@@ -1467,6 +1467,7 @@
     .workspace.video-edit-active .paper-stage {
       place-items: center center;
       overflow: hidden;
+      touch-action: none;
     }
 
     .conte-page,
@@ -6353,6 +6354,11 @@
                 <input class="shortcut-input" data-shortcut-action="onionSkinToggle" readonly />
                 <button class="shortcut-clear" type="button" data-shortcut-clear="onionSkinToggle">x</button>
               </div>
+              <div class="shortcut-row">
+                <span>Parapara</span>
+                <input class="shortcut-input" data-shortcut-action="paraparaPreview" readonly />
+                <button class="shortcut-clear" type="button" data-shortcut-clear="paraparaPreview">x</button>
+              </div>
               <div class="shortcut-actions">
                 <button id="shortcutDefaultsBtn" type="button">Defaults</button>
                 <button id="shortcutClearAllBtn" type="button">Clear all</button>
@@ -6738,14 +6744,15 @@
     const SHORTCUT_STORAGE_KEY = 'conteEditorShortcutSettings.v1';
     const EDITOR_UI_STORAGE_KEY = 'conteEditorUiState.v1';
     const ONION_SKIN_STORAGE_KEY = 'conteEditorOnionSkinSettings.v1';
-    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'memoOff', 'onionSkinToggle'];
+    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'memoOff', 'onionSkinToggle', 'paraparaPreview'];
     const SHORTCUT_DEFAULTS = {
       brushCycle: 'b',
       eraserToggle: 'e',
       sizeDown: '[',
       sizeUp: ']',
       memoOff: 'backspace',
-      onionSkinToggle: 'w'
+      onionSkinToggle: 'w',
+      paraparaPreview: 's'
     };
     const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialogue', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
     const DIALOGUE_AREA_TYPES = ['dialogue', 'narration', 'telop', 'monologue'];
@@ -23600,24 +23607,37 @@
       showParaparaPanelPreviewByOffset(-1, 100);
     }
 
-    function previewPanelFlipStartZone(event, stageEl) {
+    function previewPanelFlipTouchBlockedTarget(event) {
+      const target = event && event.target;
+      if (!target || !target.closest) return false;
+      return Boolean(target.closest('button, input, textarea, select, [contenteditable="true"], .memo-controls-wrap, .memo-quick-window-wrap, .memo-nudge-window-wrap, .memo-color-picker-window-wrap, .memo-tool-options-window-wrap, .scenario-board-window-wrap, .inspector-panel, .video-preview-zoom-controls'));
+    }
+
+    function previewPanelFlipSurfaceRect(stageEl, surfaceEl) {
+      const surface = surfaceEl && surfaceEl.getBoundingClientRect ? surfaceEl : (stageEl && stageEl.closest ? stageEl.closest('.paper-stage') : null);
+      if (surface && surface.getBoundingClientRect) return surface.getBoundingClientRect();
+      return stageEl && stageEl.getBoundingClientRect ? stageEl.getBoundingClientRect() : null;
+    }
+
+    function previewPanelFlipStartZone(event, stageEl, surfaceEl) {
       if (!mobileOrTabletRuntime() || !event || event.pointerType !== 'touch') return null;
-      const screen = stageEl && stageEl.querySelector ? stageEl.querySelector('.video-preview-screen') : null;
-      const target = screen && screen.querySelector ? screen.querySelector('.video-preview-camera-target') : null;
-      if (!screen || !target) return null;
-      const screenRect = screen.getBoundingClientRect();
-      if (event.clientX < screenRect.left || event.clientX > screenRect.right || event.clientY < screenRect.top || event.clientY > screenRect.bottom) return null;
-      const targetRect = target.getBoundingClientRect();
-      const insideTarget = event.clientX >= targetRect.left && event.clientX <= targetRect.right && event.clientY >= targetRect.top && event.clientY <= targetRect.bottom;
-      if (insideTarget) return null;
-      if (event.clientX < targetRect.left) return { side: 'left' };
-      if (event.clientX > targetRect.right) return { side: 'right' };
+      if (previewPanelFlipTouchBlockedTarget(event)) return null;
+      const surfaceRect = previewPanelFlipSurfaceRect(stageEl, surfaceEl);
+      const drawableRect = videoPreviewDrawableTouchRect(stageEl);
+      if (!surfaceRect || !drawableRect) return null;
+      const x = Number(event.clientX);
+      const y = Number(event.clientY);
+      if (!pointInsideClientRect(x, y, surfaceRect)) return null;
+      if (pointInsideClientRect(x, y, drawableRect)) return null;
+      if (x < drawableRect.left) return { side: 'left' };
+      if (x > drawableRect.right) return { side: 'right' };
       return null;
     }
 
     function beginPreviewPanelFlipTouch(event) {
-      const stageEl = event.currentTarget;
-      const zone = previewPanelFlipStartZone(event, stageEl);
+      const surfaceEl = event.currentTarget;
+      const stageEl = surfaceEl && surfaceEl.id === 'videoPreviewStage' ? surfaceEl : (surfaceEl && surfaceEl.querySelector ? surfaceEl.querySelector('#videoPreviewStage') : document.getElementById('videoPreviewStage'));
+      const zone = previewPanelFlipStartZone(event, stageEl, surfaceEl);
       if (!zone) return;
       state.previewPanelFlipTouch = {
         pointerId: event.pointerId,
@@ -23625,8 +23645,8 @@
         offset: 0,
         side: zone.side
       };
-      if (stageEl && stageEl.setPointerCapture) {
-        try { stageEl.setPointerCapture(event.pointerId); } catch (error) {}
+      if (surfaceEl && surfaceEl.setPointerCapture) {
+        try { surfaceEl.setPointerCapture(event.pointerId); } catch (error) {}
       }
       event.preventDefault();
       event.stopPropagation();
@@ -23650,9 +23670,9 @@
       const touch = state.previewPanelFlipTouch;
       if (!touch || touch.pointerId !== event.pointerId) return;
       state.previewPanelFlipTouch = null;
-      const stageEl = event.currentTarget;
-      if (stageEl && stageEl.releasePointerCapture) {
-        try { stageEl.releasePointerCapture(event.pointerId); } catch (error) {}
+      const surfaceEl = event.currentTarget;
+      if (surfaceEl && surfaceEl.releasePointerCapture) {
+        try { surfaceEl.releasePointerCapture(event.pointerId); } catch (error) {}
       }
       event.preventDefault();
       event.stopPropagation();
@@ -23660,12 +23680,13 @@
 
     function bindMobilePreviewPanelFlip(root) {
       const stageEl = root && root.id === 'videoPreviewStage' ? root : document.getElementById('videoPreviewStage');
-      if (!stageEl || stageEl.dataset.mobilePanelFlipBound === 'true') return;
-      stageEl.dataset.mobilePanelFlipBound = 'true';
-      stageEl.addEventListener('pointerdown', beginPreviewPanelFlipTouch);
-      stageEl.addEventListener('pointermove', continuePreviewPanelFlipTouch);
-      stageEl.addEventListener('pointerup', endPreviewPanelFlipTouch);
-      stageEl.addEventListener('pointercancel', endPreviewPanelFlipTouch);
+      const surfaceEl = stageEl && stageEl.closest ? (stageEl.closest('.paper-stage') || stageEl) : stageEl;
+      if (!stageEl || !surfaceEl || surfaceEl.dataset.mobilePanelFlipBound === 'true') return;
+      surfaceEl.dataset.mobilePanelFlipBound = 'true';
+      surfaceEl.addEventListener('pointerdown', beginPreviewPanelFlipTouch);
+      surfaceEl.addEventListener('pointermove', continuePreviewPanelFlipTouch);
+      surfaceEl.addEventListener('pointerup', endPreviewPanelFlipTouch);
+      surfaceEl.addEventListener('pointercancel', endPreviewPanelFlipTouch);
     }
 
     function layerDrawingUsesDirectPreviewImage(drawingRef, layerId, drawing) {
@@ -36668,6 +36689,7 @@
       if (action === 'sizeUp') changeActiveMemoSize(1);
       if (action === 'memoOff') setMemoModeEnabled(false);
       if (action === 'onionSkinToggle') toggleOnionSkinEnabled();
+      if (action === 'paraparaPreview') showParaparaPreviousPanelPreview();
       updateMemoUI();
       return true;
     }
