@@ -22070,7 +22070,7 @@
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       const activeClips = videoPreviewActiveAudioClips(state.project, state.videoPlayheadFrames, activeClipsOverride);
       const previewKey = videoPreviewKeyFor(slot, activeClips);
-      const previewLayerMode = videoPreviewFastLayerImageMode() ? 'image' : 'canvas';
+      const previewLayerMode = videoPreviewLayerMode();
       if (stageEl.dataset.previewKey === previewKey && stageEl.dataset.previewLayerMode === previewLayerMode) {
         if (cameraToolActive()) renderCameraFrameOverlay(stageEl);
         else applyCameraPreviewTransform(stageEl);
@@ -22098,7 +22098,7 @@
       state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       if (!slot || !slot.cut) return false;
-      const previewLayerMode = videoPreviewFastLayerImageMode() ? 'image' : 'canvas';
+      const previewLayerMode = videoPreviewLayerMode();
       if (stageEl.dataset.previewLayerMode !== previewLayerMode) return false;
       const seekUnitKey = videoPreviewSeekUnitKeyFor(slot);
       if (stageEl.dataset.previewSeekUnitKey !== seekUnitKey) return false;
@@ -22177,7 +22177,7 @@
       state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       const seekUnitKey = videoPreviewSeekUnitKeyFor(slot);
-      const previewLayerMode = videoPreviewFastLayerImageMode() ? 'image' : 'canvas';
+      const previewLayerMode = videoPreviewLayerMode();
       if (stageEl.dataset.previewSeekUnitKey === seekUnitKey && stageEl.dataset.previewKey && stageEl.dataset.previewLayerMode === previewLayerMode) {
         if (cameraToolActive()) renderCameraFrameOverlay(stageEl);
         else applyCameraPreviewTransform(stageEl);
@@ -22468,6 +22468,10 @@
 
     function videoPreviewFastLayerImageMode() {
       return Boolean(state.videoPlaying || state.videoPlaybackStarting || state.timelinePlayheadDragging);
+    }
+
+    function videoPreviewLayerMode() {
+      return videoPreviewFastLayerImageMode() ? 'image' : 'mixed';
     }
 
     function layerDrawingUsesDirectPreviewImage(drawingRef, layerId, drawing) {
@@ -33977,6 +33981,21 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
+    function ensureVideoPreviewReadyForDrawing() {
+      if (!state.videoEditMode) return document.getElementById('videoMemoCanvas');
+      const stage = document.getElementById('videoPreviewStage');
+      if (!stage) return document.getElementById('videoMemoCanvas');
+      if (state.timelinePlayheadDragging) {
+        setTimelinePlayheadDragging(document.getElementById('timingDashboard') || document, false);
+      }
+      const totalFrames = videoTimelineDisplayTotalFrames(state.project);
+      const currentMode = stage.dataset.previewLayerMode || '';
+      if (currentMode !== videoPreviewLayerMode()) {
+        renderVideoPreviewIfChanged(totalFrames);
+      }
+      return document.getElementById('videoMemoCanvas');
+    }
+
     function renderPendingLayerDrawingsToVideoMemoContext(ctx, width, height) {
       const pendingRefs = pendingLayerDrawingRefSet();
       if (!pendingRefs.size) return;
@@ -34042,7 +34061,7 @@
       if (!memoInteractionActive()) return;
       event.preventDefault();
       event.stopPropagation();
-      const canvas = document.getElementById('videoMemoCanvas');
+      const canvas = ensureVideoPreviewReadyForDrawing();
       if (beginMemoSpacePan(event, canvas)) return;
       state.videoMemoPointerCanvasRect = canvas ? videoMemoBaseRect(canvas) : null;
       if (state.memoEyedropper) {
