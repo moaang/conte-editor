@@ -200,6 +200,63 @@
       background: #fbfbf8;
     }
 
+    .stage-mode-settings-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .stage-settings-btn {
+      width: 25px;
+      min-width: 25px;
+      height: 25px;
+      padding: 0;
+      border-radius: 5px;
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .stage-settings-btn.active {
+      border-color: var(--focus);
+      color: var(--focus);
+      background: #eef7ff;
+    }
+
+    .stage-settings-popover {
+      position: absolute;
+      z-index: 60;
+      left: 0;
+      top: calc(100% + 5px);
+      min-width: 238px;
+      padding: 8px;
+      border: 1px solid #b8b8ad;
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    }
+
+    .stage-settings-popover[hidden] {
+      display: none;
+    }
+
+    .stage-settings-check {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+      cursor: pointer;
+    }
+
+    .stage-settings-check input {
+      width: auto;
+      margin: 0;
+      padding: 0;
+    }
+
     .control-cluster {
       display: inline-flex;
       align-items: center;
@@ -2447,6 +2504,12 @@
       line-height: 1;
     }
 
+    #videoCameraFrameToggleBtn.active {
+      border-color: var(--focus);
+      color: #fff;
+      background: var(--focus);
+    }
+
     .video-preview-zoom-value {
       min-width: 44px;
       color: #245f91;
@@ -2626,6 +2689,22 @@
       touch-action: none;
       cursor: default;
       will-change: transform, width, height, left, top;
+    }
+
+    .camera-frame-overlay.view-only .camera-frame-box {
+      border-width: 1.5px;
+      box-shadow: none;
+      pointer-events: none;
+      cursor: default;
+    }
+
+    .camera-frame-overlay.view-only .camera-frame-path,
+    .camera-frame-overlay.view-only .camera-frame-key-dot-layer,
+    .camera-frame-overlay.view-only .camera-frame-move-handle,
+    .camera-frame-overlay.view-only .camera-frame-handle,
+    .camera-frame-overlay.view-only .camera-frame-rotate-handle,
+    .camera-frame-overlay.view-only .camera-frame-rotate-line {
+      display: none;
     }
 
     .camera-frame-box::before,
@@ -5712,6 +5791,15 @@
           <div class="stage-mode-switch" aria-label="Stage mode">
             <button id="paperModeBtn" class="stage-mode-toggle" type="button">用紙</button>
             <button id="videoEditToggleBtn" class="stage-mode-toggle" type="button">映像編集</button>
+            <div class="stage-mode-settings-wrap">
+              <button id="stageSettingsBtn" class="stage-settings-btn" type="button" aria-label="映像編集設定" aria-expanded="false">⚙</button>
+              <div id="stageSettingsPopover" class="stage-settings-popover" hidden>
+                <label class="stage-settings-check">
+                  <input id="videoAutoCreateLayerKomaToggle" type="checkbox" />
+                  <span>空パネル描画時にレイヤーコマを自動作成</span>
+                </label>
+              </div>
+            </div>
           </div>
           <div class="button-row paper-header-controls">
             <div class="paper-edit-controls" aria-label="Conte edit controls">
@@ -5723,6 +5811,7 @@
             <div id="paperNavUndoHost" class="paper-nav-undo-host" aria-label="Page and edit controls"></div>
             <div id="paperPageNavHost" class="paper-page-nav-host" aria-label="Page controls"></div>
             <div id="videoPreviewZoomHeader" class="video-preview-zoom-controls header-zoom" aria-label="Preview zoom" hidden>
+              <button id="videoCameraFrameToggleBtn" type="button" aria-label="Camera frame" title="Camera frame">□</button>
               <button id="videoPreviewZoomFitBtn" class="video-preview-zoom-value" type="button" data-video-preview-zoom="fit" title="Fit preview">100%</button>
               <button type="button" data-video-preview-zoom="out" aria-label="Zoom out">−</button>
               <button type="button" data-video-preview-zoom="in" aria-label="Zoom in">＋</button>
@@ -6116,6 +6205,8 @@
       workspaceStatus: '',
       workspaceObjectUrls: { pictures: {}, audio: {}, layers: {} },
       workspaceProjectSaveTimer: 0,
+      stageSettingsOpen: false,
+      videoCameraFrameVisible: false,
       llmControlEnabled: false,
       llmControlBusy: false,
       llmControlTimer: 0,
@@ -6175,6 +6266,11 @@
       };
     }
 
+    function videoEditAutoCreateLayerKomaOnDrawEnabled(project) {
+      const settings = project && project.settings || {};
+      return settings.videoEditAutoCreateLayerKomaOnDraw !== false;
+    }
+
     function createInitialProject() {
       return {
         schemaVersion: PROJECT_FORMAT_VERSION,
@@ -6187,6 +6283,7 @@
           templateId: 'hanyou_fixed_5_column',
           targetDurationFrames: DEFAULT_TARGET_SECONDS * 24,
           targetDurationManual: false,
+          videoEditAutoCreateLayerKomaOnDraw: true,
           voiceProfiles: {},
           tts: {
             defaultProvider: 'voicevox',
@@ -6202,6 +6299,7 @@
             memoViewportPanY: 0,
             timelineVideoTracksCollapsed: false,
             timelineAudioTracksCollapsed: false,
+            videoCameraFrameVisible: false,
             memoColorSource: 'preset'
           },
           paperFrame: defaultPaperFrameSettings(),
@@ -6555,6 +6653,7 @@
         memoViewportPanY: Math.round(Number(state.memoViewportPanY) || 0),
         timelineVideoTracksCollapsed: Boolean(state.timelineVideoTracksCollapsed),
         timelineAudioTracksCollapsed: Boolean(state.timelineAudioTracksCollapsed),
+        videoCameraFrameVisible: Boolean(state.videoCameraFrameVisible),
         scenarioWindowOpen: Boolean(state.scenarioWindowOpen),
         scenarioWindowX: Math.round(Number(state.scenarioWindowX) || 48),
         scenarioWindowY: Math.round(Number(state.scenarioWindowY) || 92),
@@ -6577,6 +6676,7 @@
       state.memoViewportPanY = Math.round(Number(ui.memoViewportPanY) || 0);
       state.timelineVideoTracksCollapsed = Boolean(ui.timelineVideoTracksCollapsed);
       state.timelineAudioTracksCollapsed = Boolean(ui.timelineAudioTracksCollapsed);
+      if (Object.prototype.hasOwnProperty.call(ui, 'videoCameraFrameVisible')) state.videoCameraFrameVisible = Boolean(ui.videoCameraFrameVisible);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowOpen')) state.scenarioWindowOpen = Boolean(ui.scenarioWindowOpen);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowX')) state.scenarioWindowX = clampNumber(ui.scenarioWindowX, 8, Math.max(8, window.innerWidth - 42), state.scenarioWindowX);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowY')) state.scenarioWindowY = clampNumber(ui.scenarioWindowY, 8, Math.max(8, window.innerHeight - 42), state.scenarioWindowY);
@@ -7581,6 +7681,7 @@
       project.settings.templateId = 'hanyou_fixed_5_column';
       project.settings.targetDurationFrames = Math.max(0, Math.round(Number(project.settings.targetDurationFrames) || DEFAULT_TARGET_SECONDS * (Number(project.fps) || 24)));
       project.settings.targetDurationManual = Boolean(project.settings.targetDurationManual);
+      project.settings.videoEditAutoCreateLayerKomaOnDraw = project.settings.videoEditAutoCreateLayerKomaOnDraw !== false;
       project.settings.voiceProfiles = project.settings.voiceProfiles && typeof project.settings.voiceProfiles === 'object' ? project.settings.voiceProfiles : {};
       project.settings.tts = normalizeTtsSettings(project.settings.tts);
       project.settings.localWorkspace = normalizeWorkspaceSettings(project.settings.localWorkspace);
@@ -21701,7 +21802,7 @@
       const fastLayerMode = videoPreviewFastLayerImageMode();
       const previewLayerMode = fastLayerMode ? 'image' : 'mixed';
       if (stageEl.dataset.previewKey === previewKey && stageEl.dataset.previewLayerMode === previewLayerMode) {
-        if (cameraToolActive()) renderCameraFrameOverlay(stageEl);
+        if (cameraToolActive() || cameraFrameDisplayOverlayActive()) renderCameraFrameOverlay(stageEl);
         else applyCameraPreviewTransform(stageEl);
         return;
       }
@@ -21738,7 +21839,7 @@
         if (speakers.length) mediaHtml = speakerPreviewHtml(speakers, activeClips || []);
       }
       const overlayHtml = videoPreviewOverlayTagsHtml(slot, activeClips || [], Boolean(slotPictureSrc || videoClipSrc || layerEntries.length));
-      const previewInteractionActive = memoInteractionActive() || cameraToolOverlayActive();
+      const previewInteractionActive = memoInteractionActive() || cameraToolOverlayActive() || cameraFrameDisplayOverlayActive();
       const screenClass = videoPreviewScreenClassName();
       const screenStyle = paperFrameCssVars(state.project);
       stageEl.innerHTML = [
@@ -21769,6 +21870,10 @@
 
     function cameraToolOverlayActive() {
       return Boolean(cameraToolActive() && !state.videoPlaying && !state.videoPlaybackStarting);
+    }
+
+    function cameraFrameDisplayOverlayActive() {
+      return Boolean(state.videoEditMode && state.videoCameraFrameVisible && !state.videoPlaying && !state.videoPlaybackStarting);
     }
 
     function cameraCoordinateWidth() {
@@ -22032,7 +22137,9 @@
       const screen = stage && stage.querySelector ? stage.querySelector('.video-preview-screen') : null;
       let overlay = screen && screen.querySelector('.camera-frame-overlay');
       if (screen) applyCameraPreviewTransform(stage);
-      if (!screen || !cameraToolOverlayActive()) {
+      const toolOverlay = cameraToolOverlayActive();
+      const displayOverlay = !toolOverlay && cameraFrameDisplayOverlayActive();
+      if (!screen || (!toolOverlay && !displayOverlay)) {
         if (overlay) overlay.remove();
         return;
       }
@@ -22041,8 +22148,9 @@
         overlay.className = 'camera-frame-overlay';
         overlay.innerHTML = cameraFrameOverlayHtml();
         screen.appendChild(overlay);
-        bindCameraFrameOverlay(overlay);
       }
+      overlay.classList.toggle('view-only', Boolean(displayOverlay));
+      if (toolOverlay) bindCameraFrameOverlay(overlay);
       const rect = cameraFrameBaseRect(screen);
       const transform = currentCameraFrameTransform();
       const box = overlay.querySelector('[data-camera-frame-box]');
@@ -22054,7 +22162,7 @@
         box.style.transform = 'translate(-50%, -50%) rotate(' + transform.rotation.toFixed(2) + 'deg)';
       }
       const slot = cameraSlotAtFrame(state.project, state.videoPlayheadFrames);
-      const cutKeys = slot && slot.cut ? cameraKeyframesForCut(state.project, slot.cut.id) : [];
+      const cutKeys = toolOverlay && slot && slot.cut ? cameraKeyframesForCut(state.project, slot.cut.id) : [];
       const overlayKeys = cameraFrameOverlayKeyframes(cutKeys);
       renderCameraFramePath(overlay, overlayKeys, rect);
       renderCameraFrameKeyDots(overlay, overlayKeys, rect);
@@ -30227,10 +30335,11 @@
       }) || null;
     }
 
-    function selectedConteLayerDrawingEntryForCut(project, cutId) {
+    function selectedConteLayerDrawingEntryForCut(project, cutId, options) {
+      options = options || {};
       ensureConteLayerSelection(project, cutId);
       const selectedPanels = selectedPicturePanelSet();
-      if (selectedPanels.size && !selectedPanels.has(cutId)) return null;
+      if (options.ignoreSelectedPanel !== true && selectedPanels.size && !selectedPanels.has(cutId)) return null;
       const direct = selectedConteLayerIsActiveOnCut(project, state.selectedConteLayerId, cutId);
       if (direct) return direct;
       const found = findConteLayerById(project, state.selectedConteLayerId);
@@ -30240,11 +30349,88 @@
       }) || null) : null;
     }
 
+    function topConteLayerAnchorForAutoKoma(project, cutId) {
+      const ownerCut = conteLayerOwnerCut(project, cutId);
+      const layers = conteLayersTopToBottom(Array.isArray(ownerCut && ownerCut.conteLayers) ? ownerCut.conteLayers : []);
+      const normal = layers.find(function(layer) { return layer && layer.layerRole !== 'bg'; }) || layers[0] || null;
+      if (!ownerCut || !normal) return null;
+      return {
+        ownerCut: ownerCut,
+        layer: normal,
+        layerIndex: ownerCut.conteLayers.indexOf(normal),
+        range: layerSlotIndexRange(project, normal, ownerCut)
+      };
+    }
+
+    function createTopLayerKomaForEmptyPanel(project, cutId) {
+      const targetCutId = String(cutId || '');
+      if (!project || !targetCutId) return null;
+      const active = topDrawableConteLayerForCut(project, targetCutId);
+      if (active && active.layer) return active;
+      const anchor = topConteLayerAnchorForAutoKoma(project, targetCutId);
+      if (anchor && anchor.layer) {
+        const lineKey = conteLayerLineKey(anchor.layer);
+        const lineOrder = conteLayerLineOrderValue(anchor.layer, 1);
+        const created = duplicateConteLayerToPanel(project, anchor.layer.id, targetCutId, 0, {
+          shareDrawing: false,
+          skipExistingPanelLink: true,
+          targetLinePlacement: {
+            lineKey: lineKey,
+            lineOrder: lineOrder,
+            insertAboveLineKey: ''
+          }
+        });
+        if (created && created.id) {
+          getLayerDrawingData(project, created.drawingRef);
+          const createdOwner = conteLayerOwnerCut(project, targetCutId);
+          return selectedConteLayerIsActiveOnCut(project, created.id, targetCutId) || {
+            ownerCut: createdOwner,
+            layer: created,
+            layerIndex: (createdOwner && createdOwner.conteLayers || []).indexOf(created),
+            range: layerSlotIndexRange(project, created, createdOwner)
+          };
+        }
+      }
+      const targetOwner = conteLayerOwnerCut(project, targetCutId);
+      const targetIndex = cutIndexById(project, targetCutId);
+      const ownerIndex = cutIndexById(project, targetOwner && targetOwner.id);
+      if (!targetOwner || targetIndex < 0 || ownerIndex < 0) return null;
+      targetOwner.conteLayers = Array.isArray(targetOwner.conteLayers) ? targetOwner.conteLayers : [];
+      if (!conteLayerCanCreate(targetOwner.conteLayers)) {
+        state.timelineStatus = 'Conte layer limit is A-Z.';
+        return null;
+      }
+      const newId = newConteLayerId('conte-layer');
+      const layer = createConteLayer({
+        id: newId,
+        originLayerId: newId,
+        layerLineId: newId,
+        layerLineOrder: nextConteLayerOrder(targetOwner.conteLayers),
+        drawingRef: newLayerDrawingRef('drawing'),
+        order: nextConteLayerOrder(targetOwner.conteLayers),
+        startPanelCutId: targetCutId,
+        panelStart: Math.max(0, targetIndex - ownerIndex),
+        panelSpan: 1
+      });
+      targetOwner.conteLayers.push(layer);
+      markConteLayerOwnerHasLayers(targetOwner);
+      syncConteLayerOrderCodes(targetOwner.conteLayers);
+      setSelectedConteLayers([layer.id], layer.id);
+      state.selectedCutId = targetCutId;
+      getLayerDrawingData(project, layer.drawingRef);
+      return selectedConteLayerIsActiveOnCut(project, layer.id, targetCutId) || {
+        ownerCut: targetOwner,
+        layer: layer,
+        layerIndex: targetOwner.conteLayers.indexOf(layer),
+        range: layerSlotIndexRange(project, layer, targetOwner)
+      };
+    }
+
     function conteLayerMemoTargetForPoint(point) {
       const rect = memoPictureHitboxAtPoint(point);
       if (!rect) return null;
-      const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, rect.cutId);
-      const entry = selectedEntry || ensureTopDrawableConteLayerForCut(state.project, rect.cutId, { createForMedia: true });
+      const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, rect.cutId, { ignoreSelectedPanel: true });
+      const entry = selectedEntry || createTopLayerKomaForEmptyPanel(state.project, rect.cutId) || ensureTopDrawableConteLayerForCut(state.project, rect.cutId, { createForMedia: true });
       if (!entry || !entry.layer) return null;
       setSelectedConteLayers([entry.layer.id], entry.layer.id);
       state.selectedCutId = rect.cutId;
@@ -30265,8 +30451,9 @@
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       const cutId = slot && slot.cut && slot.cut.id || '';
       if (!cutId) return null;
-      const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, cutId);
-      const entry = selectedEntry || ensureTopDrawableConteLayerForCut(state.project, cutId, { createForMedia: true });
+      const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, cutId, { ignoreSelectedPanel: true });
+      const createdEntry = selectedEntry ? null : (videoEditAutoCreateLayerKomaOnDrawEnabled(state.project) ? createTopLayerKomaForEmptyPanel(state.project, cutId) : null);
+      const entry = selectedEntry || createdEntry || ensureTopDrawableConteLayerForCut(state.project, cutId, { createForMedia: true });
       if (!entry || !entry.layer) return null;
       setSelectedConteLayers([entry.layer.id], entry.layer.id);
       state.selectedCutId = cutId;
@@ -33436,7 +33623,7 @@
       const videoCanvas = document.getElementById('videoMemoCanvas');
       if (videoCanvas) videoCanvas.classList.toggle('memo-active', videoMemoActive);
       const videoScreen = videoCanvas && videoCanvas.closest ? videoCanvas.closest('.video-preview-screen') : null;
-      if (videoScreen) videoScreen.classList.toggle('memo-active', videoMemoActive || cameraToolOverlayActive());
+      if (videoScreen) videoScreen.classList.toggle('memo-active', videoMemoActive || cameraToolOverlayActive() || cameraFrameDisplayOverlayActive());
       applyMemoViewportPan();
       applyVideoMemoTransformHitArea();
       updateMemoSpacePanCursorClass();
@@ -34705,8 +34892,29 @@
       updateVideoPreviewZoomDom(document);
       updateWorkspaceUI();
       updateMemoUI();
+      updateStageSettingsUI();
+      updateVideoCameraFrameToggleUI();
       applyScenarioWindowState();
       updateAutoTimingToggleUI();
+    }
+
+    function updateStageSettingsUI() {
+      const button = document.getElementById('stageSettingsBtn');
+      const popover = document.getElementById('stageSettingsPopover');
+      const toggle = document.getElementById('videoAutoCreateLayerKomaToggle');
+      if (button) {
+        button.classList.toggle('active', Boolean(state.stageSettingsOpen));
+        button.setAttribute('aria-expanded', state.stageSettingsOpen ? 'true' : 'false');
+      }
+      if (popover) popover.hidden = !state.stageSettingsOpen;
+      if (toggle && document.activeElement !== toggle) toggle.checked = videoEditAutoCreateLayerKomaOnDrawEnabled(state.project);
+    }
+
+    function updateVideoCameraFrameToggleUI() {
+      const button = document.getElementById('videoCameraFrameToggleBtn');
+      if (!button) return;
+      button.classList.toggle('active', Boolean(state.videoCameraFrameVisible));
+      button.setAttribute('aria-pressed', state.videoCameraFrameVisible ? 'true' : 'false');
     }
 
     function setStageVideoEditMode(nextVideoEditMode) {
@@ -34832,6 +35040,20 @@
       document.getElementById('addConteLayerKomaBtn').addEventListener('click', function() { addConteLayerToSelection('panel'); });
       document.getElementById('addPicturePanelBtn').addEventListener('click', addPicturePanelAfterSelection);
       document.getElementById('addConteCutBtn').addEventListener('click', addConteCutAfterSelection);
+      document.getElementById('stageSettingsBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.stageSettingsOpen = !state.stageSettingsOpen;
+        updateStageSettingsUI();
+      });
+      document.getElementById('stageSettingsPopover').addEventListener('click', function(event) {
+        event.stopPropagation();
+      });
+      document.getElementById('videoAutoCreateLayerKomaToggle').addEventListener('change', function(event) {
+        state.project.settings = state.project.settings || {};
+        state.project.settings.videoEditAutoCreateLayerKomaOnDraw = Boolean(event.currentTarget.checked);
+        updateStageSettingsUI();
+      });
       document.getElementById('autoMaToggle').addEventListener('change', function(event) {
         state.project.settings = state.project.settings || {};
         state.project.settings.autoTimingIncludeMa = Boolean(event.currentTarget.checked);
@@ -34890,6 +35112,20 @@
       document.getElementById('exportChooseFolderBtn').addEventListener('click', runExportFromDialog);
       document.getElementById('paperModeBtn').addEventListener('click', function() { setStageVideoEditMode(false); });
       document.getElementById('videoEditToggleBtn').addEventListener('click', function() { setStageVideoEditMode(true); });
+      document.getElementById('videoCameraFrameToggleBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.videoCameraFrameVisible = !state.videoCameraFrameVisible;
+        saveEditorUiState();
+        updateVideoCameraFrameToggleUI();
+        renderCameraFrameOverlay(document.getElementById('videoPreviewStage'));
+      });
+      document.addEventListener('pointerdown', function(event) {
+        if (!state.stageSettingsOpen) return;
+        if (event.target && event.target.closest && event.target.closest('.stage-mode-settings-wrap')) return;
+        state.stageSettingsOpen = false;
+        updateStageSettingsUI();
+      });
       document.getElementById('blockList').addEventListener('dragover', function(event) {
         if (hasDragType(event, 'conte/cut-field') || hasDragType(event, 'conte/block-id')) {
           event.preventDefault();
