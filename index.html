@@ -34226,7 +34226,7 @@
       state.memoCurrentStroke = stroke;
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
-      if (canvas && canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      safeMemoSetPointerCapture(canvas, event.pointerId);
       ensureMemoRasterOpBounds(state.memoRasterOp, memoLayerPointsBounds([localPoint], memoStrokeLayerPadPx(stroke)));
       drawCurrentLayerStrokeSegment(stroke, null, stroke.points[0]);
       updateMemoUndoRedoButtonsOnly();
@@ -34247,7 +34247,7 @@
       };
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
-      if (canvas && canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      safeMemoSetPointerCapture(canvas, event.pointerId);
       refreshMemoEditOverlays(layerTarget.drawingRef);
       return true;
     }
@@ -34260,7 +34260,7 @@
       state.memoRasterOp = Object.assign(opTarget, { type: 'stamp', lastStampPoint: null, stampChanged: false });
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
-      if (canvas && canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      safeMemoSetPointerCapture(canvas, event.pointerId);
       drawMemoStampAtPoint(state.memoRasterOp, localPoint);
       return true;
     }
@@ -35261,7 +35261,7 @@
         baseY: Math.round(Number(state.memoViewportPanY) || 0)
       };
       updateMemoSpacePanCursorClass();
-      if (canvas && canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      safeMemoSetPointerCapture(canvas, event.pointerId);
       event.preventDefault();
       event.stopPropagation();
       return true;
@@ -35518,18 +35518,14 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    function ensureVideoPreviewReadyForDrawing() {
-      if (!state.videoEditMode) return document.getElementById('videoMemoCanvas');
+    function ensureVideoPreviewReadyForDrawing(preferredCanvas) {
+      if (!state.videoEditMode) return preferredCanvas || document.getElementById('videoMemoCanvas');
       const stage = document.getElementById('videoPreviewStage');
-      if (!stage) return document.getElementById('videoMemoCanvas');
+      if (!stage) return preferredCanvas || document.getElementById('videoMemoCanvas');
       if (state.timelinePlayheadDragging) {
         setTimelinePlayheadDragging(document.getElementById('timingDashboard') || document, false);
       }
-      const totalFrames = videoTimelineDisplayTotalFrames(state.project);
-      const currentMode = stage.dataset.previewLayerMode || '';
-      if (currentMode !== videoPreviewLayerMode()) {
-        renderVideoPreviewIfChanged(totalFrames);
-      }
+      if (preferredCanvas && preferredCanvas.isConnected) return preferredCanvas;
       return document.getElementById('videoMemoCanvas');
     }
 
@@ -35559,6 +35555,11 @@
       if (!state.videoMemoRedrawRaf) return;
       cancelAnimationFrame(state.videoMemoRedrawRaf);
       state.videoMemoRedrawRaf = 0;
+    }
+
+    function safeMemoSetPointerCapture(canvas, pointerId) {
+      if (!canvas || !canvas.setPointerCapture || pointerId == null) return;
+      try { canvas.setPointerCapture(pointerId); } catch (error) {}
     }
 
     function videoMemoBaseRect(canvas) {
@@ -35598,7 +35599,7 @@
       if (!memoInteractionActive()) return;
       event.preventDefault();
       event.stopPropagation();
-      const canvas = ensureVideoPreviewReadyForDrawing();
+      const canvas = ensureVideoPreviewReadyForDrawing(event.currentTarget);
       if (beginMemoSpacePan(event, canvas)) return;
       state.videoMemoPointerCanvasRect = canvas ? videoMemoBaseRect(canvas) : null;
       if (state.memoEyedropper) {
@@ -35609,7 +35610,10 @@
       const point = getVideoMemoPointFromEvent(event);
       const rawPoint = getVideoMemoPointFromEventRaw(event);
       const layerTarget = videoConteLayerMemoTargetForPoint(point);
-      if (!layerTarget) return;
+      if (!layerTarget) {
+        state.videoMemoPointerCanvasRect = null;
+        return;
+      }
       if (state.memoEditTool === 'transform' || state.memoEditTool === 'perspective') {
         beginMemoTransformOp(event, canvas, layerTarget, rawPoint);
         return;
@@ -36407,7 +36411,7 @@
       if (!type) return;
       state.memoColorPickerDrag = { pointerId: event.pointerId, type: type };
       updateMemoColorFromPickerPoint(event, type);
-      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      safeMemoSetPointerCapture(canvas, event.pointerId);
       event.preventDefault();
     }
 
