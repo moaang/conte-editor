@@ -207,13 +207,15 @@
     }
 
     .stage-settings-btn {
-      width: 25px;
-      min-width: 25px;
-      height: 25px;
+      width: 26px;
+      min-width: 26px;
+      height: 26px;
+      min-height: 26px;
       padding: 0;
       border-radius: 5px;
       font-size: 14px;
       line-height: 1;
+      box-sizing: border-box;
     }
 
     .stage-settings-btn.active {
@@ -255,6 +257,65 @@
       width: auto;
       margin: 0;
       padding: 0;
+    }
+
+    .stage-settings-divider {
+      height: 1px;
+      margin: 8px 0;
+      background: #e2e2d8;
+    }
+
+    .stage-settings-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .stage-settings-actions button {
+      min-height: 24px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .stage-settings-field {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 7px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .stage-settings-field input {
+      width: 58px;
+      min-height: 24px;
+      padding: 2px 5px;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .stage-settings-status {
+      margin-top: 5px;
+      min-height: 14px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.3;
+      white-space: pre-line;
+    }
+
+    .stage-settings-note {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
     }
 
     .control-cluster {
@@ -2504,6 +2565,47 @@
       line-height: 1;
     }
 
+    #videoCameraFrameToggleBtn {
+      width: 28px;
+      min-width: 28px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-camera-frame-icon {
+      position: relative;
+      display: block;
+      width: 20px;
+      height: 16px;
+      color: #e00000;
+      background:
+        linear-gradient(currentColor, currentColor) left top / 7px 2px no-repeat,
+        linear-gradient(currentColor, currentColor) left top / 2px 7px no-repeat,
+        linear-gradient(currentColor, currentColor) right top / 7px 2px no-repeat,
+        linear-gradient(currentColor, currentColor) right top / 2px 7px no-repeat,
+        linear-gradient(currentColor, currentColor) left bottom / 7px 2px no-repeat,
+        linear-gradient(currentColor, currentColor) left bottom / 2px 7px no-repeat,
+        linear-gradient(currentColor, currentColor) right bottom / 7px 2px no-repeat,
+        linear-gradient(currentColor, currentColor) right bottom / 2px 7px no-repeat;
+    }
+
+    .video-camera-frame-icon::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 9px;
+      height: 9px;
+      transform: translate(calc(-50% + 0.5px), -50%);
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-bottom-color: transparent;
+      border-radius: 999px;
+      box-sizing: border-box;
+    }
+
     #videoCameraFrameToggleBtn.active {
       border-color: var(--focus);
       color: #fff;
@@ -3825,6 +3927,20 @@
       outline: 1px solid rgba(20, 20, 18, 0.76);
       outline-offset: 0;
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48);
+    }
+
+    .media-video-track.video-media-device-disabled {
+      opacity: 0.46;
+    }
+
+    .media-video-track.video-media-device-disabled .timeline-lane,
+    .media-video-track.video-media-device-disabled .video-media-clip {
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .media-video-track.video-media-device-disabled .media-video-placeholder {
+      color: rgba(82, 82, 76, 0.58);
     }
 
     .timeline-group-collapsed .video-media-clip {
@@ -5609,7 +5725,7 @@
               <button id="memoColorSwatchBtn" class="memo-color-swatch-btn" type="button" aria-label="Open color picker"></button>
               <label class="memo-size-control" for="memoSizeRange">
                 <span id="memoSizeValue" class="memo-size-value">2</span>
-                <input id="memoSizeRange" class="memo-size-range" type="range" min="1" max="400" step="1" />
+                <input id="memoSizeRange" class="memo-size-range" type="range" min="0" max="11" step="1" />
               </label>
               <div class="memo-color-picker-host">
                 <button id="memoEyedropperBtn" class="memo-eyedropper-btn" type="button" aria-label="Eyedropper"><span class="memo-eyedropper-icon" aria-hidden="true"></span></button>
@@ -5798,6 +5914,37 @@
                   <input id="videoAutoCreateLayerKomaToggle" type="checkbox" />
                   <span>空パネル描画時にレイヤーコマを自動作成</span>
                 </label>
+                <div class="stage-settings-divider"></div>
+                <label class="stage-settings-check">
+                  <input id="indexedDbAutosaveToggle" type="checkbox" />
+                  <span>IndexedDB自動バックアップ</span>
+                </label>
+                <div class="stage-settings-actions">
+                  <button id="indexedDbAutosaveRestoreBtn" type="button">復元</button>
+                  <button id="indexedDbAutosaveDeleteBtn" type="button">削除</button>
+                </div>
+                <div id="indexedDbAutosaveStatus" class="stage-settings-status"></div>
+                <div id="workspaceAutosaveSettings" hidden>
+                  <div class="stage-settings-divider"></div>
+                  <label class="stage-settings-check">
+                    <input id="workspaceAutosaveToggle" type="checkbox" />
+                    <span>作業フォルダ自動保存</span>
+                  </label>
+                  <label class="stage-settings-field" for="workspaceAutosaveMinutesInput">
+                    <span>間隔(分)</span>
+                    <input id="workspaceAutosaveMinutesInput" type="number" min="1" max="120" step="1" inputmode="numeric" />
+                  </label>
+                  <div id="workspaceAutosaveStatus" class="stage-settings-status"></div>
+                </div>
+                <div id="mobileZipPackageSettings" hidden>
+                  <div class="stage-settings-divider"></div>
+                  <div class="stage-settings-actions">
+                    <button id="zipPackageExportBtn" type="button">ZIP書き出し</button>
+                    <button id="zipPackageImportBtn" type="button">ZIP読み込み</button>
+                  </div>
+                  <div class="stage-settings-note">JSONのみ。音声・映像・外部レイヤー画像ファイルは含まれません。</div>
+                  <div id="zipPackageStatus" class="stage-settings-status"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -5811,7 +5958,7 @@
             <div id="paperNavUndoHost" class="paper-nav-undo-host" aria-label="Page and edit controls"></div>
             <div id="paperPageNavHost" class="paper-page-nav-host" aria-label="Page controls"></div>
             <div id="videoPreviewZoomHeader" class="video-preview-zoom-controls header-zoom" aria-label="Preview zoom" hidden>
-              <button id="videoCameraFrameToggleBtn" type="button" aria-label="Camera frame" title="Camera frame">□</button>
+              <button id="videoCameraFrameToggleBtn" type="button" aria-label="Camera frame" title="Camera frame"><span class="video-camera-frame-icon" aria-hidden="true"></span></button>
               <button id="videoPreviewZoomFitBtn" class="video-preview-zoom-value" type="button" data-video-preview-zoom="fit" title="Fit preview">100%</button>
               <button type="button" data-video-preview-zoom="out" aria-label="Zoom out">−</button>
               <button type="button" data-video-preview-zoom="in" aria-label="Zoom in">＋</button>
@@ -5941,6 +6088,7 @@
     const COLUMN_RATIOS = [0.0545, 0.446, 0.2225, 0.2225, 0.0545];
     const MEMO_SIZE_MIN = 1;
     const MEMO_SIZE_MAX = 400;
+    const MEMO_SIZE_PRESETS = [1, 2, 3, 4, 5, 10, 25, 50, 100, 200, 300, 400];
     const MEMO_COLORS = ['#111111', '#d7332f'];
     const MEMO_PICKER_FIXED_LIMIT = 4;
     const MEMO_PICKER_SWATCH_SLOT_COUNT = 12;
@@ -5971,6 +6119,11 @@
     const WORKSPACE_DB_NAME = 'conteEditorWorkspace.v1';
     const WORKSPACE_STORE_NAME = 'handles';
     const WORKSPACE_HANDLE_KEY = 'workingDirectory';
+    const INDEXED_DB_AUTOSAVE_KEY = 'indexedDbAutosaveProject';
+    const INDEXED_DB_AUTOSAVE_DELAY_MS = 1600;
+    const INDEXED_DB_AUDIO_KEY_PREFIX = 'indexedDbAudio:';
+    const MOBILE_RECORDING_AUDIO_BITS_PER_SECOND = 24000;
+    const MOBILE_RECORDING_MAX_BYTES = 64 * 1024 * 1024;
     const LLM_CONTROL_POLL_MS = 1000;
     const LLM_CONTROL_INBOX_DIR = 'llm/inbox';
     const LLM_CONTROL_OUTBOX_DIR = 'llm/outbox';
@@ -6205,6 +6358,13 @@
       workspaceStatus: '',
       workspaceObjectUrls: { pictures: {}, audio: {}, layers: {} },
       workspaceProjectSaveTimer: 0,
+      workspaceAutosaveTimer: 0,
+      workspaceAutosaveTimerKey: '',
+      workspaceAutosaveStatus: '',
+      workspaceAutosaveBusy: false,
+      indexedDbAutosaveTimer: 0,
+      indexedDbAutosaveStatus: '',
+      zipPackageStatus: '',
       stageSettingsOpen: false,
       videoCameraFrameVisible: false,
       llmControlEnabled: false,
@@ -6234,6 +6394,8 @@
         videoDir: String(current.videoDir || 'assets/video'),
         layerDir: String(current.layerDir || 'assets/layers'),
         backupDir: String(current.backupDir || 'backups'),
+        autosaveEnabled: Boolean(current.autosaveEnabled),
+        autosaveMinutes: clampNumber(current.autosaveMinutes, 1, 120, 5),
         llmInboxDir: String(current.llmInboxDir || LLM_CONTROL_INBOX_DIR),
         llmOutboxDir: String(current.llmOutboxDir || LLM_CONTROL_OUTBOX_DIR),
         opsInboxDir: String(current.opsInboxDir || OPS_CONTROL_INBOX_DIR),
@@ -6271,6 +6433,55 @@
       return settings.videoEditAutoCreateLayerKomaOnDraw !== false;
     }
 
+    function mobileOrTabletRuntime() {
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      const ua = nav && nav.userAgent ? nav.userAgent : '';
+      const platform = nav && nav.platform ? nav.platform : '';
+      const touchPoints = nav && Number(nav.maxTouchPoints) || 0;
+      return /Android|iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
+    }
+
+    function videoMediaDisabledOnThisDevice() {
+      return mobileOrTabletRuntime();
+    }
+
+    function videoMediaDisabledReason() {
+      return videoMediaDisabledOnThisDevice() ? 'Mobile / tabletではV Mediaを無効化しています。' : '';
+    }
+
+    function mobileAudioRecordingStorageAvailable() {
+      return mobileOrTabletRuntime() && indexedDbAutosaveAvailable();
+    }
+
+    function indexedDbAudioStorageKey(clipId) {
+      return INDEXED_DB_AUDIO_KEY_PREFIX + String(clipId || '');
+    }
+
+    function audioClipIndexedDbStorageKey(clip) {
+      const storage = clip && clip.audioStorage && typeof clip.audioStorage === 'object' ? clip.audioStorage : null;
+      if (!storage || storage.kind !== 'indexeddb') return '';
+      return String(storage.key || (clip && clip.id ? indexedDbAudioStorageKey(clip.id) : '') || '');
+    }
+
+    function audioClipHasIndexedDbStorage(clip) {
+      return Boolean(audioClipIndexedDbStorageKey(clip));
+    }
+
+    function defaultIndexedDbAutosaveEnabled() {
+      return mobileOrTabletRuntime();
+    }
+
+    function indexedDbAutosaveAvailable() {
+      return typeof indexedDB !== 'undefined';
+    }
+
+    function indexedDbAutosaveEnabled(project) {
+      if (!indexedDbAutosaveAvailable()) return false;
+      const settings = project && project.settings || {};
+      if (!Object.prototype.hasOwnProperty.call(settings, 'indexedDbAutosaveEnabled')) return defaultIndexedDbAutosaveEnabled();
+      return Boolean(settings.indexedDbAutosaveEnabled);
+    }
+
     function createInitialProject() {
       return {
         schemaVersion: PROJECT_FORMAT_VERSION,
@@ -6284,6 +6495,7 @@
           targetDurationFrames: DEFAULT_TARGET_SECONDS * 24,
           targetDurationManual: false,
           videoEditAutoCreateLayerKomaOnDraw: true,
+          indexedDbAutosaveEnabled: defaultIndexedDbAutosaveEnabled(),
           voiceProfiles: {},
           tts: {
             defaultProvider: 'voicevox',
@@ -6569,12 +6781,14 @@
       if (!command) return;
       state.undoStack.push(command);
       trimCommandStack(state.undoStack, MAX_UNDO_HISTORY);
+      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
 
     function pushRedoCommand(command) {
       if (!command) return;
       state.redoStack.push(command);
       trimCommandStack(state.redoStack, MAX_REDO_HISTORY);
+      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
 
     function trimCommandStack(stack, maxItems) {
@@ -7682,6 +7896,9 @@
       project.settings.targetDurationFrames = Math.max(0, Math.round(Number(project.settings.targetDurationFrames) || DEFAULT_TARGET_SECONDS * (Number(project.fps) || 24)));
       project.settings.targetDurationManual = Boolean(project.settings.targetDurationManual);
       project.settings.videoEditAutoCreateLayerKomaOnDraw = project.settings.videoEditAutoCreateLayerKomaOnDraw !== false;
+      project.settings.indexedDbAutosaveEnabled = Object.prototype.hasOwnProperty.call(project.settings, 'indexedDbAutosaveEnabled')
+        ? Boolean(project.settings.indexedDbAutosaveEnabled)
+        : defaultIndexedDbAutosaveEnabled();
       project.settings.voiceProfiles = project.settings.voiceProfiles && typeof project.settings.voiceProfiles === 'object' ? project.settings.voiceProfiles : {};
       project.settings.tts = normalizeTtsSettings(project.settings.tts);
       project.settings.localWorkspace = normalizeWorkspaceSettings(project.settings.localWorkspace);
@@ -11832,6 +12049,7 @@
     }
 
     function cutHasVideoMedia(project, cutId) {
+      if (videoMediaDisabledOnThisDevice()) return false;
       const targetId = String(cutId || '');
       if (!project || !targetId) return false;
       return (project.video && Array.isArray(project.video.clips) ? project.video.clips : []).some(function(clip) {
@@ -11840,6 +12058,7 @@
     }
 
     function videoMediaClipForCut(project, cutId) {
+      if (videoMediaDisabledOnThisDevice()) return null;
       const targetId = String(cutId || '');
       if (!project || !targetId) return null;
       return (project.video && Array.isArray(project.video.clips) ? project.video.clips : []).find(function(clip) {
@@ -11853,6 +12072,7 @@
     }
 
     function videoMediaClipAtFrame(project, frame, fallbackCutId) {
+      if (videoMediaDisabledOnThisDevice()) return null;
       const target = Math.max(0, Math.round(Number(frame) || 0));
       const clips = (project && project.video && Array.isArray(project.video.clips) ? project.video.clips : []).filter(function(clip) {
         if (!clip || clip.hidden || !(clip.mediaDataUrl || clip.mediaFileName)) return false;
@@ -13809,6 +14029,7 @@
         clip.sourceBlockId = String(clip.sourceBlockId || '');
         clip.audioFileName = String(clip.audioFileName || '');
         clip.audioMime = String(clip.audioMime || '');
+        clip.audioStorage = clip.audioStorage && typeof clip.audioStorage === 'object' ? Object.assign({}, clip.audioStorage) : null;
         clip.waveformPeaks = Array.isArray(clip.waveformPeaks)
           ? clip.waveformPeaks.slice(0, AUDIO_WAVEFORM_PEAK_COUNT).map(function(value) {
             return Math.max(0, Math.min(1, Number(value) || 0));
@@ -14206,7 +14427,11 @@
     }
 
     function audioClipHasSource(project, clip) {
-      return Boolean(clip && !clip.hidden && (clip.audioFileName || (state.workspaceObjectUrls && state.workspaceObjectUrls.audio && state.workspaceObjectUrls.audio[clip.id])));
+      return Boolean(clip && !clip.hidden && (
+        clip.audioFileName ||
+        audioClipHasIndexedDbStorage(clip) ||
+        (state.workspaceObjectUrls && state.workspaceObjectUrls.audio && state.workspaceObjectUrls.audio[clip.id])
+      ));
     }
 
     function audioClipSourceBlockId(clip) {
@@ -14224,6 +14449,7 @@
       let score = audioClipIsAutoDialogueCandidate(clip) ? 0 : 1000;
       if (clip && clip.manualTiming) score += 200;
       if (clip && clip.audioFileName) score += 100;
+      if (clip && audioClipHasIndexedDbStorage(clip)) score += 90;
       if (clip && clip.ttsProvider) score += 30;
       if (clip && Array.isArray(clip.waveformPeaks) && clip.waveformPeaks.length) score += 20;
       if (clip && Math.round(Number(clip.audioTrimDurationFrames) || 0) > 0) score += 12;
@@ -14547,7 +14773,7 @@
       const audioEnd = audioTimelineDisplayClips(project).reduce(function(max, clip) {
         return Math.max(max, Math.max(0, clip.startFrame) + Math.max(1, clip.durationFrames));
       }, 0);
-      const videoMediaEnd = videoTimelineDisplayClips(project).reduce(function(max, clip) {
+      const videoMediaEnd = videoMediaDisabledOnThisDevice() ? 0 : videoTimelineDisplayClips(project).reduce(function(max, clip) {
         return Math.max(max, Math.max(0, clip.startFrame) + Math.max(1, clip.durationFrames));
       }, 0);
       return Math.max(1, video.totalFrames, audioEnd, videoMediaEnd);
@@ -16337,12 +16563,18 @@
     function externalVideoTrackHtml(track, clips, totalFrames) {
       const id = track && track.id || 'video-media-main';
       const hidden = videoMediaTrackIsHidden(state.project, id);
+      const disabled = videoMediaDisabledOnThisDevice();
       const trackData = Object.assign({}, track || {}, { id: id, type: 'video', label: track && track.label || nextVideoMediaTrackLabel(id), source: 'external-video-media', hidden: hidden });
       const collapsed = state.timelineVideoTracksCollapsed ? ' timeline-group-collapsed' : '';
-      return '<div class="timeline-track media-video-track' + collapsed + (hidden ? ' video-hidden' : '') + '" data-video-media-track-id="' + escapeAttr(id) + '">' +
+      const body = hidden
+        ? ''
+        : (disabled
+          ? ((clips || []).length ? (clips || []).map(function(clip) { return videoMediaClipHtml(clip, totalFrames); }).join('') : '<span class="media-video-placeholder">V Media disabled</span>')
+          : ((clips || []).length ? (clips || []).map(function(clip) { return videoMediaClipHtml(clip, totalFrames); }).join('') : '<span class="media-video-placeholder">drop image/video here</span>'));
+      return '<div class="timeline-track media-video-track' + collapsed + (hidden ? ' video-hidden' : '') + (disabled ? ' video-media-device-disabled' : '') + '" data-video-media-track-id="' + escapeAttr(id) + '">' +
         timelineTrackLabelHtml(trackData) +
         '<div class="timeline-lane" data-video-media-lane="true">' +
-          (hidden ? '' : ((clips || []).length ? (clips || []).map(function(clip) { return videoMediaClipHtml(clip, totalFrames); }).join('') : '<span class="media-video-placeholder">drop image/video here</span>')) +
+          body +
         '</div>' +
       '</div>';
     }
@@ -16726,6 +16958,7 @@
       const off = isVideo ? Boolean(track.hidden) : Boolean(track.muted);
       const title = isVideo ? (off ? 'Show video track' : 'Hide video track') : (off ? 'Unmute audio track' : 'Mute audio track');
       const icon = isVideo ? (off ? '◌' : '◉') : (off ? 'M' : '♪');
+      const videoDisabled = Boolean(isVideo && track && track.source === 'external-video-media' && videoMediaDisabledOnThisDevice());
       const selected = isVideo
         ? (state.selectedVideoTrackId === id ? ' selected' : '')
         : (state.selectedAudioTrackId === id ? ' selected' : '');
@@ -16736,7 +16969,7 @@
         ? '<button class="timeline-track-delete" type="button" data-video-track-delete="' + escapeAttr(id) + '" title="Delete video media layer">×</button>'
         : '';
       return '<span class="timeline-track-label' + selected + '" data-track-label="' + escapeAttr(id) + '">' +
-        '<button class="timeline-track-toggle' + (off ? ' off' : '') + '" type="button" data-track-toggle="' + (isVideo ? 'hidden' : 'muted') + '" data-track-id="' + escapeAttr(id) + '" title="' + escapeAttr(title) + '">' + icon + '</button>' +
+        '<button class="timeline-track-toggle' + (off ? ' off' : '') + '" type="button" data-track-toggle="' + (isVideo ? 'hidden' : 'muted') + '" data-track-id="' + escapeAttr(id) + '" title="' + escapeAttr(videoDisabled ? videoMediaDisabledReason() : title) + '"' + (videoDisabled ? ' disabled' : '') + '>' + icon + '</button>' +
         '<span data-track-title="' + escapeAttr(id) + '">' + escapeHtml(label) + '</span>' +
         deleteButton +
         videoDeleteButton +
@@ -16841,9 +17074,9 @@
     }
 
     function audioRecordingDisabledReason() {
-      if (!state.workspaceHandle) return '作業フォルダ未指定';
       if (!audioRecordingSupported()) return '録音未対応';
       if (state.audioRecordingSession) return '録音中';
+      if (!state.workspaceHandle && !mobileAudioRecordingStorageAvailable()) return '作業フォルダ未指定';
       return '';
     }
 
@@ -16920,20 +17153,29 @@
       }
       let stream = null;
       try {
-        if (!await ensureWorkspacePermission(state.workspaceHandle, true)) {
-          throw new Error('Working folder write permission was not granted.');
+        const useWorkspaceStorage = Boolean(state.workspaceHandle);
+        const useIndexedDbStorage = !useWorkspaceStorage && mobileAudioRecordingStorageAvailable();
+        if (useWorkspaceStorage) {
+          if (!await ensureWorkspacePermission(state.workspaceHandle, true)) {
+            throw new Error('Working folder write permission was not granted.');
+          }
+          await ensureWorkspaceStructure();
         }
-        await ensureWorkspaceStructure();
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mimeType = preferredAudioRecordingMimeType();
-        const options = mimeType ? { mimeType: mimeType } : undefined;
-        const recorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
+        const options = mimeType ? { mimeType: mimeType } : {};
+        if (useIndexedDbStorage) options.audioBitsPerSecond = MOBILE_RECORDING_AUDIO_BITS_PER_SECOND;
+        const recorder = Object.keys(options).length ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
         const clipId = 'audio-record-' + Date.now().toString(36) + '-' + Math.abs(hashString(String(performance.now() || Date.now())));
         const actualMime = recorder.mimeType || mimeType || 'audio/webm';
         const fileName = recordedAudioFileName(clipId, actualMime);
-        const audioDir = await getWorkspaceDirectory(state.project.settings.localWorkspace.audioDir, true);
-        const fileHandle = await audioDir.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
+        let fileHandle = null;
+        let writable = null;
+        if (useWorkspaceStorage) {
+          const audioDir = await getWorkspaceDirectory(state.project.settings.localWorkspace.audioDir, true);
+          fileHandle = await audioDir.getFileHandle(fileName, { create: true });
+          writable = await fileHandle.createWritable();
+        }
         const session = {
           recorder: recorder,
           stream: stream,
@@ -16942,6 +17184,8 @@
           fileHandle: fileHandle,
           writable: writable,
           writeQueue: Promise.resolve(),
+          storageKind: useWorkspaceStorage ? 'workspace' : 'indexeddb',
+          recordedChunks: useIndexedDbStorage ? [] : null,
           analysisChunks: [],
           analysisBytes: 0,
           bytesWritten: 0,
@@ -16956,6 +17200,14 @@
           if (!event.data || !event.data.size) return;
           const chunk = event.data;
           session.bytesWritten += Math.round(Number(chunk.size) || 0);
+          if (session.recordedChunks) {
+            if (session.bytesWritten > MOBILE_RECORDING_MAX_BYTES) {
+              session.error = new Error('Recording is too large for mobile IndexedDB storage.');
+              stopActiveAudioRecording();
+              return;
+            }
+            session.recordedChunks.push(chunk);
+          }
           if (session.analysisChunks) {
             const nextBytes = session.analysisBytes + Math.round(Number(chunk.size) || 0);
             if (nextBytes <= 12 * 1024 * 1024) {
@@ -17077,6 +17329,97 @@
       }, Math.max(0, Math.round(Number(delay) || 900)));
     }
 
+    function workspaceAutosaveUiAvailable() {
+      return !mobileOrTabletRuntime() && fileSystemAccessAvailable();
+    }
+
+    function workspaceAutosaveSettings() {
+      state.project.settings = state.project.settings || {};
+      state.project.settings.localWorkspace = normalizeWorkspaceSettings(state.project.settings.localWorkspace);
+      return state.project.settings.localWorkspace;
+    }
+
+    function workspaceAutosaveMinutes() {
+      return clampNumber(workspaceAutosaveSettings().autosaveMinutes, 1, 120, 5);
+    }
+
+    function workspaceAutosaveEnabled() {
+      const settings = workspaceAutosaveSettings();
+      return Boolean(workspaceAutosaveUiAvailable() && state.workspaceHandle && settings.autosaveEnabled);
+    }
+
+    function workspaceAutosaveDisabledReason() {
+      if (!workspaceAutosaveUiAvailable()) return 'この環境では作業フォルダ自動保存は非表示です。';
+      if (!state.workspaceHandle) return '作業フォルダ未接続';
+      return '';
+    }
+
+    function workspaceAutosaveTimerKey() {
+      if (!workspaceAutosaveEnabled()) return '';
+      return [
+        state.workspaceName || 'workspace',
+        workspaceAutosaveMinutes(),
+        state.project && state.project.settings && state.project.settings.localWorkspace && state.project.settings.localWorkspace.projectFileName || 'project.conte.json'
+      ].join('|');
+    }
+
+    function cancelWorkspaceAutosaveTimer() {
+      if (state.workspaceAutosaveTimer) clearTimeout(state.workspaceAutosaveTimer);
+      state.workspaceAutosaveTimer = 0;
+      state.workspaceAutosaveTimerKey = '';
+    }
+
+    function workspaceAutosaveCanRunNow() {
+      if (!workspaceAutosaveEnabled()) return false;
+      if (state.workspaceAutosaveBusy) return false;
+      if (state.videoPlaying || state.videoPlaybackStarting) return false;
+      if (state.memoPointerId !== null || state.memoRasterOp || state.cameraFrameDrag) return false;
+      if (state.audioDrag || state.timelinePlayheadDragging || state.timelineScrollbarDragging || state.timelineLowerResizeDrag) return false;
+      if (state.audioRecordingSession) return false;
+      return true;
+    }
+
+    function syncWorkspaceAutosaveTimer() {
+      const key = workspaceAutosaveTimerKey();
+      if (!key) {
+        cancelWorkspaceAutosaveTimer();
+        return;
+      }
+      if (state.workspaceAutosaveTimer && state.workspaceAutosaveTimerKey === key) return;
+      cancelWorkspaceAutosaveTimer();
+      state.workspaceAutosaveTimerKey = key;
+      state.workspaceAutosaveTimer = setTimeout(runWorkspaceAutosaveTick, workspaceAutosaveMinutes() * 60 * 1000);
+    }
+
+    async function runWorkspaceAutosaveTick() {
+      state.workspaceAutosaveTimer = 0;
+      state.workspaceAutosaveTimerKey = '';
+      if (!workspaceAutosaveEnabled()) {
+        syncWorkspaceAutosaveTimer();
+        return;
+      }
+      if (!workspaceAutosaveCanRunNow()) {
+        state.workspaceAutosaveStatus = '待機中\n操作終了後に保存';
+        updateStageSettingsUI();
+        state.workspaceAutosaveTimerKey = workspaceAutosaveTimerKey();
+        state.workspaceAutosaveTimer = setTimeout(runWorkspaceAutosaveTick, 30000);
+        return;
+      }
+      state.workspaceAutosaveBusy = true;
+      state.workspaceAutosaveStatus = '自動保存中...';
+      updateStageSettingsUI();
+      try {
+        await saveProjectToWorkspace({ source: 'autosave' });
+        state.workspaceAutosaveStatus = '自動保存完了\n' + new Date().toLocaleString();
+      } catch (error) {
+        state.workspaceAutosaveStatus = '自動保存失敗\n' + (error && error.message ? error.message : error);
+      } finally {
+        state.workspaceAutosaveBusy = false;
+        updateStageSettingsUI();
+        syncWorkspaceAutosaveTimer();
+      }
+    }
+
     async function finalizeAudioRecordingSession(session) {
       if (!session || session.finalizeStarted) return;
       session.finalizeStarted = true;
@@ -17094,7 +17437,9 @@
         throw error;
       }
       if (session.error) throw session.error;
-      const recordedFile = session.fileHandle ? await session.fileHandle.getFile() : null;
+      const recordedFile = session.fileHandle
+        ? await session.fileHandle.getFile()
+        : (session.recordedChunks && session.recordedChunks.length ? new Blob(session.recordedChunks, { type: session.mimeType || 'audio/webm' }) : null);
       if (!recordedFile || !recordedFile.size) {
         state.timelineStatus = 'Recording discarded: no audio data.';
         guardedRender('timing', renderTimingDashboard);
@@ -17120,7 +17465,7 @@
           characterGender: '',
           characterAge: '',
           text: recordedAudioClipLabel(),
-          audioFileName: session.fileName || '',
+          audioFileName: session.storageKind === 'workspace' ? (session.fileName || '') : '',
           audioMime: mime,
           audioDurationFrames: 0,
           audioTrimStartFrames: 0,
@@ -17141,14 +17486,18 @@
         clip.durationFrames = fallbackFrames;
         state.project.audio.clips.push(clip);
         placeAudioClipOnNonOverlappingTrack(state.project, clip, session.trackId || 'dialogue-main');
-        clip.audioStorage = {
-          kind: 'workspace',
-          dir: state.project.settings.localWorkspace.audioDir,
-          fileName: clip.audioFileName,
-          size: Math.round(Number(recordedFile.size) || 0),
-          savedAt: new Date().toISOString()
-        };
-        replaceWorkspaceObjectUrl('audio', clip.id, recordedFile);
+        if (session.storageKind === 'workspace') {
+          clip.audioStorage = {
+            kind: 'workspace',
+            dir: state.project.settings.localWorkspace.audioDir,
+            fileName: clip.audioFileName,
+            size: Math.round(Number(recordedFile.size) || 0),
+            savedAt: new Date().toISOString()
+          };
+          replaceWorkspaceObjectUrl('audio', clip.id, recordedFile);
+        } else {
+          await saveAudioBlobToIndexedDb(clip, recordedFile, mime, session.fileName || '');
+        }
         state.project.audio.manualTimeline = true;
         sortAudioClips(state.project);
         writeAudioTimelineTrack(state.project);
@@ -17171,7 +17520,9 @@
           afterSelection: afterSelection
         });
         state.redoStack = [];
-        state.timelineStatus = 'Recorded audio: ' + clip.audioFileName;
+        state.timelineStatus = session.storageKind === 'workspace'
+          ? ('Recorded audio: ' + clip.audioFileName)
+          : 'Recorded audio: IndexedDB';
         if (state.videoEditMode) {
           guardedRender('timing', renderTimingDashboard);
           guardedRender('inspector', renderInspector);
@@ -17179,7 +17530,8 @@
         } else {
           refresh({ skipSource: true, skipMemo: true });
         }
-        scheduleWorkspaceProjectSave(1400);
+        if (session.storageKind === 'workspace') scheduleWorkspaceProjectSave(1400);
+        else scheduleIndexedDbAutosave(700);
         const analysisBlob = session.analysisChunks
           ? new Blob(session.analysisChunks, { type: mime })
           : recordedFile;
@@ -18704,6 +19056,11 @@
           const property = toggle.dataset.trackToggle || '';
           const track = timelineTrackById(state.project, trackId);
           if (track && track.type === 'video') {
+            if (track.source === 'external-video-media' && videoMediaDisabledOnThisDevice()) {
+              state.timelineStatus = videoMediaDisabledReason();
+              guardedRender('chrome', refreshChromeControls);
+              return;
+            }
             runTimelineStructureCommand('Toggle video timeline track', function(project) {
               toggleTimelineTrack(project, trackId, property);
             }, { deferThumbnails: true, deferThumbnailMs: 320, partialTimeline: true });
@@ -18725,6 +19082,11 @@
           if (!trackId) return;
           const track = timelineTrackById(state.project, trackId);
           if (track && track.type === 'video') {
+            if (track.source === 'external-video-media' && videoMediaDisabledOnThisDevice()) {
+              state.timelineStatus = videoMediaDisabledReason();
+              guardedRender('chrome', refreshChromeControls);
+              return;
+            }
             state.selectedVideoTrackId = state.selectedVideoTrackId === trackId ? '' : trackId;
             state.selectedVideoClipId = '';
             state.selectedAudioClipId = '';
@@ -18779,6 +19141,11 @@
       root.querySelectorAll('[data-video-track-delete]').forEach(function(button) {
         if (button.dataset.trackLabelControlBound === 'true') return;
         button.dataset.trackLabelControlBound = 'true';
+        if (videoMediaDisabledOnThisDevice()) {
+          button.disabled = true;
+          button.title = videoMediaDisabledReason();
+          return;
+        }
         button.addEventListener('click', function(event) {
           event.preventDefault();
           event.stopPropagation();
@@ -18841,6 +19208,11 @@
         });
       });
       root.querySelectorAll('[data-video-add-track="true"]').forEach(function(button) {
+        if (videoMediaDisabledOnThisDevice()) {
+          button.disabled = true;
+          button.title = videoMediaDisabledReason();
+          return;
+        }
         button.addEventListener('click', function(event) {
           event.preventDefault();
           event.stopPropagation();
@@ -19640,6 +20012,12 @@
     }
 
     function selectVideoMediaClip(clipId, root) {
+      if (videoMediaDisabledOnThisDevice()) {
+        state.timelineStatus = videoMediaDisabledReason();
+        refreshTimelineSelectionDom(root || document.getElementById('timingDashboard'), { thumbnails: false });
+        guardedRender('chrome', refreshChromeControls);
+        return;
+      }
       const id = String(clipId || '');
       state.selectedVideoClipId = id;
       state.selectedVideoTrackId = '';
@@ -19747,6 +20125,11 @@
     }
 
     function commitVideoMediaClipMove(clipId, nextStartFrame, trackId) {
+      if (videoMediaDisabledOnThisDevice()) {
+        state.timelineStatus = videoMediaDisabledReason();
+        guardedRender('timing', renderTimingDashboard);
+        return;
+      }
       runTimelineStructureCommand('Move V media', function(project) {
         normalizeVideoClips(project);
         const clip = project.video.clips.find(function(item) { return item.id === clipId; });
@@ -19764,6 +20147,11 @@
     }
 
     function commitVideoMediaClipTrim(clipId, edge, original, deltaFrames) {
+      if (videoMediaDisabledOnThisDevice()) {
+        state.timelineStatus = videoMediaDisabledReason();
+        guardedRender('timing', renderTimingDashboard);
+        return;
+      }
       runTimelineStructureCommand('Trim V media', function(project) {
         normalizeVideoClips(project);
         const clip = project.video.clips.find(function(item) { return item.id === clipId; });
@@ -19778,6 +20166,11 @@
     }
 
     function commitVideoMediaClipHide(clipId) {
+      if (videoMediaDisabledOnThisDevice()) {
+        state.timelineStatus = videoMediaDisabledReason();
+        guardedRender('timing', renderTimingDashboard);
+        return false;
+      }
       let hidden = false;
       runTimelineStructureCommand('Hide V media clip', function(project) {
         normalizeVideoClips(project);
@@ -19795,6 +20188,7 @@
     }
 
     function bindVideoMediaTimelineDrag(root, totalFrames) {
+      if (videoMediaDisabledOnThisDevice()) return;
       root.querySelectorAll('.video-media-clip').forEach(function(clipEl) {
         clipEl.addEventListener('pointerdown', function(event) {
           if (event.button !== 0) return;
@@ -20093,6 +20487,7 @@
     }
 
     function bindVideoMediaTimelineDrop(root, totalFrames) {
+      if (videoMediaDisabledOnThisDevice()) return;
       root.querySelectorAll('[data-video-media-track-id]').forEach(function(track) {
         const trackId = track.dataset.videoMediaTrackId || 'video-media-main';
         track.addEventListener('dragover', function(event) {
@@ -20386,7 +20781,7 @@
         const fps = fpsForProject(project);
         const preloadEnd = Math.min(totalFrames, startFrame + fps * 10);
         (project.audio && project.audio.clips || []).filter(function(clip) {
-          return clip.startFrame + clip.durationFrames >= startFrame && clip.startFrame <= preloadEnd && (clip.audioFileName || state.workspaceObjectUrls.audio[clip.id]);
+          return clip.startFrame + clip.durationFrames >= startFrame && clip.startFrame <= preloadEnd && audioClipHasSource(project, clip);
         }).slice(0, 8).forEach(function(clip) {
           ensurePlaybackAudioUrlForClip(clip).then(function(url) {
             if (url) preloadAudioBufferForClip(clip);
@@ -20454,6 +20849,7 @@
       const needsBrowserSpeech = state.playbackClipQueue.some(function(clip) {
         if (state.workspaceObjectUrls.audio[clip.id]) return false;
         if (clip.audioFileName && state.workspaceHandle) return false;
+        if (audioClipHasIndexedDbStorage(clip)) return false;
         const profile = characterVoiceProfile(state.project, clip.characterName || 'Unknown', {
           gender: clip.characterGender || '',
           age: clip.characterAge || ''
@@ -20568,6 +20964,19 @@
     async function ensurePlaybackAudioUrlForClip(clip) {
       if (!clip || !clip.id) return '';
       if (state.workspaceObjectUrls.audio[clip.id]) return state.workspaceObjectUrls.audio[clip.id];
+      if (audioClipHasIndexedDbStorage(clip)) {
+        try {
+          const blob = await readAudioBlobFromIndexedDb(clip);
+          if (!blob) return '';
+          const url = replaceWorkspaceObjectUrl('audio', clip.id, blob);
+          if (!clip.audioTrimDurationFrames || !clip.waveformPeaks || !clip.waveformPeaks.length) {
+            analyzeAudioBlobForClip(clip, blob).catch(function() {});
+          }
+          return url;
+        } catch (error) {
+          return '';
+        }
+      }
       if (!state.workspaceHandle || !clip.audioFileName) return '';
       try {
         const file = await readBlobFromWorkspace(state.project.settings.localWorkspace.audioDir, clip.audioFileName);
@@ -20589,6 +20998,14 @@
         return;
       }
       if (clip && clip.audioFileName && state.workspaceHandle) {
+        const playbackToken = state.videoPlaybackStartToken;
+        ensurePlaybackAudioUrlForClip(clip).then(function(url) {
+          if (!url || !state.videoPlaying || playbackToken !== state.videoPlaybackStartToken) return;
+          playAudioUrlForClip(clip, url);
+        });
+        return;
+      }
+      if (clip && audioClipHasIndexedDbStorage(clip)) {
         const playbackToken = state.videoPlaybackStartToken;
         ensurePlaybackAudioUrlForClip(clip).then(function(url) {
           if (!url || !state.videoPlaying || playbackToken !== state.videoPlaybackStartToken) return;
@@ -23991,6 +24408,11 @@
 
     async function importExternalVideoMediaFileToTimeline(file, frame, trackId) {
       try {
+        if (videoMediaDisabledOnThisDevice()) {
+          state.timelineStatus = videoMediaDisabledReason();
+          renderTimingDashboard();
+          return;
+        }
         if (!state.workspaceHandle) {
           state.timelineStatus = 'V1 media import blocked: select a working folder first.';
           renderTimingDashboard();
@@ -25690,6 +26112,7 @@
       clearAudioObjectUrl(clip);
       clip.audioFileName = '';
       clip.audioMime = '';
+      clip.audioStorage = null;
       clip.audioDurationFrames = 0;
       clip.audioTrimStartFrames = 0;
       clip.audioTrimDurationFrames = 0;
@@ -27305,6 +27728,193 @@
       return handle;
     }
 
+    async function getWorkspaceDbValue(key) {
+      if (!indexedDbAutosaveAvailable()) return null;
+      const db = await openWorkspaceDb();
+      try {
+        return await new Promise(function(resolve, reject) {
+          const tx = db.transaction(WORKSPACE_STORE_NAME, 'readonly');
+          const request = tx.objectStore(WORKSPACE_STORE_NAME).get(key);
+          request.onsuccess = function() { resolve(request.result || null); };
+          request.onerror = function() { reject(request.error); };
+        });
+      } finally {
+        db.close();
+      }
+    }
+
+    async function putWorkspaceDbValue(key, value) {
+      if (!indexedDbAutosaveAvailable()) return false;
+      const db = await openWorkspaceDb();
+      try {
+        await new Promise(function(resolve, reject) {
+          const tx = db.transaction(WORKSPACE_STORE_NAME, 'readwrite');
+          tx.objectStore(WORKSPACE_STORE_NAME).put(value, key);
+          tx.oncomplete = resolve;
+          tx.onerror = function() { reject(tx.error); };
+        });
+        return true;
+      } finally {
+        db.close();
+      }
+    }
+
+    async function deleteWorkspaceDbValue(key) {
+      if (!indexedDbAutosaveAvailable()) return false;
+      const db = await openWorkspaceDb();
+      try {
+        await new Promise(function(resolve, reject) {
+          const tx = db.transaction(WORKSPACE_STORE_NAME, 'readwrite');
+          tx.objectStore(WORKSPACE_STORE_NAME).delete(key);
+          tx.oncomplete = resolve;
+          tx.onerror = function() { reject(tx.error); };
+        });
+        return true;
+      } finally {
+        db.close();
+      }
+    }
+
+    async function saveAudioBlobToIndexedDb(clip, blob, mime, fileName) {
+      if (!clip || !clip.id || !blob) return null;
+      if (!indexedDbAutosaveAvailable()) throw new Error('IndexedDB is not available for audio storage.');
+      const key = indexedDbAudioStorageKey(clip.id);
+      const audioMime = mime || blob.type || clip.audioMime || 'audio/webm';
+      const record = {
+        kind: 'audioBlob',
+        clipId: String(clip.id || ''),
+        fileName: String(fileName || clip.audioFileName || ''),
+        mime: audioMime,
+        size: Math.round(Number(blob.size) || 0),
+        savedAt: new Date().toISOString(),
+        blob: blob
+      };
+      await putWorkspaceDbValue(key, record);
+      clip.audioFileName = '';
+      clip.audioMime = audioMime;
+      clip.audioStorage = {
+        kind: 'indexeddb',
+        key: key,
+        fileName: record.fileName,
+        mime: audioMime,
+        size: record.size,
+        savedAt: record.savedAt
+      };
+      replaceWorkspaceObjectUrl('audio', clip.id, blob);
+      return clip.audioStorage;
+    }
+
+    async function readAudioBlobFromIndexedDb(clip) {
+      const key = audioClipIndexedDbStorageKey(clip);
+      if (!key || !indexedDbAutosaveAvailable()) return null;
+      const record = await getWorkspaceDbValue(key);
+      const blob = record && record.blob instanceof Blob ? record.blob : null;
+      if (!blob || !blob.size) return null;
+      if (clip) {
+        clip.audioStorage = Object.assign({}, clip.audioStorage || {}, {
+          kind: 'indexeddb',
+          key: key,
+          fileName: String(record.fileName || clip.audioStorage && clip.audioStorage.fileName || ''),
+          mime: String(record.mime || blob.type || clip.audioMime || 'audio/webm'),
+          size: Math.max(Math.round(Number(record.size) || 0), Math.round(Number(blob.size) || 0)),
+          savedAt: String(record.savedAt || clip.audioStorage && clip.audioStorage.savedAt || '')
+        });
+        clip.audioMime = clip.audioStorage.mime;
+      }
+      return blob;
+    }
+
+    function indexedDbAutosaveRecordLabel(record) {
+      if (!record) return 'バックアップなし';
+      const savedAt = record && record.savedAt ? new Date(record.savedAt) : null;
+      const time = savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt.toLocaleString() : '';
+      const bytes = Math.max(0, Math.round(Number(record.bytes) || String(record.payload || '').length || 0));
+      const kb = bytes ? Math.ceil(bytes / 1024) + 'KB' : '';
+      return ['最終バックアップ', time, kb].filter(Boolean).join('\n');
+    }
+
+    async function loadIndexedDbAutosaveRecord() {
+      return getWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY);
+    }
+
+    async function refreshIndexedDbAutosaveStatus() {
+      if (!indexedDbAutosaveAvailable()) {
+        state.indexedDbAutosaveStatus = 'IndexedDB非対応';
+        updateStageSettingsUI();
+        return;
+      }
+      try {
+        const record = await loadIndexedDbAutosaveRecord();
+        state.indexedDbAutosaveStatus = indexedDbAutosaveRecordLabel(record);
+      } catch (error) {
+        state.indexedDbAutosaveStatus = '確認失敗';
+      }
+      updateStageSettingsUI();
+    }
+
+    async function saveProjectToIndexedDbAutosave() {
+      if (!indexedDbAutosaveEnabled(state.project)) return false;
+      const payload = serializedProjectJson();
+      const record = {
+        savedAt: new Date().toISOString(),
+        schemaVersion: PROJECT_FORMAT_VERSION,
+        projectId: String(state.project && state.project.projectId || ''),
+        title: String(state.project && state.project.title || ''),
+        bytes: payload.length,
+        payload: payload
+      };
+      await putWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY, record);
+      state.indexedDbAutosaveStatus = indexedDbAutosaveRecordLabel(record);
+      updateStageSettingsUI();
+      return true;
+    }
+
+    function scheduleIndexedDbAutosave(delay) {
+      if (!indexedDbAutosaveEnabled(state.project)) return;
+      if (state.indexedDbAutosaveTimer) clearTimeout(state.indexedDbAutosaveTimer);
+      state.indexedDbAutosaveTimer = setTimeout(function() {
+        state.indexedDbAutosaveTimer = 0;
+        saveProjectToIndexedDbAutosave().catch(function(error) {
+          state.indexedDbAutosaveStatus = '保存失敗\n' + (error && error.message ? error.message : error);
+          updateStageSettingsUI();
+        });
+      }, Math.max(300, Math.round(Number(delay) || INDEXED_DB_AUTOSAVE_DELAY_MS)));
+    }
+
+    async function restoreIndexedDbAutosave() {
+      try {
+        const record = await loadIndexedDbAutosaveRecord();
+        const payload = record && typeof record === 'object' ? String(record.payload || '') : String(record || '');
+        if (!payload) {
+          alert('IndexedDBバックアップはありません。');
+          return;
+        }
+        const label = indexedDbAutosaveRecordLabel(record);
+        if (!confirm(label + '\n\nこのバックアップを復元しますか？')) return;
+        stopTimelinePlayback(false);
+        state.undoStack = [];
+        state.redoStack = [];
+        state.stageSettingsOpen = false;
+        restoreProject(JSON.parse(payload));
+        await hydrateWorkspaceMediaRefs();
+        state.indexedDbAutosaveStatus = '復元完了\n' + (record && record.savedAt ? new Date(record.savedAt).toLocaleString() : '');
+        refresh();
+      } catch (error) {
+        alert('IndexedDB restore failed: ' + (error && error.message ? error.message : error));
+      }
+    }
+
+    async function deleteIndexedDbAutosave() {
+      if (!confirm('IndexedDBバックアップを削除しますか？')) return;
+      try {
+        await deleteWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY);
+        state.indexedDbAutosaveStatus = '削除完了';
+        updateStageSettingsUI();
+      } catch (error) {
+        alert('IndexedDB backup delete failed: ' + (error && error.message ? error.message : error));
+      }
+    }
+
     async function ensureWorkspaceStructure() {
       if (!state.workspaceHandle) return;
       await getWorkspaceDirectory(state.project.settings.localWorkspace.audioDir, true);
@@ -27708,7 +28318,31 @@
       return stats;
     }
 
+    async function hydrateIndexedDbAudioRefs(project) {
+      const clips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
+      if (!clips.length || !indexedDbAutosaveAvailable()) return { checked: 0, found: 0, missing: 0 };
+      const stats = { checked: 0, found: 0, missing: 0 };
+      for (let index = 0; index < clips.length; index += 1) {
+        const clip = clips[index];
+        if (!clip || !audioClipHasIndexedDbStorage(clip) || state.workspaceObjectUrls.audio[clip.id]) continue;
+        stats.checked += 1;
+        try {
+          const blob = await readAudioBlobFromIndexedDb(clip);
+          if (!blob) {
+            stats.missing += 1;
+            continue;
+          }
+          replaceWorkspaceObjectUrl('audio', clip.id, blob);
+          stats.found += 1;
+        } catch (error) {
+          stats.missing += 1;
+        }
+      }
+      return stats;
+    }
+
     async function hydrateWorkspaceMediaRefs() {
+      await hydrateIndexedDbAudioRefs(state.project);
       if (!state.workspaceHandle) return;
       const videoClips = state.project.video && Array.isArray(state.project.video.clips) ? state.project.video.clips : [];
       for (let index = 0; index < videoClips.length; index += 1) {
@@ -27741,7 +28375,16 @@
 
     async function hydrateWorkspaceAudioRefs(project) {
       const stats = { checked: 0, found: 0, missing: 0, healed: 0 };
-      if (!state.workspaceHandle || !project || !project.audio || !Array.isArray(project.audio.clips)) return stats;
+      if (!project || !project.audio || !Array.isArray(project.audio.clips)) return stats;
+      const indexedStats = await hydrateIndexedDbAudioRefs(project);
+      stats.checked += indexedStats.checked;
+      stats.found += indexedStats.found;
+      stats.missing += indexedStats.missing;
+      if (!state.workspaceHandle) {
+        sortAudioClips(project);
+        writeAudioTimelineTrack(project);
+        return stats;
+      }
       stats.healed = await healClipAudioFileNamesFromWorkspace(project);
       for (let index = 0; index < project.audio.clips.length; index += 1) {
         const clip = project.audio.clips[index];
@@ -27776,6 +28419,7 @@
       });
       const needsHeal = project.audio.clips.filter(function(clip) {
         if (!clip || clip.audioFileName) return false;
+        if (audioClipHasIndexedDbStorage(clip)) return false;
         const sourceBlockId = audioClipSourceBlockId(clip);
         return !(sourceBlockId && audioClipIsAutoDialogueCandidate(clip) && protectedSourceBlocks.has(sourceBlockId));
       });
@@ -27870,6 +28514,275 @@
 
     function serializedProjectJson() {
       return JSON.stringify(projectForJsonStorage(), null, 2);
+    }
+
+    function mobileZipPackageAvailable() {
+      return mobileOrTabletRuntime();
+    }
+
+    function zipPackageWarningText() {
+      return 'ZIPには project.conte.json のみを書き出します。\n音声・映像・外部レイヤー画像ファイルは含まれません。';
+    }
+
+    function zipPackageFileName() {
+      const base = safeFileName(state.project && state.project.projectId || 'conte_project') || 'conte_project';
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+      return base + '_' + stamp + '.conte.zip';
+    }
+
+    function le16(value) {
+      const bytes = new Uint8Array(2);
+      new DataView(bytes.buffer).setUint16(0, Math.max(0, Math.round(Number(value) || 0)) & 0xffff, true);
+      return bytes;
+    }
+
+    function le32(value) {
+      const bytes = new Uint8Array(4);
+      new DataView(bytes.buffer).setUint32(0, Math.max(0, Math.round(Number(value) || 0)) >>> 0, true);
+      return bytes;
+    }
+
+    let zipCrcTableCache = null;
+    function zipCrcTable() {
+      if (zipCrcTableCache) return zipCrcTableCache;
+      const table = new Uint32Array(256);
+      for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        table[n] = c >>> 0;
+      }
+      zipCrcTableCache = table;
+      return table;
+    }
+
+    function zipCrc32(bytes) {
+      const table = zipCrcTable();
+      let crc = 0xffffffff;
+      for (let index = 0; index < bytes.length; index += 1) {
+        crc = table[(crc ^ bytes[index]) & 0xff] ^ (crc >>> 8);
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function zipDosTime(date) {
+      const d = date || new Date();
+      const time = ((d.getHours() & 0x1f) << 11) | ((d.getMinutes() & 0x3f) << 5) | ((Math.floor(d.getSeconds() / 2)) & 0x1f);
+      const year = Math.max(1980, d.getFullYear());
+      const day = ((year - 1980) << 9) | (((d.getMonth() + 1) & 0x0f) << 5) | (d.getDate() & 0x1f);
+      return { time: time, date: day };
+    }
+
+    function zipFixedHeader(parts) {
+      const chunks = [];
+      parts.forEach(function(part) {
+        if (part[0] === 2) chunks.push(le16(part[1]));
+        else if (part[0] === 4) chunks.push(le32(part[1]));
+      });
+      return chunks;
+    }
+
+    function createStoredZipBlob(files) {
+      const encoder = new TextEncoder();
+      const localChunks = [];
+      const centralChunks = [];
+      const entries = [];
+      let offset = 0;
+      (files || []).forEach(function(file) {
+        const nameBytes = encoder.encode(String(file.name || 'file'));
+        const dataBytes = typeof file.data === 'string' ? encoder.encode(file.data) : new Uint8Array(file.data || []);
+        const crc = zipCrc32(dataBytes);
+        const stamp = zipDosTime(new Date());
+        const localHeader = zipFixedHeader([
+          [4, 0x04034b50],
+          [2, 20],
+          [2, 0x0800],
+          [2, 0],
+          [2, stamp.time],
+          [2, stamp.date],
+          [4, crc],
+          [4, dataBytes.length],
+          [4, dataBytes.length],
+          [2, nameBytes.length],
+          [2, 0]
+        ]);
+        const localSize = localHeader.reduce(function(sum, chunk) { return sum + chunk.length; }, 0) + nameBytes.length + dataBytes.length;
+        localHeader.forEach(function(chunk) { localChunks.push(chunk); });
+        localChunks.push(nameBytes, dataBytes);
+        entries.push({
+          nameBytes: nameBytes,
+          crc: crc,
+          size: dataBytes.length,
+          offset: offset,
+          stamp: stamp
+        });
+        offset += localSize;
+      });
+      const centralOffset = offset;
+      entries.forEach(function(entry) {
+        const centralHeader = zipFixedHeader([
+          [4, 0x02014b50],
+          [2, 20],
+          [2, 20],
+          [2, 0x0800],
+          [2, 0],
+          [2, entry.stamp.time],
+          [2, entry.stamp.date],
+          [4, entry.crc],
+          [4, entry.size],
+          [4, entry.size],
+          [2, entry.nameBytes.length],
+          [2, 0],
+          [2, 0],
+          [2, 0],
+          [2, 0],
+          [4, 0],
+          [4, entry.offset]
+        ]);
+        centralHeader.forEach(function(chunk) { centralChunks.push(chunk); });
+        centralChunks.push(entry.nameBytes);
+      });
+      const centralSize = centralChunks.reduce(function(sum, chunk) { return sum + chunk.length; }, 0);
+      const endHeader = zipFixedHeader([
+        [4, 0x06054b50],
+        [2, 0],
+        [2, 0],
+        [2, entries.length],
+        [2, entries.length],
+        [4, centralSize],
+        [4, centralOffset],
+        [2, 0]
+      ]);
+      return new Blob(localChunks.concat(centralChunks, endHeader), { type: 'application/zip' });
+    }
+
+    function zipReadU16(view, offset) {
+      return view.getUint16(offset, true);
+    }
+
+    function zipReadU32(view, offset) {
+      return view.getUint32(offset, true);
+    }
+
+    function findZipEndOfCentralDirectory(view) {
+      const min = Math.max(0, view.byteLength - 22 - 65535);
+      for (let offset = view.byteLength - 22; offset >= min; offset -= 1) {
+        if (zipReadU32(view, offset) === 0x06054b50) return offset;
+      }
+      return -1;
+    }
+
+    function readStoredZipEntries(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const view = new DataView(buffer);
+      const decoder = new TextDecoder('utf-8');
+      const eocd = findZipEndOfCentralDirectory(view);
+      if (eocd < 0) throw new Error('ZIP end record was not found.');
+      const entryCount = zipReadU16(view, eocd + 10);
+      const centralOffset = zipReadU32(view, eocd + 16);
+      const entries = [];
+      let cursor = centralOffset;
+      for (let index = 0; index < entryCount; index += 1) {
+        if (zipReadU32(view, cursor) !== 0x02014b50) throw new Error('ZIP central directory is broken.');
+        const method = zipReadU16(view, cursor + 10);
+        const compressedSize = zipReadU32(view, cursor + 20);
+        const nameLength = zipReadU16(view, cursor + 28);
+        const extraLength = zipReadU16(view, cursor + 30);
+        const commentLength = zipReadU16(view, cursor + 32);
+        const localOffset = zipReadU32(view, cursor + 42);
+        const name = decoder.decode(bytes.slice(cursor + 46, cursor + 46 + nameLength));
+        if (method !== 0) throw new Error('圧縮されたZIPは未対応です。このエディタで書き出したZIPを読み込んでください。');
+        if (zipReadU32(view, localOffset) !== 0x04034b50) throw new Error('ZIP local header is broken.');
+        const localNameLength = zipReadU16(view, localOffset + 26);
+        const localExtraLength = zipReadU16(view, localOffset + 28);
+        const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+        entries.push({
+          name: name,
+          data: bytes.slice(dataStart, dataStart + compressedSize)
+        });
+        cursor += 46 + nameLength + extraLength + commentLength;
+      }
+      return entries;
+    }
+
+    async function extractProjectJsonFromZipFile(file) {
+      const entries = readStoredZipEntries(await file.arrayBuffer());
+      const jsonEntry = entries.find(function(entry) {
+        return /(^|\/)project\.conte\.json$/i.test(entry.name);
+      }) || entries.find(function(entry) {
+        return /\.json$/i.test(entry.name);
+      });
+      if (!jsonEntry) throw new Error('ZIP内にJSONがありません。');
+      return new TextDecoder('utf-8').decode(jsonEntry.data);
+    }
+
+    async function deliverZipPackage(blob, fileName) {
+      const file = typeof File !== 'undefined' ? new File([blob], fileName, { type: 'application/zip' }) : null;
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      if (file && nav && typeof nav.share === 'function') {
+        try {
+          if (!nav.canShare || nav.canShare({ files: [file] })) {
+            await nav.share({ files: [file], title: fileName });
+            return;
+          }
+        } catch (error) {
+          if (error && error.name === 'AbortError') return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function exportMobileZipPackage() {
+      if (!mobileZipPackageAvailable()) return;
+      if (!confirm(zipPackageWarningText() + '\n\n続行しますか？')) return;
+      try {
+        const payload = serializedProjectJson();
+        const blob = createStoredZipBlob([{ name: 'project.conte.json', data: payload }]);
+        const fileName = zipPackageFileName();
+        await deliverZipPackage(blob, fileName);
+        state.zipPackageStatus = '書き出し完了\n' + fileName;
+        updateStageSettingsUI();
+      } catch (error) {
+        alert('ZIP export failed: ' + (error && error.message ? error.message : error));
+      }
+    }
+
+    async function importMobileZipPackageFile(file) {
+      if (!mobileZipPackageAvailable() || !file) return;
+      try {
+        alert(zipPackageWarningText() + '\n読み込み後、音声・映像素材や外部レイヤー画像は必要に応じて再配置してください。');
+        const text = await extractProjectJsonFromZipFile(file);
+        stopTimelinePlayback(false);
+        state.workspaceHandle = null;
+        state.workspaceName = '';
+        state.workspaceStatus = 'ZIP読込\n素材ファイルなし';
+        state.undoStack = [];
+        state.redoStack = [];
+        restoreProject(JSON.parse(text));
+        state.zipPackageStatus = '読み込み完了\n' + (file.name || 'package.zip');
+        updateWorkspaceUI();
+        updateStageSettingsUI();
+        scheduleIndexedDbAutosave(500);
+      } catch (error) {
+        alert('ZIP import failed: ' + (error && error.message ? error.message : error));
+      }
+    }
+
+    function chooseMobileZipPackageForImport() {
+      if (!mobileZipPackageAvailable()) return;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.zip,application/zip,application/x-zip-compressed';
+      input.addEventListener('change', function(event) {
+        importMobileZipPackageFile(event.target.files && event.target.files[0]);
+      });
+      input.click();
     }
 
     async function saveProjectToWorkspace() {
@@ -30826,6 +31739,7 @@
             scheduleMemoCanvasRedraw();
           }
           updateMemoUndoRedoButtonsOnly();
+          scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
           return true;
         }
         sourceCanvas = trimmed.canvas;
@@ -30863,6 +31777,7 @@
         scheduleMemoCanvasRedraw();
       }
       updateMemoUndoRedoButtonsOnly();
+      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
       return true;
     }
 
@@ -32417,6 +33332,7 @@
       page.redo = [];
       redrawMemoCanvas();
       updateMemoUndoRedoButtonsOnly();
+      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
 
     function shouldAppendMemoPoint(stroke, point) {
@@ -32984,6 +33900,7 @@
         clearMemoEditStateForDrawing(selectedLayer.layer.drawingRef);
         touchLayerDrawing(drawing);
         refreshMemoLayerHistoryChange(selectedLayer.layer.drawingRef, null, '');
+        scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
         return;
       }
       const page = getMemoPageData(state.project.currentPage);
@@ -32995,6 +33912,7 @@
       redrawMemoCanvas();
       if (captured) refreshAfterMemoPictureCapture();
       updateMemoUndoRedoButtonsOnly();
+      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
 
     function memoRedo() {
@@ -33008,6 +33926,7 @@
         clearMemoEditStateForDrawing(selectedLayer.layer.drawingRef);
         touchLayerDrawing(drawing);
         refreshMemoLayerHistoryChange(selectedLayer.layer.drawingRef, null, '');
+        scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
         return;
       }
       const page = getMemoPageData(state.project.currentPage);
@@ -33018,6 +33937,7 @@
       redrawMemoCanvas();
       if (captured) refreshAfterMemoPictureCapture();
       updateMemoUndoRedoButtonsOnly();
+      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
 
     function setMemoModeEnabled(enabled) {
@@ -33385,8 +34305,34 @@
       return state.memoTool === 'eraser' ? state.memoEraserSize : state.memoPenSize;
     }
 
+    function memoSizePresetIndex(value) {
+      const number = clampNumber(value, MEMO_SIZE_MIN, MEMO_SIZE_MAX, activeMemoSize());
+      let bestIndex = 0;
+      let bestDistance = Infinity;
+      MEMO_SIZE_PRESETS.forEach(function(size, index) {
+        const distance = Math.abs(size - number);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      });
+      return bestIndex;
+    }
+
+    function memoSizePresetValue(value) {
+      return MEMO_SIZE_PRESETS[memoSizePresetIndex(value)] || MEMO_SIZE_PRESETS[0];
+    }
+
     function setActiveMemoSize(value) {
-      const next = clampNumber(value, MEMO_SIZE_MIN, MEMO_SIZE_MAX, activeMemoSize());
+      const next = memoSizePresetValue(value);
+      if (state.memoTool === 'eraser') state.memoEraserSize = next;
+      else state.memoPenSize = next;
+      return next;
+    }
+
+    function setActiveMemoSizeByPresetIndex(index) {
+      const clampedIndex = clampNumber(index, 0, MEMO_SIZE_PRESETS.length - 1, memoSizePresetIndex(activeMemoSize()));
+      const next = MEMO_SIZE_PRESETS[clampedIndex] || MEMO_SIZE_PRESETS[0];
       if (state.memoTool === 'eraser') state.memoEraserSize = next;
       else state.memoPenSize = next;
       return next;
@@ -33612,8 +34558,8 @@
 
     function updateMemoUI() {
       normalizeMemoColorState();
-      state.memoPenSize = clampNumber(state.memoPenSize, MEMO_SIZE_MIN, MEMO_SIZE_MAX, 2);
-      state.memoEraserSize = clampNumber(state.memoEraserSize, MEMO_SIZE_MIN, MEMO_SIZE_MAX, 50);
+      state.memoPenSize = memoSizePresetValue(state.memoPenSize || 2);
+      state.memoEraserSize = memoSizePresetValue(state.memoEraserSize || 50);
       const page = getMemoPageData(state.project.currentPage);
       const canvas = document.getElementById('memoCanvas');
       if (canvas) canvas.classList.toggle('memo-active', state.memoMode);
@@ -33662,9 +34608,15 @@
       const popover = document.getElementById('memoColorPickerPopover');
       const toolWindow = document.getElementById('memoToolOptionsWindow');
       const toolTitle = document.getElementById('memoToolOptionsTitle');
-      if (sizeRange) sizeRange.value = String(activeMemoSize());
+      const sizeIndex = memoSizePresetIndex(activeMemoSize());
       if (sizeRange) {
-        const fill = (activeMemoSize() - MEMO_SIZE_MIN) / Math.max(1, MEMO_SIZE_MAX - MEMO_SIZE_MIN) * 100;
+        sizeRange.min = '0';
+        sizeRange.max = String(MEMO_SIZE_PRESETS.length - 1);
+        sizeRange.step = '1';
+        sizeRange.value = String(sizeIndex);
+      }
+      if (sizeRange) {
+        const fill = sizeIndex / Math.max(1, MEMO_SIZE_PRESETS.length - 1) * 100;
         sizeRange.style.setProperty('--memo-size-fill', Math.max(0, Math.min(100, fill)) + '%');
       }
       if (sizeValue) sizeValue.textContent = String(activeMemoSize());
@@ -33703,7 +34655,7 @@
     }
 
     function changeActiveMemoSize(delta) {
-      setActiveMemoSize(activeMemoSize() + delta);
+      setActiveMemoSizeByPresetIndex(memoSizePresetIndex(activeMemoSize()) + delta);
       updateMemoUI();
     }
 
@@ -34066,7 +35018,7 @@
         updateMemoUI();
       });
       document.getElementById('memoSizeRange').addEventListener('input', function(event) {
-        setActiveMemoSize(event.target.value);
+        setActiveMemoSizeByPresetIndex(event.target.value);
         updateMemoUI();
       });
       document.querySelectorAll('.memo-color-btn').forEach(function(button) {
@@ -34902,12 +35854,47 @@
       const button = document.getElementById('stageSettingsBtn');
       const popover = document.getElementById('stageSettingsPopover');
       const toggle = document.getElementById('videoAutoCreateLayerKomaToggle');
+      const autosaveToggle = document.getElementById('indexedDbAutosaveToggle');
+      const autosaveStatus = document.getElementById('indexedDbAutosaveStatus');
+      const autosaveRestore = document.getElementById('indexedDbAutosaveRestoreBtn');
+      const autosaveDelete = document.getElementById('indexedDbAutosaveDeleteBtn');
+      const workspaceAutosaveSettingsEl = document.getElementById('workspaceAutosaveSettings');
+      const workspaceAutosaveToggle = document.getElementById('workspaceAutosaveToggle');
+      const workspaceAutosaveMinutesInput = document.getElementById('workspaceAutosaveMinutesInput');
+      const workspaceAutosaveStatus = document.getElementById('workspaceAutosaveStatus');
+      const zipSettings = document.getElementById('mobileZipPackageSettings');
+      const zipExport = document.getElementById('zipPackageExportBtn');
+      const zipImport = document.getElementById('zipPackageImportBtn');
+      const zipStatus = document.getElementById('zipPackageStatus');
       if (button) {
         button.classList.toggle('active', Boolean(state.stageSettingsOpen));
         button.setAttribute('aria-expanded', state.stageSettingsOpen ? 'true' : 'false');
       }
       if (popover) popover.hidden = !state.stageSettingsOpen;
       if (toggle && document.activeElement !== toggle) toggle.checked = videoEditAutoCreateLayerKomaOnDrawEnabled(state.project);
+      if (autosaveToggle && document.activeElement !== autosaveToggle) {
+        autosaveToggle.checked = indexedDbAutosaveEnabled(state.project);
+        autosaveToggle.disabled = !indexedDbAutosaveAvailable();
+      }
+      if (autosaveStatus) autosaveStatus.textContent = state.indexedDbAutosaveStatus || (indexedDbAutosaveAvailable() ? 'バックアップ未確認' : 'IndexedDB非対応');
+      if (autosaveRestore) autosaveRestore.disabled = !indexedDbAutosaveAvailable();
+      if (autosaveDelete) autosaveDelete.disabled = !indexedDbAutosaveAvailable();
+      const workspaceAutosaveVisible = workspaceAutosaveUiAvailable();
+      const workspaceAutosaveReason = workspaceAutosaveDisabledReason();
+      const workspaceSettings = workspaceAutosaveVisible ? workspaceAutosaveSettings() : null;
+      if (workspaceAutosaveSettingsEl) workspaceAutosaveSettingsEl.hidden = !workspaceAutosaveVisible;
+      if (workspaceAutosaveToggle && document.activeElement !== workspaceAutosaveToggle) workspaceAutosaveToggle.checked = Boolean(workspaceSettings && workspaceSettings.autosaveEnabled);
+      if (workspaceAutosaveToggle) workspaceAutosaveToggle.disabled = Boolean(workspaceAutosaveReason);
+      if (workspaceAutosaveMinutesInput && document.activeElement !== workspaceAutosaveMinutesInput) workspaceAutosaveMinutesInput.value = String(workspaceAutosaveMinutes());
+      if (workspaceAutosaveMinutesInput) workspaceAutosaveMinutesInput.disabled = Boolean(workspaceAutosaveReason || !(workspaceSettings && workspaceSettings.autosaveEnabled));
+      if (workspaceAutosaveStatus) {
+        workspaceAutosaveStatus.textContent = workspaceAutosaveReason || state.workspaceAutosaveStatus || ('次回: ' + workspaceAutosaveMinutes() + '分ごと');
+      }
+      const zipEnabled = mobileZipPackageAvailable();
+      if (zipSettings) zipSettings.hidden = !zipEnabled;
+      if (zipExport) zipExport.disabled = !zipEnabled;
+      if (zipImport) zipImport.disabled = !zipEnabled;
+      if (zipStatus) zipStatus.textContent = state.zipPackageStatus || '';
     }
 
     function updateVideoCameraFrameToggleUI() {
@@ -34960,6 +35947,7 @@
         status.classList.toggle('ready', Boolean(state.workspaceHandle));
       }
       updateLlmControlUI();
+      syncWorkspaceAutosaveTimer();
     }
 
     function updateLlmControlUI() {
@@ -35045,6 +36033,7 @@
         event.stopPropagation();
         state.stageSettingsOpen = !state.stageSettingsOpen;
         updateStageSettingsUI();
+        if (state.stageSettingsOpen) refreshIndexedDbAutosaveStatus();
       });
       document.getElementById('stageSettingsPopover').addEventListener('click', function(event) {
         event.stopPropagation();
@@ -35053,10 +36042,57 @@
         state.project.settings = state.project.settings || {};
         state.project.settings.videoEditAutoCreateLayerKomaOnDraw = Boolean(event.currentTarget.checked);
         updateStageSettingsUI();
+        scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
+      });
+      document.getElementById('indexedDbAutosaveToggle').addEventListener('change', function(event) {
+        state.project.settings = state.project.settings || {};
+        state.project.settings.indexedDbAutosaveEnabled = Boolean(event.currentTarget.checked);
+        if (!state.project.settings.indexedDbAutosaveEnabled && state.indexedDbAutosaveTimer) {
+          clearTimeout(state.indexedDbAutosaveTimer);
+          state.indexedDbAutosaveTimer = 0;
+        }
+        updateStageSettingsUI();
+        if (state.project.settings.indexedDbAutosaveEnabled) saveProjectToIndexedDbAutosave().catch(function(error) {
+          state.indexedDbAutosaveStatus = '保存失敗\n' + (error && error.message ? error.message : error);
+          updateStageSettingsUI();
+        });
+      });
+      document.getElementById('indexedDbAutosaveRestoreBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        restoreIndexedDbAutosave();
+      });
+      document.getElementById('indexedDbAutosaveDeleteBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        deleteIndexedDbAutosave();
+      });
+      document.getElementById('workspaceAutosaveToggle').addEventListener('change', function(event) {
+        const settings = workspaceAutosaveSettings();
+        settings.autosaveEnabled = Boolean(event.currentTarget.checked);
+        state.workspaceAutosaveStatus = settings.autosaveEnabled ? ('次回: ' + workspaceAutosaveMinutes() + '分ごと') : '自動保存OFF';
+        syncWorkspaceAutosaveTimer();
+        updateStageSettingsUI();
+        scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
+      });
+      document.getElementById('workspaceAutosaveMinutesInput').addEventListener('change', function(event) {
+        const settings = workspaceAutosaveSettings();
+        settings.autosaveMinutes = clampNumber(event.currentTarget.value, 1, 120, 5);
+        state.workspaceAutosaveStatus = settings.autosaveEnabled ? ('次回: ' + settings.autosaveMinutes + '分ごと') : '自動保存OFF';
+        syncWorkspaceAutosaveTimer();
+        updateStageSettingsUI();
+        scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
+      });
+      document.getElementById('zipPackageExportBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        exportMobileZipPackage();
+      });
+      document.getElementById('zipPackageImportBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        chooseMobileZipPackageForImport();
       });
       document.getElementById('autoMaToggle').addEventListener('change', function(event) {
         state.project.settings = state.project.settings || {};
         state.project.settings.autoTimingIncludeMa = Boolean(event.currentTarget.checked);
+        scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
       });
       document.getElementById('autoTimingBtn').addEventListener('click', autoAssignCutDurations);
       bindTimingDashboard();
