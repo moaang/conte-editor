@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Conte Editor Prototype</title>
   <style>
     :root {
@@ -2643,6 +2643,10 @@
     }
 
     .video-preview-screen {
+      --paper-drawing-left: -8.5220%;
+      --paper-drawing-top: -27.0686%;
+      --paper-drawing-width: 116.7776%;
+      --paper-drawing-height: 146.5721%;
       position: relative;
       width: var(--video-preview-width, 940px);
       aspect-ratio: 16 / 9;
@@ -2685,10 +2689,6 @@
     }
 
     .video-preview-layered {
-      --paper-drawing-left: -8.5220%;
-      --paper-drawing-top: -27.0686%;
-      --paper-drawing-width: 116.7776%;
-      --paper-drawing-height: 146.5721%;
       position: absolute;
       inset: 0;
       background: #fff;
@@ -2722,6 +2722,14 @@
       background: #fff;
       pointer-events: none;
       z-index: 0;
+    }
+
+    .video-preview-screen.memo-active:not(.paper-frame-active) .video-memo-canvas {
+      inset: auto;
+      left: var(--paper-drawing-left, 0%);
+      top: var(--paper-drawing-top, 0%);
+      width: var(--paper-drawing-width, 100%);
+      height: var(--paper-drawing-height, 100%);
     }
 
     .video-preview-camera-target {
@@ -3712,6 +3720,8 @@
       scrollbar-width: none;
       -ms-overflow-style: none;
       overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
       background: #eeeeea;
     }
 
@@ -3745,6 +3755,7 @@
       box-sizing: border-box;
       border-radius: 0;
       border-top-width: 0;
+      touch-action: pan-y;
     }
 
     .timeline-scroll-section .timeline-track:first-child,
@@ -6467,6 +6478,11 @@
     function updateRuntimeDeviceClasses() {
       if (!document.body) return;
       document.body.classList.toggle('mobile-tablet-runtime', mobileOrTabletRuntime());
+    }
+
+    function preventMobileBrowserGesture(event) {
+      if (!mobileOrTabletRuntime()) return;
+      event.preventDefault();
     }
 
     function videoMediaDisabledOnThisDevice() {
@@ -22262,6 +22278,50 @@
       setVideoPreviewZoom(1);
     }
 
+    function touchPairDistance(touches) {
+      if (!touches || touches.length < 2) return 0;
+      const a = touches[0];
+      const b = touches[1];
+      const dx = Number(a.clientX) - Number(b.clientX);
+      const dy = Number(a.clientY) - Number(b.clientY);
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function bindVideoPreviewTouchZoom(stage) {
+      if (!stage || stage.dataset.previewTouchZoomBound === 'true') return;
+      stage.dataset.previewTouchZoomBound = 'true';
+      let pinchStart = null;
+      const screenFromTouchEvent = function(event) {
+        return event.target && event.target.closest ? event.target.closest('.video-preview-screen') : null;
+      };
+      stage.addEventListener('touchstart', function(event) {
+        if (!mobileOrTabletRuntime() || !screenFromTouchEvent(event) || !event.touches || event.touches.length !== 2) return;
+        const distance = touchPairDistance(event.touches);
+        if (!distance) return;
+        pinchStart = {
+          distance: distance,
+          zoom: videoPreviewZoomValue()
+        };
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      stage.addEventListener('touchmove', function(event) {
+        if (!pinchStart || !screenFromTouchEvent(event) || !event.touches || event.touches.length < 2) return;
+        const distance = touchPairDistance(event.touches);
+        if (distance) {
+          setVideoPreviewZoom(Math.round(clampVideoPreviewZoom(pinchStart.zoom * distance / Math.max(1, pinchStart.distance), pinchStart.zoom) * 100) / 100);
+        }
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      const endPinch = function(event) {
+        if (!pinchStart) return;
+        if (!event.touches || event.touches.length < 2) pinchStart = null;
+      };
+      stage.addEventListener('touchend', endPinch, { passive: true });
+      stage.addEventListener('touchcancel', function() { pinchStart = null; }, { passive: true });
+    }
+
     function bindVideoPreviewZoomControls(root) {
       const scope = root && root.querySelector ? root : document;
       const stage = scope.querySelector('#videoPreviewStage') || document.getElementById('videoPreviewStage');
@@ -22278,6 +22338,7 @@
           setVideoPreviewZoom(Math.round((current + direction * step) * 100) / 100);
         }, { passive: false });
       }
+      bindVideoPreviewTouchZoom(stage);
       scope.querySelectorAll('[data-video-preview-zoom]').forEach(function(button) {
         if (button.dataset.previewZoomBound === 'true') return;
         button.dataset.previewZoomBound = 'true';
@@ -31522,7 +31583,8 @@
       const rect = memoPictureHitboxAtPoint(point);
       if (!rect) return null;
       const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, rect.cutId, { ignoreSelectedPanel: true });
-      const entry = selectedEntry || createTopLayerKomaForEmptyPanel(state.project, rect.cutId) || ensureTopDrawableConteLayerForCut(state.project, rect.cutId, { createForMedia: true });
+      const createdEntry = selectedEntry ? null : createTopLayerKomaForEmptyPanel(state.project, rect.cutId);
+      const entry = selectedEntry || createdEntry || ensureTopDrawableConteLayerForCut(state.project, rect.cutId, { createForMedia: true });
       if (!entry || !entry.layer) return null;
       setSelectedConteLayers([entry.layer.id], entry.layer.id);
       state.selectedCutId = rect.cutId;
@@ -31535,7 +31597,8 @@
         rect: rect,
         layerId: entry.layer.id,
         drawingRef: entry.layer.drawingRef,
-        drawing: getLayerDrawingData(state.project, entry.layer.drawingRef)
+        drawing: getLayerDrawingData(state.project, entry.layer.drawingRef),
+        autoCreatedLayerKoma: Boolean(createdEntry)
       };
     }
 
@@ -31558,8 +31621,29 @@
         rect: { cutId: cutId, x: 0, y: 0, w: 1, h: 1 },
         layerId: entry.layer.id,
         drawingRef: entry.layer.drawingRef,
-        drawing: getLayerDrawingData(state.project, entry.layer.drawingRef)
+        drawing: getLayerDrawingData(state.project, entry.layer.drawingRef),
+        autoCreatedLayerKoma: Boolean(createdEntry)
       };
+    }
+
+    function refreshAfterAutoCreatedLayerKomaDraw(op) {
+      const target = op && op.target || null;
+      if (!target || !target.autoCreatedLayerKoma) return;
+      invalidateVideoTimelineCache();
+      if (state.videoEditMode) {
+        refreshConteLayerTimelineEdit({
+          patchOwnerCutIds: conteLayerOwnerCutIdsForPanelCutIds(state.project, [target.cutId]),
+          deferThumbnails: true,
+          deferThumbnailMs: 320,
+          previewDelayMs: 0,
+          skipPlayheadSelectionSync: true
+        });
+      } else {
+        guardedRender('stage', renderStageView);
+        guardedRender('timing', renderTimingDashboard);
+        guardedRender('inspector', renderInspector);
+        guardedRender('chrome', refreshChromeControls);
+      }
     }
 
     function drawMemoStrokeIntoPictureContext(ctx, stroke, rect, width, height) {
@@ -32406,6 +32490,13 @@
       event.preventDefault();
       event.stopPropagation();
       exitMemoStampMode();
+    }
+
+    function handleMemoCanvasContextMenu(event) {
+      if (!memoInteractionActive()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.memoEditTool === 'lasso-stamp' && state.memoStamp) exitMemoStampMode();
     }
 
     function setMemoStampPreview(drawingRef, point) {
@@ -33818,6 +33909,7 @@
       }
       state.memoCurrentLayerRect = null;
       clearActiveLayerCanvasTargets();
+      refreshAfterAutoCreatedLayerKomaDraw(op);
       updateMemoUndoRedoButtonsOnly();
     }
 
@@ -34021,6 +34113,7 @@
       }
       state.memoCurrentLayerRect = null;
       clearActiveLayerCanvasTargets();
+      refreshAfterAutoCreatedLayerKomaDraw(op);
       updateMemoUndoRedoButtonsOnly();
     }
 
@@ -34032,7 +34125,7 @@
       canvas.addEventListener('pointermove', continueVideoMemoStroke);
       canvas.addEventListener('pointerup', endVideoMemoStroke);
       canvas.addEventListener('pointercancel', endVideoMemoStroke);
-      bindMobileLongPressContextMenu(canvas, handleMemoContextMenu);
+      canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
     }
 
     function updateMemoUndoRedoButtonsOnly() {
@@ -35298,7 +35391,7 @@
       canvas.addEventListener('pointermove', continueMemoStroke);
       canvas.addEventListener('pointerup', endMemoStroke);
       canvas.addEventListener('pointercancel', endMemoStroke);
-      bindMobileLongPressContextMenu(canvas, handleMemoContextMenu);
+      canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
       document.addEventListener('pointermove', continueCameraFrameDrag);
@@ -36156,6 +36249,9 @@
 
     function bindEvents() {
       updateRuntimeDeviceClasses();
+      document.addEventListener('gesturestart', preventMobileBrowserGesture, { passive: false });
+      document.addEventListener('gesturechange', preventMobileBrowserGesture, { passive: false });
+      document.addEventListener('gestureend', preventMobileBrowserGesture, { passive: false });
       movePageUndoControlsToPaperHeader();
       // 방어: LLM/OPS 토글은 다른 바인딩이 throw해도 살아남도록 최우선 attach
       try {
