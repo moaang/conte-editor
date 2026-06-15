@@ -17158,10 +17158,18 @@
         target: sourceEvent.target,
         currentTarget: currentTarget || sourceEvent.currentTarget,
         pointerType: sourceEvent.pointerType || '',
+        syntheticLongPress: true,
         preventDefault: function() {},
         stopPropagation: function() {},
         sourceEvent: sourceEvent
       };
+    }
+
+    function suppressMobileNativeContextMenu(event) {
+      if (!mobileOrTabletRuntime()) return false;
+      if (event && event.syntheticLongPress) return false;
+      if (event && (event.button === 2 || event.buttons === 2 || event.ctrlKey)) return false;
+      return true;
     }
 
     function bindMobileLongPressContextMenu(el, handler, options) {
@@ -17191,6 +17199,9 @@
         const sourceEvent = event;
         timer = window.setTimeout(function() {
           timer = 0;
+          pointerId = null;
+          const hit = document.elementFromPoint(startX, startY);
+          if (hit && hit !== el && !el.contains(hit)) return;
           suppressClick = true;
           handler(syntheticContextMenuEventFromPointer(sourceEvent, el));
         }, options.delay || 520);
@@ -17201,6 +17212,10 @@
       }, { passive: true });
       el.addEventListener('pointerup', clear, { passive: true });
       el.addEventListener('pointercancel', clear, { passive: true });
+      el.addEventListener('pointerleave', clear, { passive: true });
+      el.addEventListener('lostpointercapture', clear, { passive: true });
+      el.addEventListener('touchend', clear, { passive: true });
+      el.addEventListener('touchcancel', clear, { passive: true });
       el.addEventListener('click', function(event) {
         if (!suppressClick) return;
         suppressClick = false;
@@ -18025,6 +18040,7 @@
         trackEl.addEventListener('contextmenu', function(event) {
           event.preventDefault();
           event.stopPropagation();
+          if (suppressMobileNativeContextMenu(event)) return;
           const slot = videoSlotAtTimelinePointer(root, event, boundTotalFrames(trackEl));
           const cutId = slot && slot.cut && slot.cut.id || state.selectedCutId;
           showTimelineCutAddContextMenu(event, cutId, root);
