@@ -22303,15 +22303,42 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
+    function pointInsideClientRect(x, y, rect) {
+      return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+    }
+
+    function videoPreviewDrawableTouchRect(stage) {
+      const screen = stage && stage.querySelector ? stage.querySelector('.video-preview-screen') : null;
+      if (!screen) return null;
+      const canvas = screen.querySelector('#videoMemoCanvas');
+      if (canvas && canvas.getBoundingClientRect) return canvas.getBoundingClientRect();
+      const layered = screen.querySelector('.video-preview-layered');
+      if (layered && layered.getBoundingClientRect) return layered.getBoundingClientRect();
+      return screen.getBoundingClientRect ? screen.getBoundingClientRect() : null;
+    }
+
+    function touchEventHitsVideoPreviewDrawable(stage, event) {
+      const rect = videoPreviewDrawableTouchRect(stage);
+      if (!rect || !event || !event.touches) return false;
+      return Array.from(event.touches).some(function(touch) {
+        return pointInsideClientRect(Number(touch.clientX), Number(touch.clientY), rect);
+      });
+    }
+
     function bindVideoPreviewTouchZoom(stage) {
-      if (!stage || stage.dataset.previewTouchZoomBound === 'true') return;
-      stage.dataset.previewTouchZoomBound = 'true';
+      if (!stage) return;
+      const surface = stage.closest && stage.closest('.paper-stage') || stage;
+      if (!surface || surface.dataset.previewTouchZoomBound === 'true') return;
+      surface.dataset.previewTouchZoomBound = 'true';
       let pinchStart = null;
-      const screenFromTouchEvent = function(event) {
-        return event.target && event.target.closest ? event.target.closest('.video-preview-screen') : null;
+      const canStartPreviewPinch = function(event) {
+        if (!mobileOrTabletRuntime() || state.memoRasterOp || !event.touches || event.touches.length !== 2) return false;
+        if (touchEventHitsVideoPreviewDrawable(stage, event)) return false;
+        const target = event.target && event.target.closest ? event.target.closest('#videoPreviewStage, .paper-stage') : null;
+        return Boolean(target);
       };
-      stage.addEventListener('touchstart', function(event) {
-        if (!mobileOrTabletRuntime() || !screenFromTouchEvent(event) || !event.touches || event.touches.length !== 2) return;
+      surface.addEventListener('touchstart', function(event) {
+        if (!canStartPreviewPinch(event)) return;
         const distance = touchPairDistance(event.touches);
         if (!distance) return;
         pinchStart = {
@@ -22321,8 +22348,8 @@
         event.preventDefault();
         event.stopPropagation();
       }, { passive: false });
-      stage.addEventListener('touchmove', function(event) {
-        if (!pinchStart || !screenFromTouchEvent(event) || !event.touches || event.touches.length < 2) return;
+      surface.addEventListener('touchmove', function(event) {
+        if (!pinchStart || state.memoRasterOp || !event.touches || event.touches.length < 2) return;
         const distance = touchPairDistance(event.touches);
         if (distance) {
           setVideoPreviewZoom(Math.round(clampVideoPreviewZoom(pinchStart.zoom * distance / Math.max(1, pinchStart.distance), pinchStart.zoom) * 100) / 100);
@@ -22334,8 +22361,8 @@
         if (!pinchStart) return;
         if (!event.touches || event.touches.length < 2) pinchStart = null;
       };
-      stage.addEventListener('touchend', endPinch, { passive: true });
-      stage.addEventListener('touchcancel', function() { pinchStart = null; }, { passive: true });
+      surface.addEventListener('touchend', endPinch, { passive: true });
+      surface.addEventListener('touchcancel', function() { pinchStart = null; }, { passive: true });
     }
 
     function bindVideoPreviewZoomControls(root) {
