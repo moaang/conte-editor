@@ -412,13 +412,54 @@
 
     .workspace.inspector-window .right-pane {
       position: fixed;
-      right: 12px;
-      top: 82px;
-      bottom: 12px;
+      left: var(--inspector-window-left, calc(100vw - 328px));
+      top: var(--inspector-window-top, 82px);
+      right: auto;
+      bottom: auto;
       z-index: 84;
-      width: 300px;
+      width: var(--inspector-window-width, 300px);
+      height: var(--inspector-window-height, calc(100vh - 94px));
       min-height: 0;
       box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    }
+
+    .workspace.inspector-window .right-pane .pane-header {
+      cursor: move;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .workspace.inspector-window .right-pane .pane-body {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+    }
+
+    .inspector-resize-handle {
+      display: none;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 18px;
+      height: 18px;
+      cursor: nwse-resize;
+      touch-action: none;
+      z-index: 4;
+    }
+
+    .inspector-resize-handle::before {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 9px;
+      height: 9px;
+      border-right: 2px solid rgba(88, 100, 111, 0.74);
+      border-bottom: 2px solid rgba(88, 100, 111, 0.74);
+    }
+
+    .workspace.inspector-window .inspector-resize-handle {
+      display: block;
     }
 
     .pane {
@@ -1390,7 +1431,7 @@
 
     .memo-tool-row-secondary {
       justify-content: flex-start;
-      gap: 3px;
+      gap: 4px;
     }
 
     .memo-tool-separator {
@@ -6205,7 +6246,7 @@
       </section>
 
       <section class="pane right-pane">
-        <div class="pane-header">
+        <div id="inspectorWindowHeader" class="pane-header" data-inspector-window-drag="true">
           <div class="pane-title">Inspector</div>
           <div class="inspector-header-actions">
             <button id="inspectorModeBtn" class="inspector-mode-btn" type="button" aria-label="Collapse inspector" title="Inspector">◧</button>
@@ -6225,6 +6266,7 @@
             <div id="targetBalanceStatus" class="target-balance-status" aria-live="polite"></div>
           </div>
         </div>
+        <div id="inspectorResizeHandle" class="inspector-resize-handle" aria-hidden="true"></div>
       </section>
     </main>
   </div>
@@ -6592,6 +6634,12 @@
       stageSettingsOpen: false,
       videoCameraFrameVisible: false,
       inspectorMode: 'open',
+      inspectorWindowX: 0,
+      inspectorWindowY: 82,
+      inspectorWindowWidth: 300,
+      inspectorWindowHeight: 560,
+      inspectorWindowDrag: null,
+      inspectorWindowResize: null,
       llmControlEnabled: false,
       llmControlBusy: false,
       llmControlTimer: 0,
@@ -7157,6 +7205,11 @@
         scenarioWindowX: Math.round(Number(state.scenarioWindowX) || 48),
         scenarioWindowY: Math.round(Number(state.scenarioWindowY) || 92),
         scenarioWindowCollapsed: Boolean(state.scenarioWindowCollapsed),
+        inspectorMode: normalizedInspectorMode(state.inspectorMode),
+        inspectorWindowX: Math.round(Number(state.inspectorWindowX) || 0),
+        inspectorWindowY: Math.round(Number(state.inspectorWindowY) || 82),
+        inspectorWindowWidth: Math.round(Number(state.inspectorWindowWidth) || 300),
+        inspectorWindowHeight: Math.round(Number(state.inspectorWindowHeight) || 560),
         memoColorSource: state.memoColorSource === 'custom' ? 'custom' : 'preset',
         memoCustomColor: normalizeMemoBaseColor(state.memoCustomColor || state.memoColor),
         memoColorHistory: normalizedMemoColorList(state.memoColorHistory, MEMO_PICKER_HISTORY_LIMIT, MEMO_PICKER_DEFAULT_HISTORY),
@@ -7180,6 +7233,11 @@
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowX')) state.scenarioWindowX = clampNumber(ui.scenarioWindowX, 8, Math.max(8, window.innerWidth - 42), state.scenarioWindowX);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowY')) state.scenarioWindowY = clampNumber(ui.scenarioWindowY, 8, Math.max(8, window.innerHeight - 42), state.scenarioWindowY);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowCollapsed')) state.scenarioWindowCollapsed = Boolean(ui.scenarioWindowCollapsed);
+      if (Object.prototype.hasOwnProperty.call(ui, 'inspectorMode')) state.inspectorMode = normalizedInspectorMode(ui.inspectorMode);
+      if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowX')) state.inspectorWindowX = Math.round(Number(ui.inspectorWindowX) || 0);
+      if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowY')) state.inspectorWindowY = Math.round(Number(ui.inspectorWindowY) || 82);
+      if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowWidth')) state.inspectorWindowWidth = Math.round(Number(ui.inspectorWindowWidth) || 300);
+      if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowHeight')) state.inspectorWindowHeight = Math.round(Number(ui.inspectorWindowHeight) || 560);
       if (Object.prototype.hasOwnProperty.call(ui, 'memoColorSource')) state.memoColorSource = ui.memoColorSource === 'custom' ? 'custom' : 'preset';
       if (Object.prototype.hasOwnProperty.call(ui, 'memoCustomColor')) state.memoCustomColor = normalizeMemoBaseColor(ui.memoCustomColor);
       if (Object.prototype.hasOwnProperty.call(ui, 'memoColorHistory')) state.memoColorHistory = normalizedMemoColorList(ui.memoColorHistory, MEMO_PICKER_HISTORY_LIMIT, MEMO_PICKER_DEFAULT_HISTORY);
@@ -12111,6 +12169,40 @@
       return null;
     }
 
+    function playheadConteLayerCellIsSynced(project, cutId) {
+      const targetCutId = String(cutId || '');
+      const lineKey = selectedConteLayerPrimaryLineKey(project);
+      if (!project || !targetCutId || !lineKey) return false;
+      const entry = conteLayerLineAnchorForCut(project, targetCutId, lineKey);
+      if (entry && entry.layer && entry.layer.id) {
+        return state.selectedConteLayerId === entry.layer.id;
+      }
+      return !state.selectedConteLayerId
+        && state.selectedConteLayerIds instanceof Set
+        && state.selectedConteLayerIds.size === 0
+        && state.selectedConteLayerLineKey === lineKey;
+    }
+
+    function syncPlayheadConteLayerCellSelection(project, cutId, options) {
+      options = options || {};
+      const targetCutId = String(cutId || '');
+      if (!project || !targetCutId) return null;
+      const previousActiveType = state.activeConteSelectionType;
+      let lineKey = selectedConteLayerPrimaryLineKey(project);
+      let entry = null;
+      if (lineKey) {
+        entry = setConteLayerLineOnlySelection(project, lineKey, targetCutId, [targetCutId]);
+      } else {
+        entry = syncConteLayerSelectionToPanel(project, targetCutId);
+        lineKey = selectedConteLayerPrimaryLineKey(project) || (entry && entry.layer ? conteLayerLineKey(entry.layer) : '');
+        if (lineKey) {
+          entry = setConteLayerLineOnlySelection(project, lineKey, targetCutId, [targetCutId]) || entry;
+        }
+      }
+      state.activeConteSelectionType = options.activate === false ? previousActiveType : 'layer';
+      return entry;
+    }
+
     function restoreConteLayerSelectionAfterRemoval(project, context) {
       context = context || {};
       const selectedCutId = project && project.cuts && project.cuts.some(function(cut) { return cut.id === context.selectedCutId; })
@@ -15173,18 +15265,30 @@
       const cutId = slot && slot.cut && slot.cut.id || '';
       if (!cutId) return false;
       const beforeLayerId = state.selectedConteLayerId;
+      const beforeLayerLineKey = state.selectedConteLayerLineKey;
       const selectedPanels = selectedPicturePanelSet();
       const preserveCameraSelection = options.preserveCameraSelection && state.activeConteSelectionType === 'camera';
-      const changed = state.selectedCutId !== cutId || selectedPanels.size !== 1 || !selectedPanels.has(cutId) || (!preserveCameraSelection && state.activeConteSelectionType !== 'panel') || state.selectedAudioClipId || state.selectedAudioTrackId;
+      const changed = state.selectedCutId !== cutId
+        || selectedPanels.size !== 1
+        || !selectedPanels.has(cutId)
+        || (!preserveCameraSelection && state.activeConteSelectionType !== 'layer')
+        || !playheadConteLayerCellIsSynced(state.project, cutId)
+        || state.selectedAudioClipId
+        || state.selectedAudioTrackId
+        || state.selectedVideoClipId
+        || state.selectedVideoTrackId;
       if (!changed && options.refreshDom === false && !options.renderInspector) return false;
       selectedPanels.clear();
       selectedPanels.add(cutId);
       state.selectedCutId = cutId;
       state.selectedAudioClipId = '';
       state.selectedAudioTrackId = '';
-      if (!preserveCameraSelection) state.activeConteSelectionType = 'panel';
-      syncConteLayerSelectionToPanel(state.project, cutId);
-      const layerChanged = beforeLayerId !== state.selectedConteLayerId;
+      state.selectedVideoClipId = '';
+      state.selectedVideoTrackId = '';
+      syncPlayheadConteLayerCellSelection(state.project, cutId, {
+        activate: !preserveCameraSelection
+      });
+      const layerChanged = beforeLayerId !== state.selectedConteLayerId || beforeLayerLineKey !== state.selectedConteLayerLineKey;
       if (!changed && !layerChanged) return false;
       setCurrentPageToCut(state.project, cutId);
       if (options.refreshDom !== false) {
@@ -15207,10 +15311,9 @@
       selectedPanels.clear();
       selectedPanels.add(cutId);
       state.selectedCutId = cutId;
-      syncConteLayerSelectionToPanel(project, cutId);
-      if (!state.activeConteSelectionType || state.activeConteSelectionType === 'cut') {
-        state.activeConteSelectionType = 'layer';
-      }
+      syncPlayheadConteLayerCellSelection(project, cutId, {
+        activate: state.activeConteSelectionType !== 'camera'
+      });
       return true;
     }
 
@@ -36461,15 +36564,17 @@
       }
       const button = document.getElementById('inspectorModeBtn');
       if (button) {
-        button.textContent = mode === 'open' ? '◧' : (mode === 'compact' ? '□' : '◨');
+        button.textContent = '◧';
         button.title = mode === 'open' ? 'Inspector compact' : (mode === 'compact' ? 'Inspector window' : 'Inspector open');
         button.setAttribute('aria-label', button.title);
       }
+      applyInspectorWindowState();
     }
 
     function setInspectorMode(mode) {
       state.inspectorMode = normalizedInspectorMode(mode);
       updateInspectorModeUI();
+      saveEditorUiState();
     }
 
     function cycleInspectorMode() {
@@ -36477,6 +36582,94 @@
       if (mode === 'open') setInspectorMode('compact');
       else if (mode === 'compact') setInspectorMode('window');
       else setInspectorMode('open');
+    }
+
+    function applyInspectorWindowState() {
+      const pane = document.querySelector('.right-pane');
+      if (!pane) return;
+      const maxWidth = Math.max(260, window.innerWidth - 24);
+      const maxHeight = Math.max(260, window.innerHeight - 24);
+      const width = clampNumber(state.inspectorWindowWidth, 260, maxWidth, 300);
+      const height = clampNumber(state.inspectorWindowHeight, 260, maxHeight, Math.min(560, maxHeight));
+      const defaultX = Math.max(8, window.innerWidth - width - 12);
+      const rawX = Number(state.inspectorWindowX);
+      state.inspectorWindowWidth = Math.round(width);
+      state.inspectorWindowHeight = Math.round(height);
+      state.inspectorWindowX = clampNumber(Number.isFinite(rawX) && rawX > 0 ? rawX : defaultX, 8, Math.max(8, window.innerWidth - width - 8), defaultX);
+      state.inspectorWindowY = clampNumber(state.inspectorWindowY, 8, Math.max(8, window.innerHeight - height - 8), 82);
+      pane.style.setProperty('--inspector-window-left', Math.round(state.inspectorWindowX) + 'px');
+      pane.style.setProperty('--inspector-window-top', Math.round(state.inspectorWindowY) + 'px');
+      pane.style.setProperty('--inspector-window-width', Math.round(state.inspectorWindowWidth) + 'px');
+      pane.style.setProperty('--inspector-window-height', Math.round(state.inspectorWindowHeight) + 'px');
+    }
+
+    function beginInspectorWindowDrag(event) {
+      if (state.inspectorMode !== 'window' || event.button !== 0) return;
+      const handle = event.target && event.target.closest ? event.target.closest('[data-inspector-window-drag="true"]') : null;
+      if (!handle || event.target.closest('button, input, select, textarea, label, [contenteditable="true"]')) return;
+      const pane = document.querySelector('.right-pane');
+      if (!pane) return;
+      const rect = pane.getBoundingClientRect();
+      state.inspectorWindowDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        baseX: rect.left,
+        baseY: rect.top
+      };
+      event.preventDefault();
+    }
+
+    function moveInspectorWindowDrag(event) {
+      const drag = state.inspectorWindowDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      state.inspectorWindowX = drag.baseX + event.clientX - drag.startX;
+      state.inspectorWindowY = drag.baseY + event.clientY - drag.startY;
+      applyInspectorWindowState();
+      event.preventDefault();
+    }
+
+    function endInspectorWindowDrag(event) {
+      const drag = state.inspectorWindowDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      state.inspectorWindowDrag = null;
+      applyInspectorWindowState();
+      saveEditorUiState();
+    }
+
+    function beginInspectorWindowResize(event) {
+      if (state.inspectorMode !== 'window' || event.button !== 0) return;
+      const handle = event.target && event.target.closest ? event.target.closest('#inspectorResizeHandle') : null;
+      if (!handle) return;
+      const pane = document.querySelector('.right-pane');
+      if (!pane) return;
+      const rect = pane.getBoundingClientRect();
+      state.inspectorWindowResize = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        baseWidth: rect.width,
+        baseHeight: rect.height
+      };
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function moveInspectorWindowResize(event) {
+      const resize = state.inspectorWindowResize;
+      if (!resize || resize.pointerId !== event.pointerId) return;
+      state.inspectorWindowWidth = resize.baseWidth + event.clientX - resize.startX;
+      state.inspectorWindowHeight = resize.baseHeight + event.clientY - resize.startY;
+      applyInspectorWindowState();
+      event.preventDefault();
+    }
+
+    function endInspectorWindowResize(event) {
+      const resize = state.inspectorWindowResize;
+      if (!resize || resize.pointerId !== event.pointerId) return;
+      state.inspectorWindowResize = null;
+      applyInspectorWindowState();
+      saveEditorUiState();
     }
 
     function refreshChromeControls() {
@@ -36630,6 +36823,17 @@
       movePageUndoControlsToPaperHeader();
       const inspectorModeBtn = document.getElementById('inspectorModeBtn');
       if (inspectorModeBtn) inspectorModeBtn.addEventListener('click', cycleInspectorMode);
+      const inspectorHeader = document.getElementById('inspectorWindowHeader');
+      if (inspectorHeader) inspectorHeader.addEventListener('pointerdown', beginInspectorWindowDrag);
+      const inspectorResizeHandle = document.getElementById('inspectorResizeHandle');
+      if (inspectorResizeHandle) inspectorResizeHandle.addEventListener('pointerdown', beginInspectorWindowResize);
+      document.addEventListener('pointermove', moveInspectorWindowDrag);
+      document.addEventListener('pointermove', moveInspectorWindowResize);
+      document.addEventListener('pointerup', endInspectorWindowDrag);
+      document.addEventListener('pointerup', endInspectorWindowResize);
+      document.addEventListener('pointercancel', endInspectorWindowDrag);
+      document.addEventListener('pointercancel', endInspectorWindowResize);
+      window.addEventListener('resize', applyInspectorWindowState);
       // 방어: LLM/OPS 토글은 다른 바인딩이 throw해도 살아남도록 최우선 attach
       try {
         const llmBtn = document.getElementById('llmControlModeBtn');
