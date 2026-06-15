@@ -28,11 +28,28 @@
     html,
     body {
       height: 100%;
+      height: 100dvh;
       margin: 0;
+      overflow: hidden;
       color: var(--ink);
       background: var(--bg);
       font-family: "Yu Gothic", "Meiryo", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
       font-size: 13px;
+    }
+
+    body.mobile-tablet-runtime {
+      overscroll-behavior: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    body.mobile-tablet-runtime input,
+    body.mobile-tablet-runtime textarea,
+    body.mobile-tablet-runtime [contenteditable="true"] {
+      -webkit-touch-callout: default;
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     button,
@@ -85,6 +102,9 @@
 
     .app {
       height: 100%;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
     }
@@ -5653,11 +5673,14 @@
     }
 
     @media (max-width: 820px) {
-      .app { height: auto; min-height: 100%; }
+      .app {
+        height: 100dvh;
+        min-height: 0;
+      }
 
       .topbar {
-        flex-direction: column;
-        align-items: stretch;
+        overflow-x: auto;
+        overflow-y: hidden;
       }
 
       .toolbar {
@@ -6441,6 +6464,11 @@
       return /Android|iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
     }
 
+    function updateRuntimeDeviceClasses() {
+      if (!document.body) return;
+      document.body.classList.toggle('mobile-tablet-runtime', mobileOrTabletRuntime());
+    }
+
     function videoMediaDisabledOnThisDevice() {
       return mobileOrTabletRuntime();
     }
@@ -6609,10 +6637,6 @@
       return fastClone(state.project.memoPages || {});
     }
 
-    function snapshotLayerDrawings() {
-      return fastClone(state.project.layerDrawings || {});
-    }
-
     function captureTimelineSelectionState() {
       return {
         activeConteSelectionType: String(state.activeConteSelectionType || ''),
@@ -6743,7 +6767,15 @@
       (refs || []).forEach(function(ref) {
         const key = String(ref || '');
         if (!key) return;
-        result[key] = Object.prototype.hasOwnProperty.call(drawings, key) ? fastClone(drawings[key]) : null;
+        if (!Object.prototype.hasOwnProperty.call(drawings, key)) {
+          result[key] = null;
+          return;
+        }
+        const drawing = normalizeLayerDrawingData(fastClone(drawings[key]));
+        drawing.undo = [];
+        drawing.redo = [];
+        drawing.strokes = [];
+        result[key] = drawing;
       });
       return result;
     }
@@ -6775,6 +6807,33 @@
         guardedRender('inspector', renderInspector);
         guardedRender('chrome', refreshChromeControls);
       }
+    }
+
+    function pushLayerDrawingEditCommand(name, before, refs) {
+      const list = (refs || []).map(function(ref) { return String(ref || ''); }).filter(Boolean);
+      if (!list.length || !before) return;
+      const after = captureLayerDrawingEditState(state.project, list);
+      pushUndoCommand({
+        name: name || 'Edit conte layer drawing',
+        layerDrawingEdit: true,
+        before: before,
+        after: after
+      });
+      state.redoStack = [];
+    }
+
+    function layerDrawingEditCommandHasRef(command, ref) {
+      const key = String(ref || '');
+      if (!key || !command || !command.layerDrawingEdit) return false;
+      const before = command.before || {};
+      const after = command.after || {};
+      return Object.prototype.hasOwnProperty.call(before, key) || Object.prototype.hasOwnProperty.call(after, key);
+    }
+
+    function layerDrawingGlobalHistoryAvailable(kind, ref) {
+      const stack = kind === 'redo' ? state.redoStack : state.undoStack;
+      const command = stack && stack.length ? stack[stack.length - 1] : null;
+      return layerDrawingEditCommandHasRef(command, ref);
     }
 
     function pushUndoCommand(command) {
@@ -6945,7 +7004,7 @@
       setTimelineScrollLeftState(nextLeft);
     }
 
-    function restoreProject(project, memoPagesOverride, layerDrawingsOverride, options) {
+    function restoreProject(project, memoPagesOverride, options) {
       options = options || {};
       const historyViewport = options.historyTimelineViewport || null;
       state.project = normalizeProjectSnapshot(project);
@@ -6959,10 +7018,6 @@
       if (historyViewport && historyViewport.enabled) setTimelineScrollLeftState(historyViewport.scrollLeft);
       if (memoPagesOverride) {
         state.project.memoPages = memoPagesOverride;
-        normalizeProject(state.project);
-      }
-      if (layerDrawingsOverride) {
-        state.project.layerDrawings = layerDrawingsOverride;
         normalizeProject(state.project);
       }
       clampCurrentPage();
@@ -7809,9 +7864,8 @@
         return;
       }
       const memoPages = snapshotMemoPages();
-      const layerDrawings = snapshotLayerDrawings();
       pushRedoCommand(command);
-      restoreProject(command.before, memoPages, layerDrawings, { historyTimelineViewport: historyViewport });
+      restoreProject(command.before, memoPages, { historyTimelineViewport: historyViewport });
     }
 
     function redo() {
@@ -7881,9 +7935,38 @@
         return;
       }
       const memoPages = snapshotMemoPages();
-      const layerDrawings = snapshotLayerDrawings();
       pushUndoCommand(command);
-      restoreProject(command.after, memoPages, layerDrawings, { historyTimelineViewport: historyViewport });
+      restoreProject(command.after, memoPages, { historyTimelineViewport: historyViewport });
+    }
+
+    function primaryUndoShouldUseMemoHistory(kind) {
+      if (!memoInteractionActive()) return false;
+      const stack = kind === 'redo' ? state.redoStack : state.undoStack;
+      if (stack && stack.length) return false;
+      return memoHistoryAvailable(kind);
+    }
+
+    function runPrimaryUndo() {
+      if (state.undoStack.length) {
+        undo();
+        return;
+      }
+      if (primaryUndoShouldUseMemoHistory('undo')) memoUndo();
+    }
+
+    function runPrimaryRedo() {
+      if (state.redoStack.length) {
+        redo();
+        return;
+      }
+      if (primaryUndoShouldUseMemoHistory('redo')) memoRedo();
+    }
+
+    function updatePrimaryUndoRedoButtonsOnly() {
+      const undoBtn = document.getElementById('undoBtn');
+      const redoBtn = document.getElementById('redoBtn');
+      if (undoBtn) undoBtn.disabled = state.undoStack.length === 0 && !primaryUndoShouldUseMemoHistory('undo');
+      if (redoBtn) redoBtn.disabled = state.redoStack.length === 0 && !primaryUndoShouldUseMemoHistory('redo');
     }
 
     function normalizeProject(project) {
@@ -17052,6 +17135,64 @@
       menu.style.top = y + 'px';
     }
 
+    function syntheticContextMenuEventFromPointer(sourceEvent, currentTarget) {
+      return {
+        clientX: sourceEvent.clientX,
+        clientY: sourceEvent.clientY,
+        target: sourceEvent.target,
+        currentTarget: currentTarget || sourceEvent.currentTarget,
+        pointerType: sourceEvent.pointerType || '',
+        preventDefault: function() {},
+        stopPropagation: function() {},
+        sourceEvent: sourceEvent
+      };
+    }
+
+    function bindMobileLongPressContextMenu(el, handler, options) {
+      if (!el || typeof handler !== 'function' || el.dataset.mobileLongPressContextBound === 'true') return;
+      el.dataset.mobileLongPressContextBound = 'true';
+      options = options || {};
+      let timer = 0;
+      let startX = 0;
+      let startY = 0;
+      let pointerId = null;
+      let suppressClick = false;
+      const clear = function() {
+        if (timer) window.clearTimeout(timer);
+        timer = 0;
+        pointerId = null;
+      };
+      el.addEventListener('pointerdown', function(event) {
+        if (!mobileOrTabletRuntime()) return;
+        if (event.button && event.button !== 0) return;
+        const pointerType = String(event.pointerType || '');
+        if (pointerType && pointerType !== 'touch' && pointerType !== 'pen') return;
+        if (options.ignore && options.ignore(event)) return;
+        clear();
+        startX = event.clientX;
+        startY = event.clientY;
+        pointerId = event.pointerId;
+        const sourceEvent = event;
+        timer = window.setTimeout(function() {
+          timer = 0;
+          suppressClick = true;
+          handler(syntheticContextMenuEventFromPointer(sourceEvent, el));
+        }, options.delay || 520);
+      }, { passive: true });
+      el.addEventListener('pointermove', function(event) {
+        if (pointerId === null || event.pointerId !== pointerId) return;
+        if (Math.abs(event.clientX - startX) > 9 || Math.abs(event.clientY - startY) > 9) clear();
+      }, { passive: true });
+      el.addEventListener('pointerup', clear, { passive: true });
+      el.addEventListener('pointercancel', clear, { passive: true });
+      el.addEventListener('click', function(event) {
+        if (!suppressClick) return;
+        suppressClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }, true);
+    }
+
     function audioRecordingSupported() {
       return Boolean(
         typeof navigator !== 'undefined' &&
@@ -17872,6 +18013,11 @@
           const cutId = slot && slot.cut && slot.cut.id || state.selectedCutId;
           showTimelineCutAddContextMenu(event, cutId, root);
         });
+        bindMobileLongPressContextMenu(trackEl, function(event) {
+          const slot = videoSlotAtTimelinePointer(root, event, boundTotalFrames(trackEl));
+          const cutId = slot && slot.cut && slot.cut.id || state.selectedCutId;
+          showTimelineCutAddContextMenu(event, cutId, root);
+        });
       });
       root.querySelectorAll('[data-conte-layer-cell-hit]').forEach(function(cellEl) {
         cellEl.dataset.timelineTotalFrames = String(totalFrames);
@@ -17896,6 +18042,9 @@
         cellEl.addEventListener('contextmenu', function(event) {
           event.preventDefault();
           event.stopPropagation();
+          showConteLayerCellContextMenu(event, cellEl, root);
+        });
+        bindMobileLongPressContextMenu(cellEl, function(event) {
           showConteLayerCellContextMenu(event, cellEl, root);
         });
         cellEl.addEventListener('dragover', function(event) {
@@ -17980,6 +18129,11 @@
           if (!layerId) return;
           showConteLayerContextMenu(event, layerId);
         });
+        bindMobileLongPressContextMenu(layerEl, function(event) {
+          const layerId = layerEl.dataset.conteLayerId || '';
+          if (!layerId) return;
+          showConteLayerContextMenu(event, layerId);
+        });
         layerEl.addEventListener('dragenter', function(event) {
           if (!hasFileDrag(event)) return;
           const file = firstDroppedFile(event);
@@ -18044,6 +18198,12 @@
           selectConteLayerRowFromTimeline(root, layerId, handleEl.dataset.conteOwnerCutId || '', false);
           showConteLayerContextMenu(event, layerId);
         });
+        bindMobileLongPressContextMenu(handleEl, function(event) {
+          const layerId = handleEl.dataset.conteLayerId || '';
+          if (!layerId) return;
+          selectConteLayerRowFromTimeline(root, layerId, handleEl.dataset.conteOwnerCutId || '', false);
+          showConteLayerContextMenu(event, layerId);
+        });
       });
       root.querySelectorAll('[data-conte-panel-edge]').forEach(function(handle) {
         handle.dataset.timelineTotalFrames = String(totalFrames);
@@ -18091,6 +18251,19 @@
         if (event.target.closest('[data-conte-panel-edge]')) return;
         event.preventDefault();
         event.stopPropagation();
+        const slot = videoSlotAtTimelinePointer(root, event, boundTotalFrames(lane));
+        const cutId = slot && slot.cut && slot.cut.id || state.selectedCutId;
+        const ownerCut = conteLayerOwnerCut(state.project, cutId);
+        const lineKey = conteLayerLineKeyAtPointer(root, event, ownerCut);
+        if (cutId && lineKey) selectConteLayerCellFromTimeline(root, cutId, lineKey, '', false);
+        else selectTimelinePanelForContextAction(root, cutId);
+        showConteLayerBlankAreaContextMenu(event, root, cutId, lineKey);
+      });
+      bindMobileLongPressContextMenu(lane, function(event) {
+        if (event.target.closest('.conte-layer-bar')) return;
+        if (event.target.closest('.conte-layer-cell-hit')) return;
+        if (event.target.closest('.conte-layer-row-handle')) return;
+        if (event.target.closest('[data-conte-panel-edge]')) return;
         const slot = videoSlotAtTimelinePointer(root, event, boundTotalFrames(lane));
         const cutId = slot && slot.cut && slot.cut.id || state.selectedCutId;
         const ownerCut = conteLayerOwnerCut(state.project, cutId);
@@ -19412,6 +19585,9 @@
       root.querySelectorAll('[data-timeline-seek="true"]').forEach(function(track) {
         track.addEventListener('pointerdown', function(event) {
           if (event.button !== 0) return;
+          const playheadDrag = event.target && event.target.dataset && event.target.dataset.playheadDrag === 'true';
+          const timeRulerSeek = Boolean(event.target && event.target.closest && event.target.closest('.timeline-ruler'));
+          if (!playheadDrag && !timeRulerSeek) return;
           if (event.target.closest('.audio-clip')) return;
           if (event.target.closest('.video-media-clip')) return;
           if (event.target.closest('.camera-keyframe-marker')) return;
@@ -19419,7 +19595,6 @@
           if (event.target.closest('.conte-layer-cell-hit')) return;
           if (event.target.closest('.timeline-track-label')) return;
           if (event.target.closest('[data-timeline-lower-resize="true"]')) return;
-          const playheadDrag = event.target && event.target.dataset && event.target.dataset.playheadDrag === 'true';
           if (!playheadDrag && pointerNearTimelinePlayhead(track, event, totalFrames)) return;
           event.preventDefault();
           setTimelinePlayheadDragging(root, true);
@@ -20431,6 +20606,10 @@
           if (!trackId) return;
           event.preventDefault();
           event.stopPropagation();
+          showAudioTrackContextMenu(event, trackId, root);
+        });
+        bindMobileLongPressContextMenu(track, function(event) {
+          if (!trackId) return;
           showAudioTrackContextMenu(event, trackId, root);
         });
         track.addEventListener('dragover', function(event) {
@@ -31651,14 +31830,6 @@
       drawing.strokes = [];
     }
 
-    function pushLayerDrawingUndo(drawing, beforeDataUrl) {
-      if (!drawing) return;
-      const undo = layerDrawingUndoStack(drawing);
-      undo.push(normalizeLayerDrawingSnapshot(beforeDataUrl));
-      while (undo.length > MEMO_BITMAP_HISTORY_LIMIT) undo.shift();
-      drawing.redo = [];
-    }
-
     function canvasAlphaBounds(canvas) {
       if (!canvas) return null;
       const width = Math.max(1, Math.round(Number(canvas.width) || 1));
@@ -31715,7 +31886,9 @@
       if (!ref || !canvas) return false;
       options = options || {};
       const drawing = getLayerDrawingData(state.project, ref);
-      if (beforeDataUrl !== undefined) pushLayerDrawingUndo(drawing, beforeDataUrl);
+      const beforeHistory = beforeDataUrl !== undefined && options.skipGlobalHistory !== true
+        ? captureLayerDrawingEditState(state.project, [ref])
+        : null;
       let bitmapX = Math.round(Number(options.bitmapX) || 0);
       let bitmapY = Math.round(Number(options.bitmapY) || 0);
       let bitmapWidth = Math.max(1, Math.round(Number(options.bitmapWidth) || canvas.width || LAYER_DRAWING_WIDTH));
@@ -31738,6 +31911,7 @@
             scheduleVideoMemoCanvasRedraw();
             scheduleMemoCanvasRedraw();
           }
+          pushLayerDrawingEditCommand(options.historyName || 'Edit conte layer drawing', beforeHistory, [ref]);
           updateMemoUndoRedoButtonsOnly();
           scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
           return true;
@@ -31776,6 +31950,7 @@
         scheduleVideoMemoCanvasRedraw();
         scheduleMemoCanvasRedraw();
       }
+      pushLayerDrawingEditCommand(options.historyName || 'Edit conte layer drawing', beforeHistory, [ref]);
       updateMemoUndoRedoButtonsOnly();
       scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
       return true;
@@ -33277,8 +33452,7 @@
         if (!drawing || !drawing.bitmapDataUrl) return;
         const selection = memoSelectionForDrawingRef(ref);
         if (!selection) {
-          const before = layerDrawingSnapshot(drawing);
-          pushLayerDrawingUndo(drawing, before);
+          const before = captureLayerDrawingEditState(state.project, [ref]);
           drawing.bitmapX = Math.round(Number(drawing.bitmapX) || 0) + Math.round(dx);
           drawing.bitmapY = Math.round(Number(drawing.bitmapY) || 0) + Math.round(dy);
           drawing.strokes = [];
@@ -33289,6 +33463,7 @@
           redrawVisibleLayerCanvasesForRef(ref);
           scheduleVideoMemoCanvasRedraw();
           scheduleMemoCanvasRedraw();
+          pushLayerDrawingEditCommand('Move conte layer drawing', before, [ref]);
           updateMemoUndoRedoButtonsOnly();
           return;
         }
@@ -33857,6 +34032,7 @@
       canvas.addEventListener('pointermove', continueVideoMemoStroke);
       canvas.addEventListener('pointerup', endVideoMemoStroke);
       canvas.addEventListener('pointercancel', endVideoMemoStroke);
+      bindMobileLongPressContextMenu(canvas, handleMemoContextMenu);
     }
 
     function updateMemoUndoRedoButtonsOnly() {
@@ -33865,14 +34041,20 @@
       const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
       const selectedDrawing = selectedLayer && selectedLayer.layer ? getLayerDrawingData(state.project, selectedLayer.layer.drawingRef) : null;
       const page = selectedDrawing ? null : getMemoPageData(state.project.currentPage);
-      if (undoBtn) undoBtn.disabled = selectedDrawing ? layerDrawingUndoStack(selectedDrawing).length === 0 : page.strokes.length === 0;
-      if (redoBtn) redoBtn.disabled = selectedDrawing ? selectedDrawing.redo.length === 0 : page.redo.length === 0;
+      const selectedRef = selectedLayer && selectedLayer.layer ? String(selectedLayer.layer.drawingRef || '') : '';
+      const hasPrimaryUndo = state.undoStack.length > 0;
+      const hasPrimaryRedo = state.redoStack.length > 0;
+      if (undoBtn) undoBtn.disabled = hasPrimaryUndo ? false : (selectedDrawing ? !layerDrawingGlobalHistoryAvailable('undo', selectedRef) && layerDrawingUndoStack(selectedDrawing).length === 0 : page.strokes.length === 0);
+      if (redoBtn) redoBtn.disabled = hasPrimaryRedo ? false : (selectedDrawing ? !layerDrawingGlobalHistoryAvailable('redo', selectedRef) && layerDrawingRedoStack(selectedDrawing).length === 0 : page.redo.length === 0);
+      updatePrimaryUndoRedoButtonsOnly();
     }
 
     function memoHistoryAvailable(kind) {
       const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
       const selectedDrawing = selectedLayer && selectedLayer.layer ? getLayerDrawingData(state.project, selectedLayer.layer.drawingRef) : null;
       if (selectedDrawing) {
+        const ref = selectedLayer && selectedLayer.layer ? String(selectedLayer.layer.drawingRef || '') : '';
+        if (layerDrawingGlobalHistoryAvailable(kind, ref)) return true;
         return kind === 'redo' ? layerDrawingRedoStack(selectedDrawing).length > 0 : layerDrawingUndoStack(selectedDrawing).length > 0;
       }
       const page = getMemoPageData(state.project.currentPage);
@@ -33892,6 +34074,10 @@
     function memoUndo() {
       const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
       if (selectedLayer && selectedLayer.layer && selectedLayer.layer.drawingRef) {
+        if (layerDrawingGlobalHistoryAvailable('undo', selectedLayer.layer.drawingRef)) {
+          undo();
+          return;
+        }
         const drawing = getLayerDrawingData(state.project, selectedLayer.layer.drawingRef);
         const undo = layerDrawingUndoStack(drawing);
         if (!undo.length) return;
@@ -33918,6 +34104,10 @@
     function memoRedo() {
       const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
       if (selectedLayer && selectedLayer.layer && selectedLayer.layer.drawingRef) {
+        if (layerDrawingGlobalHistoryAvailable('redo', selectedLayer.layer.drawingRef)) {
+          redo();
+          return;
+        }
         const drawing = getLayerDrawingData(state.project, selectedLayer.layer.drawingRef);
         const redo = layerDrawingRedoStack(drawing);
         if (!redo.length) return;
@@ -34590,12 +34780,7 @@
       }
       if (eraser) eraser.classList.toggle('active', state.memoTool === 'eraser');
       if (eyedropper) eyedropper.classList.toggle('active', Boolean(state.memoEyedropper));
-      const undoBtn = document.getElementById('memoUndoBtn');
-      const redoBtn = document.getElementById('memoRedoBtn');
-      const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
-      const selectedDrawing = selectedLayer && selectedLayer.layer ? getLayerDrawingData(state.project, selectedLayer.layer.drawingRef) : null;
-      if (undoBtn) undoBtn.disabled = selectedDrawing ? layerDrawingUndoStack(selectedDrawing).length === 0 : page.strokes.length === 0;
-      if (redoBtn) redoBtn.disabled = selectedDrawing ? selectedDrawing.redo.length === 0 : page.redo.length === 0;
+      updateMemoUndoRedoButtonsOnly();
       document.querySelectorAll('.memo-color-btn').forEach(function(button) {
         const buttonColor = normalizeMemoBaseColor(button.dataset.memoColor);
         button.classList.toggle('active', buttonColor === state.memoColor && state.memoTool !== 'eraser' && state.memoColorSource !== 'custom');
@@ -34773,15 +34958,15 @@
       const key = String(event.key || '').toLowerCase();
       if ((event.ctrlKey || event.metaKey) && key === 'z') {
         const redoRequested = Boolean(event.shiftKey);
-        if (state.videoEditMode && !memoHistoryAvailable(redoRequested ? 'redo' : 'undo')) return;
         event.preventDefault();
-        if (redoRequested) memoRedo();
-        else memoUndo();
+        event.stopImmediatePropagation();
+        if (redoRequested) runPrimaryRedo();
+        else runPrimaryUndo();
       }
       if ((event.ctrlKey || event.metaKey) && key === 'y') {
-        if (state.videoEditMode && !memoHistoryAvailable('redo')) return;
         event.preventDefault();
-        memoRedo();
+        event.stopImmediatePropagation();
+        runPrimaryRedo();
       }
     }
 
@@ -34958,11 +35143,11 @@
       const isY = key === 'y' || code === 'keyy';
       if (isZ) {
         event.preventDefault();
-        if (event.shiftKey) redo();
-        else undo();
+        if (event.shiftKey) runPrimaryRedo();
+        else runPrimaryUndo();
       } else if (isY) {
         event.preventDefault();
-        redo();
+        runPrimaryRedo();
       }
     }
 
@@ -35007,8 +35192,8 @@
       document.addEventListener('pointercancel', endMemoTransformDocument);
       document.addEventListener('pointercancel', endCameraFrameDrag);
       document.addEventListener('contextmenu', handleMemoContextMenu);
-      document.getElementById('memoUndoBtn').addEventListener('click', memoUndo);
-      document.getElementById('memoRedoBtn').addEventListener('click', memoRedo);
+      document.getElementById('memoUndoBtn').addEventListener('click', runPrimaryUndo);
+      document.getElementById('memoRedoBtn').addEventListener('click', runPrimaryRedo);
       document.getElementById('memoEraserBtn').addEventListener('click', function() {
         state.memoTool = 'eraser';
         state.memoEyedropper = false;
@@ -35056,6 +35241,11 @@
       if (pickerSwatches) {
         pickerSwatches.addEventListener('click', handleMemoPickerSwatchClick);
         pickerSwatches.addEventListener('contextmenu', handleMemoPickerSwatchContextMenu);
+        bindMobileLongPressContextMenu(pickerSwatches, handleMemoPickerSwatchContextMenu, {
+          ignore: function(event) {
+            return !event.target || !event.target.closest || !event.target.closest('.memo-picker-swatch[data-memo-picker-color]');
+          }
+        });
       }
       document.getElementById('memoEyedropperBtn').addEventListener('click', function() {
         state.memoEyedropper = !state.memoEyedropper;
@@ -35108,6 +35298,7 @@
       canvas.addEventListener('pointermove', continueMemoStroke);
       canvas.addEventListener('pointerup', endMemoStroke);
       canvas.addEventListener('pointercancel', endMemoStroke);
+      bindMobileLongPressContextMenu(canvas, handleMemoContextMenu);
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
       document.addEventListener('pointermove', continueCameraFrameDrag);
@@ -35828,8 +36019,7 @@
       document.getElementById('pageReadout').textContent = 'Page ' + state.project.currentPage + ' / ' + totalPages();
       document.getElementById('prevPageBtn').disabled = state.project.currentPage <= 1;
       document.getElementById('nextPageBtn').disabled = !pageHasConteInformation(state.project, state.project.currentPage);
-      document.getElementById('undoBtn').disabled = state.undoStack.length === 0;
-      document.getElementById('redoBtn').disabled = state.redoStack.length === 0;
+      updatePrimaryUndoRedoButtonsOnly();
       const paperModeButton = document.getElementById('paperModeBtn');
       if (paperModeButton) paperModeButton.classList.toggle('active', !state.videoEditMode);
       const videoModeButton = document.getElementById('videoEditToggleBtn');
@@ -35965,6 +36155,7 @@
     }
 
     function bindEvents() {
+      updateRuntimeDeviceClasses();
       movePageUndoControlsToPaperHeader();
       // 방어: LLM/OPS 토글은 다른 바인딩이 throw해도 살아남도록 최우선 attach
       try {
@@ -36128,8 +36319,8 @@
         // 묶음 A: 페이지 이동 — source 영역 무관
         refresh({ skipSource: true });
       });
-      document.getElementById('undoBtn').addEventListener('click', undo);
-      document.getElementById('redoBtn').addEventListener('click', redo);
+      document.getElementById('undoBtn').addEventListener('click', runPrimaryUndo);
+      document.getElementById('redoBtn').addEventListener('click', runPrimaryRedo);
       document.getElementById('llmControlModeBtn').addEventListener('click', toggleLlmControlMode);
       const opsBtn = document.getElementById('opsControlModeBtn');
       if (opsBtn) opsBtn.addEventListener('click', toggleOpsControlMode);
