@@ -23596,7 +23596,9 @@
       overlay.dataset.paraparaPreview = 'true';
       overlay.innerHTML = staticVideoPreviewLayeredHtmlForSlot(slot);
       screen.appendChild(overlay);
-      state.paraparaPreviewTimer = setTimeout(clearParaparaPreviewOverlay, Math.max(50, Math.round(Number(durationMs) || 100)));
+      if (durationMs !== false) {
+        state.paraparaPreviewTimer = setTimeout(clearParaparaPreviewOverlay, Math.max(50, Math.round(Number(durationMs) || 100)));
+      }
     }
 
     function showParaparaPanelPreviewByOffset(offset, durationMs) {
@@ -23641,7 +23643,7 @@
       if (!zone) return;
       state.previewPanelFlipTouch = {
         pointerId: event.pointerId,
-        lastY: event.clientY,
+        startY: event.clientY,
         offset: 0,
         side: zone.side
       };
@@ -23655,12 +23657,13 @@
     function continuePreviewPanelFlipTouch(event) {
       const touch = state.previewPanelFlipTouch;
       if (!touch || touch.pointerId !== event.pointerId) return;
-      const deltaY = event.clientY - touch.lastY;
+      const deltaY = event.clientY - touch.startY;
       const steps = deltaY > 0 ? Math.floor(deltaY / 40) : Math.ceil(deltaY / 40);
-      if (steps) {
-        touch.offset += steps;
-        touch.lastY += steps * 40;
-        showParaparaPanelPreviewByOffset(touch.offset, 160);
+      const nextOffset = -steps;
+      if (nextOffset !== touch.offset) {
+        touch.offset = nextOffset;
+        if (touch.offset) showParaparaPanelPreviewByOffset(touch.offset, false);
+        else clearParaparaPreviewOverlay();
       }
       event.preventDefault();
       event.stopPropagation();
@@ -23674,6 +23677,7 @@
       if (surfaceEl && surfaceEl.releasePointerCapture) {
         try { surfaceEl.releasePointerCapture(event.pointerId); } catch (error) {}
       }
+      clearParaparaPreviewOverlay();
       event.preventDefault();
       event.stopPropagation();
     }
