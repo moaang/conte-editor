@@ -39,9 +39,11 @@
 
     body.mobile-tablet-runtime {
       overscroll-behavior: none;
+      touch-action: manipulation;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body.mobile-tablet-runtime input,
@@ -368,8 +370,55 @@
       grid-template-columns: minmax(760px, 1fr) 300px;
     }
 
+    .workspace.inspector-compact {
+      grid-template-columns: minmax(760px, 1fr) 46px;
+    }
+
+    .workspace.inspector-window {
+      grid-template-columns: minmax(560px, 1fr);
+    }
+
+    .workspace.video-edit-active.inspector-window {
+      grid-template-columns: minmax(760px, 1fr);
+    }
+
     .workspace.video-edit-active .right-pane {
       grid-column: auto;
+    }
+
+    .workspace.inspector-compact .right-pane {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .workspace.inspector-compact .right-pane .pane-header {
+      min-height: 0;
+      padding: 5px 4px;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 6px;
+    }
+
+    .workspace.inspector-compact .right-pane .pane-title {
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .workspace.inspector-compact .right-pane .pane-body {
+      display: none;
+    }
+
+    .workspace.inspector-window .right-pane {
+      position: fixed;
+      right: 12px;
+      top: 82px;
+      bottom: 12px;
+      z-index: 84;
+      width: 300px;
+      min-height: 0;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
     }
 
     .pane {
@@ -397,6 +446,26 @@
       font-size: 12px;
       font-weight: 900;
       white-space: nowrap;
+    }
+
+    .inspector-header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+
+    .inspector-mode-btn {
+      width: 24px;
+      min-width: 24px;
+      height: 22px;
+      min-height: 22px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
     }
 
     .scenario-header {
@@ -1203,11 +1272,16 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      min-height: 22px;
       min-width: 0;
-      padding: 4px 5px;
+      padding: 3px 5px;
       border-bottom: 1px solid #d1d1c6;
       background: #ededdf;
       user-select: none;
+    }
+
+    body.video-edit-active-runtime #memoToggleBtn {
+      display: none;
     }
 
     .memo-window-title {
@@ -1230,7 +1304,19 @@
     }
 
     .memo-controls-wrap.collapsed {
-      width: 178px;
+      width: 112px;
+    }
+
+    .memo-controls-wrap.collapsed .memo-controls {
+      width: 112px;
+    }
+
+    .memo-controls-wrap.collapsed #memoToggleBtn {
+      display: none;
+    }
+
+    .memo-controls-wrap.collapsed .memo-window-title {
+      min-width: 0;
     }
 
     .memo-controls-wrap.collapsed .memo-window-body {
@@ -1243,6 +1329,22 @@
       font-size: 10px;
       font-weight: 800;
       white-space: nowrap;
+    }
+
+    #memoWindowCollapseBtn {
+      width: 18px;
+      min-width: 18px;
+      height: 18px;
+      min-height: 18px;
+      padding: 0;
+      line-height: 1;
+    }
+
+    #memoToggleBtn {
+      height: 18px;
+      min-height: 18px;
+      padding: 0 6px;
+      line-height: 1;
     }
 
     .memo-icon-btn {
@@ -1421,13 +1523,6 @@
       display: inline-flex;
       align-items: center;
       gap: 0;
-    }
-
-    .memo-history-group {
-      display: inline-flex;
-      align-items: center;
-      gap: 1px;
-      margin-left: 4px;
     }
 
     .memo-color-swatch-btn,
@@ -1689,6 +1784,82 @@
     .memo-picker-swatch.active {
       outline: 2px solid #f3c0c6;
       outline-offset: 2px;
+    }
+
+    .memo-quick-window-wrap {
+      position: fixed;
+      left: var(--memo-quick-left, 206px);
+      top: var(--memo-quick-top, 44px);
+      z-index: 81;
+      width: 112px;
+      max-width: calc(100vw - 18px);
+      background: transparent;
+    }
+
+    .memo-quick-window {
+      overflow: hidden;
+      border: 1px solid #c5c5ba;
+      border-radius: 7px;
+      background: #f9f9f5;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    }
+
+    .memo-quick-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 4px 5px;
+      border-bottom: 1px solid #d1d1c6;
+      background: #ededdf;
+      color: #4a4a43;
+      font-size: 10px;
+      font-weight: 900;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .memo-quick-body {
+      display: grid;
+      grid-template-columns: repeat(3, 32px);
+      gap: 4px;
+      justify-content: center;
+      padding: 6px 4px;
+    }
+
+    .memo-quick-btn {
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 6px;
+      line-height: 0;
+    }
+
+    .memo-quick-btn .memo-undo-icon,
+    .memo-quick-btn .memo-redo-icon {
+      width: 22px;
+      height: 22px;
+      background-size: 22px 22px;
+    }
+
+    .memo-clear-drawing-btn {
+      border-color: #b32623;
+      background: #d7332f;
+      color: #fff;
+      font-size: 27px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .memo-clear-drawing-btn:disabled {
+      border-color: #c8c8c0;
+      background: #ecece4;
+      color: #a2a29a;
     }
 
     .memo-nudge-window-wrap {
@@ -2618,7 +2789,7 @@
       top: 50%;
       width: 9px;
       height: 9px;
-      transform: translate(calc(-50% + 0.5px), -50%);
+      transform: translate(-50%, -50%);
       border: 2px solid currentColor;
       border-top-color: transparent;
       border-bottom-color: transparent;
@@ -2640,6 +2811,10 @@
     .video-preview-zoom-controls.header-zoom {
       margin-left: auto;
       flex: 0 0 auto;
+    }
+
+    .workspace:not(.video-edit-active) #videoPreviewZoomHeader {
+      display: none !important;
     }
 
     .video-preview-screen {
@@ -5757,17 +5932,13 @@
             </div>
             <div class="memo-tool-strip memo-tool-row-secondary" aria-label="Memo size and edit controls">
               <button id="memoColorSwatchBtn" class="memo-color-swatch-btn" type="button" aria-label="Open color picker"></button>
+              <div class="memo-color-picker-host">
+                <button id="memoEyedropperBtn" class="memo-eyedropper-btn" type="button" aria-label="Eyedropper"><span class="memo-eyedropper-icon" aria-hidden="true"></span></button>
+              </div>
               <label class="memo-size-control" for="memoSizeRange">
                 <span id="memoSizeValue" class="memo-size-value">2</span>
                 <input id="memoSizeRange" class="memo-size-range" type="range" min="0" max="11" step="1" />
               </label>
-              <div class="memo-color-picker-host">
-                <button id="memoEyedropperBtn" class="memo-eyedropper-btn" type="button" aria-label="Eyedropper"><span class="memo-eyedropper-icon" aria-hidden="true"></span></button>
-              </div>
-              <div class="memo-history-group" aria-label="Memo history">
-                <button id="memoUndoBtn" class="memo-btn memo-icon-btn" type="button" aria-label="Undo" title="Undo"><span class="memo-undo-icon" aria-hidden="true"></span></button>
-                <button id="memoRedoBtn" class="memo-btn memo-icon-btn" type="button" aria-label="Redo" title="Redo"><span class="memo-redo-icon" aria-hidden="true"></span></button>
-              </div>
             </div>
             <details id="shortcutDetails" class="shortcut-card">
               <summary>Memo shortcuts</summary>
@@ -5801,6 +5972,18 @@
                 <button id="shortcutClearAllBtn" type="button">Clear all</button>
               </div>
             </details>
+          </div>
+        </div>
+      </div>
+      <div id="memoQuickWindow" class="memo-quick-window-wrap" aria-label="Memo quick controls">
+        <div class="memo-quick-window">
+          <div id="memoQuickHeader" class="memo-quick-header" data-memo-quick-window-drag="true">
+            <span>Edit</span>
+          </div>
+          <div class="memo-quick-body">
+            <button id="memoClearDrawingBtn" class="memo-quick-btn memo-clear-drawing-btn" type="button" aria-label="Clear layer drawing" title="Backspace">×</button>
+            <button id="memoUndoBtn" class="memo-quick-btn" type="button" aria-label="Undo" title="Undo"><span class="memo-undo-icon" aria-hidden="true"></span></button>
+            <button id="memoRedoBtn" class="memo-quick-btn" type="button" aria-label="Redo" title="Redo"><span class="memo-redo-icon" aria-hidden="true"></span></button>
           </div>
         </div>
       </div>
@@ -6024,6 +6207,9 @@
       <section class="pane right-pane">
         <div class="pane-header">
           <div class="pane-title">Inspector</div>
+          <div class="inspector-header-actions">
+            <button id="inspectorModeBtn" class="inspector-mode-btn" type="button" aria-label="Collapse inspector" title="Inspector">◧</button>
+          </div>
         </div>
         <div class="pane-body">
           <div id="inspector" class="inspector-grid"></div>
@@ -6265,6 +6451,10 @@
       memoWindowY: 44,
       memoWindowCollapsed: false,
       memoWindowDrag: null,
+      lastMobileTouchEndAt: 0,
+      memoQuickWindowX: 206,
+      memoQuickWindowY: 44,
+      memoQuickWindowDrag: null,
       memoNudgeWindowX: 895,
       memoNudgeWindowY: 44,
       memoNudgeWindowDrag: null,
@@ -6401,6 +6591,7 @@
       zipPackageStatus: '',
       stageSettingsOpen: false,
       videoCameraFrameVisible: false,
+      inspectorMode: 'open',
       llmControlEnabled: false,
       llmControlBusy: false,
       llmControlTimer: 0,
@@ -6482,6 +6673,25 @@
 
     function preventMobileBrowserGesture(event) {
       if (!mobileOrTabletRuntime()) return;
+      event.preventDefault();
+    }
+
+    function preventMobileDoubleTapZoom(event) {
+      if (!mobileOrTabletRuntime()) return;
+      const target = event && event.target ? event.target : null;
+      if (isTypingTarget(target)) return;
+      if (target && target.closest && target.closest('button, input, select, textarea, [contenteditable="true"]')) return;
+      const now = Date.now();
+      const previous = Number(state.lastMobileTouchEndAt) || 0;
+      if (previous && now - previous > 0 && now - previous < 360) {
+        event.preventDefault();
+      }
+      state.lastMobileTouchEndAt = now;
+    }
+
+    function preventMobileDoubleClickZoom(event) {
+      if (!mobileOrTabletRuntime()) return;
+      if (isTypingTarget(event && event.target)) return;
       event.preventDefault();
     }
 
@@ -34193,6 +34403,7 @@
     function updateMemoUndoRedoButtonsOnly() {
       const undoBtn = document.getElementById('memoUndoBtn');
       const redoBtn = document.getElementById('memoRedoBtn');
+      const clearBtn = document.getElementById('memoClearDrawingBtn');
       const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
       const selectedDrawing = selectedLayer && selectedLayer.layer ? getLayerDrawingData(state.project, selectedLayer.layer.drawingRef) : null;
       const page = selectedDrawing ? null : getMemoPageData(state.project.currentPage);
@@ -34201,6 +34412,7 @@
       const hasPrimaryRedo = state.redoStack.length > 0;
       if (undoBtn) undoBtn.disabled = hasPrimaryUndo ? false : (selectedDrawing ? !layerDrawingGlobalHistoryAvailable('undo', selectedRef) && layerDrawingUndoStack(selectedDrawing).length === 0 : page.strokes.length === 0);
       if (redoBtn) redoBtn.disabled = hasPrimaryRedo ? false : (selectedDrawing ? !layerDrawingGlobalHistoryAvailable('redo', selectedRef) && layerDrawingRedoStack(selectedDrawing).length === 0 : page.redo.length === 0);
+      if (clearBtn) clearBtn.disabled = !selectedLayer;
       updatePrimaryUndoRedoButtonsOnly();
     }
 
@@ -34319,7 +34531,7 @@
       if (!win) return;
       win.classList.toggle('collapsed', Boolean(state.memoWindowCollapsed));
       const rect = win.getBoundingClientRect();
-      const width = Math.max(120, Math.round(rect.width || 180));
+      const width = Math.max(112, Math.round(rect.width || 180));
       const height = Math.max(34, Math.round(rect.height || 34));
       const maxX = Math.max(8, window.innerWidth - width - 8);
       const maxY = Math.max(8, window.innerHeight - height - 8);
@@ -34333,6 +34545,20 @@
         collapseBtn.setAttribute('aria-label', state.memoWindowCollapsed ? 'Expand memo window' : 'Collapse memo window');
         collapseBtn.setAttribute('aria-expanded', state.memoWindowCollapsed ? 'false' : 'true');
       }
+    }
+
+    function applyMemoQuickWindowState() {
+      const win = document.getElementById('memoQuickWindow');
+      if (!win) return;
+      const rect = win.getBoundingClientRect();
+      const width = Math.max(96, Math.round(rect.width || 112));
+      const height = Math.max(66, Math.round(rect.height || 72));
+      const maxX = Math.max(8, window.innerWidth - width - 8);
+      const maxY = Math.max(8, window.innerHeight - height - 8);
+      state.memoQuickWindowX = clampNumber(state.memoQuickWindowX, 8, maxX, 206);
+      state.memoQuickWindowY = clampNumber(state.memoQuickWindowY, 8, maxY, 44);
+      win.style.setProperty('--memo-quick-left', state.memoQuickWindowX + 'px');
+      win.style.setProperty('--memo-quick-top', state.memoQuickWindowY + 'px');
     }
 
     function applyMemoNudgeWindowState() {
@@ -34579,6 +34805,39 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       state.memoNudgeWindowDrag = null;
       applyMemoNudgeWindowState();
+    }
+
+    function beginMemoQuickWindowDrag(event) {
+      if (event.button !== 0) return;
+      const handle = event.target && event.target.closest ? event.target.closest('[data-memo-quick-window-drag="true"]') : null;
+      if (!handle) return;
+      const win = document.getElementById('memoQuickWindow');
+      if (!win) return;
+      const rect = win.getBoundingClientRect();
+      state.memoQuickWindowDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        baseX: rect.left,
+        baseY: rect.top
+      };
+      event.preventDefault();
+    }
+
+    function moveMemoQuickWindowDrag(event) {
+      const drag = state.memoQuickWindowDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      state.memoQuickWindowX = drag.baseX + event.clientX - drag.startX;
+      state.memoQuickWindowY = drag.baseY + event.clientY - drag.startY;
+      applyMemoQuickWindowState();
+      event.preventDefault();
+    }
+
+    function endMemoQuickWindowDrag(event) {
+      const drag = state.memoQuickWindowDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      state.memoQuickWindowDrag = null;
+      applyMemoQuickWindowState();
     }
 
     function beginMemoWindowDrag(event) {
@@ -34981,6 +35240,7 @@
       applyMemoEditToolWindowState();
       if (state.memoColorPickerOpen) drawMemoColorPicker();
       applyMemoWindowState();
+      applyMemoQuickWindowState();
       applyMemoNudgeWindowState();
       refreshShortcutInputs();
     }
@@ -35320,6 +35580,8 @@
       }
       const memoHeader = document.getElementById('memoWindowHeader');
       if (memoHeader) memoHeader.addEventListener('pointerdown', beginMemoWindowDrag);
+      const quickHeader = document.getElementById('memoQuickHeader');
+      if (quickHeader) quickHeader.addEventListener('pointerdown', beginMemoQuickWindowDrag);
       const nudgeHeader = document.getElementById('memoNudgeHeader');
       if (nudgeHeader) nudgeHeader.addEventListener('pointerdown', beginMemoNudgeWindowDrag);
       const pickerHeader = document.getElementById('memoColorPickerHeader');
@@ -35327,12 +35589,14 @@
       const toolHeader = document.getElementById('memoToolOptionsHeader');
       if (toolHeader) toolHeader.addEventListener('pointerdown', beginMemoEditToolWindowDrag);
       document.addEventListener('pointermove', moveMemoWindowDrag);
+      document.addEventListener('pointermove', moveMemoQuickWindowDrag);
       document.addEventListener('pointermove', moveMemoNudgeWindowDrag);
       document.addEventListener('pointermove', moveMemoColorPickerWindowDrag);
       document.addEventListener('pointermove', moveMemoEditToolWindowDrag);
       document.addEventListener('pointermove', continueMemoSpacePan);
       document.addEventListener('pointermove', continueMemoTransformDocument);
       document.addEventListener('pointerup', endMemoWindowDrag);
+      document.addEventListener('pointerup', endMemoQuickWindowDrag);
       document.addEventListener('pointerup', endMemoNudgeWindowDrag);
       document.addEventListener('pointerup', endMemoColorPickerWindowDrag);
       document.addEventListener('pointerup', endMemoEditToolWindowDrag);
@@ -35340,6 +35604,7 @@
       document.addEventListener('pointerup', endMemoTransformDocument);
       document.addEventListener('pointerup', endCameraFrameDrag);
       document.addEventListener('pointercancel', endMemoWindowDrag);
+      document.addEventListener('pointercancel', endMemoQuickWindowDrag);
       document.addEventListener('pointercancel', endMemoNudgeWindowDrag);
       document.addEventListener('pointercancel', endMemoColorPickerWindowDrag);
       document.addEventListener('pointercancel', endMemoEditToolWindowDrag);
@@ -35347,8 +35612,19 @@
       document.addEventListener('pointercancel', endMemoTransformDocument);
       document.addEventListener('pointercancel', endCameraFrameDrag);
       document.addEventListener('contextmenu', handleMemoContextMenu);
-      document.getElementById('memoUndoBtn').addEventListener('click', runPrimaryUndo);
-      document.getElementById('memoRedoBtn').addEventListener('click', runPrimaryRedo);
+      const clearDrawingBtn = document.getElementById('memoClearDrawingBtn');
+      if (clearDrawingBtn) {
+        clearDrawingBtn.addEventListener('click', function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          clearSelectedConteLayerDrawings();
+          updateMemoUndoRedoButtonsOnly();
+        });
+      }
+      const memoUndoBtn = document.getElementById('memoUndoBtn');
+      if (memoUndoBtn) memoUndoBtn.addEventListener('click', runPrimaryUndo);
+      const memoRedoBtn = document.getElementById('memoRedoBtn');
+      if (memoRedoBtn) memoRedoBtn.addEventListener('click', runPrimaryRedo);
       document.getElementById('memoEraserBtn').addEventListener('click', function() {
         state.memoTool = 'eraser';
         state.memoEyedropper = false;
@@ -35476,6 +35752,7 @@
         observer.observe(document.getElementById('contePage'));
       }
       applyMemoWindowState();
+      applyMemoQuickWindowState();
       applyMemoNudgeWindowState();
       applyMemoColorPickerWindowState();
       applyMemoEditToolWindowState();
@@ -36170,6 +36447,38 @@
       if (!options.skipChrome) guardedRender('chrome', refreshChromeControls);
     }
 
+    function normalizedInspectorMode(mode) {
+      if (mode === 'compact' || mode === 'window') return mode;
+      return 'open';
+    }
+
+    function updateInspectorModeUI() {
+      const mode = normalizedInspectorMode(state.inspectorMode);
+      const workspace = document.querySelector('.workspace');
+      if (workspace) {
+        workspace.classList.toggle('inspector-compact', mode === 'compact');
+        workspace.classList.toggle('inspector-window', mode === 'window');
+      }
+      const button = document.getElementById('inspectorModeBtn');
+      if (button) {
+        button.textContent = mode === 'open' ? '◧' : (mode === 'compact' ? '□' : '◨');
+        button.title = mode === 'open' ? 'Inspector compact' : (mode === 'compact' ? 'Inspector window' : 'Inspector open');
+        button.setAttribute('aria-label', button.title);
+      }
+    }
+
+    function setInspectorMode(mode) {
+      state.inspectorMode = normalizedInspectorMode(mode);
+      updateInspectorModeUI();
+    }
+
+    function cycleInspectorMode() {
+      const mode = normalizedInspectorMode(state.inspectorMode);
+      if (mode === 'open') setInspectorMode('compact');
+      else if (mode === 'compact') setInspectorMode('window');
+      else setInspectorMode('open');
+    }
+
     function refreshChromeControls() {
       document.getElementById('pageReadout').textContent = 'Page ' + state.project.currentPage + ' / ' + totalPages();
       document.getElementById('prevPageBtn').disabled = state.project.currentPage <= 1;
@@ -36182,10 +36491,12 @@
         videoModeButton.classList.toggle('active', state.videoEditMode);
         videoModeButton.textContent = '映像編集';
       }
+      if (document.body) document.body.classList.toggle('video-edit-active-runtime', state.videoEditMode);
       const workspace = document.querySelector('.workspace');
       if (workspace) workspace.classList.toggle('video-edit-active', state.videoEditMode);
       const zoomHeader = document.getElementById('videoPreviewZoomHeader');
       if (zoomHeader) zoomHeader.hidden = !state.videoEditMode;
+      updateInspectorModeUI();
       updateVideoPreviewZoomDom(document);
       updateWorkspaceUI();
       updateMemoUI();
@@ -36314,7 +36625,11 @@
       document.addEventListener('gesturestart', preventMobileBrowserGesture, { passive: false });
       document.addEventListener('gesturechange', preventMobileBrowserGesture, { passive: false });
       document.addEventListener('gestureend', preventMobileBrowserGesture, { passive: false });
+      document.addEventListener('touchend', preventMobileDoubleTapZoom, { passive: false });
+      document.addEventListener('dblclick', preventMobileDoubleClickZoom, { passive: false });
       movePageUndoControlsToPaperHeader();
+      const inspectorModeBtn = document.getElementById('inspectorModeBtn');
+      if (inspectorModeBtn) inspectorModeBtn.addEventListener('click', cycleInspectorMode);
       // 방어: LLM/OPS 토글은 다른 바인딩이 throw해도 살아남도록 최우선 attach
       try {
         const llmBtn = document.getElementById('llmControlModeBtn');
