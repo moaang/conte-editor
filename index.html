@@ -228,6 +228,13 @@
       align-items: center;
     }
 
+    .stage-onion-skin-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     .stage-settings-btn {
       width: 26px;
       min-width: 26px;
@@ -246,6 +253,66 @@
       background: #eef7ff;
     }
 
+    .stage-onion-btn {
+      display: inline-grid;
+      place-items: center;
+      color: #4d514e;
+    }
+
+    .stage-onion-btn.enabled {
+      border-color: #f1a52d;
+      color: #f1a52d;
+      background: #fff8e8;
+    }
+
+    .stage-onion-icon {
+      position: relative;
+      display: block;
+      width: 16px;
+      height: 16px;
+    }
+
+    .stage-onion-icon::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 1px;
+      width: 8px;
+      height: 9px;
+      border: 2px solid currentColor;
+      border-bottom-width: 1px;
+      border-radius: 50% 50% 45% 45%;
+      box-sizing: border-box;
+    }
+
+    .stage-onion-icon::after {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 10px;
+      width: 6px;
+      height: 4px;
+      border: 2px solid currentColor;
+      border-top-width: 1px;
+      border-radius: 1px;
+      box-sizing: border-box;
+    }
+
+    .stage-onion-indicator {
+      width: 7px;
+      height: 7px;
+      border: 1px solid #9c9c92;
+      border-radius: 50%;
+      background: #d4d4cb;
+      box-sizing: border-box;
+    }
+
+    .stage-onion-indicator.enabled {
+      border-color: #f1a52d;
+      background: #ffd15a;
+      box-shadow: 0 0 0 2px rgba(241, 165, 45, 0.18);
+    }
+
     .stage-settings-popover {
       position: absolute;
       z-index: 60;
@@ -261,6 +328,128 @@
 
     .stage-settings-popover[hidden] {
       display: none;
+    }
+
+    .onion-skin-window {
+      position: absolute;
+      z-index: 62;
+      left: 0;
+      top: calc(100% + 5px);
+      width: 258px;
+      padding: 8px;
+      border: 1px solid #777a76;
+      border-radius: 6px;
+      background: #3d3f3d;
+      color: #e8e8e2;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+      font-size: 11px;
+    }
+
+    .onion-skin-window[hidden] {
+      display: none;
+    }
+
+    .onion-skin-title-row,
+    .onion-skin-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .onion-skin-title-row {
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-weight: 800;
+    }
+
+    .onion-skin-row {
+      margin-top: 7px;
+    }
+
+    .onion-skin-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .onion-skin-check input {
+      width: auto;
+      margin: 0;
+    }
+
+    .onion-skin-grid {
+      display: grid;
+      grid-template-columns: 1fr 20px 1fr;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .onion-frame-toggle {
+      min-height: 70px;
+      border: 1px solid #5e625f;
+      border-radius: 4px;
+      background: #303230;
+      color: #cfcfc7;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .onion-frame-toggle.active.previous {
+      border-color: #51ca78;
+      color: #a6ffc1;
+      background: rgba(49, 171, 86, 0.22);
+    }
+
+    .onion-frame-toggle.active.next {
+      border-color: #f0a13a;
+      color: #ffd08a;
+      background: rgba(224, 133, 35, 0.24);
+    }
+
+    .onion-opacity-rail {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 70px;
+    }
+
+    .onion-opacity-rail input[type='range'] {
+      width: 70px;
+      height: 18px;
+      transform: rotate(-90deg);
+      accent-color: #cfd2ce;
+    }
+
+    .onion-mode-group {
+      display: inline-flex;
+      border: 1px solid #666a66;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-left: auto;
+    }
+
+    .onion-mode-group button {
+      min-height: 24px;
+      border: 0;
+      border-right: 1px solid #666a66;
+      border-radius: 0;
+      background: #2f312f;
+      color: #dadad3;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .onion-mode-group button:last-child {
+      border-right: 0;
+    }
+
+    .onion-mode-group button.active {
+      background: #e7e9df;
+      color: #1f2a23;
     }
 
     .stage-settings-check {
@@ -493,6 +682,7 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
+      order: -1;
       flex: 0 0 auto;
     }
 
@@ -601,9 +791,15 @@
     }
 
     .scenario-primary-actions button {
-      min-height: 27px;
-      padding: 4px 7px;
+      width: 22px;
+      min-width: 22px;
+      height: 22px;
+      min-height: 22px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
       font-size: 11px;
+      line-height: 1;
     }
 
     .scenario-timing-actions {
@@ -1378,6 +1574,10 @@
       height: 18px;
       min-height: 18px;
       padding: 0;
+      padding-top: 1px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       line-height: 1;
     }
 
@@ -1832,7 +2032,7 @@
       left: var(--memo-quick-left, 206px);
       top: var(--memo-quick-top, 44px);
       z-index: 81;
-      width: 112px;
+      width: 152px;
       max-width: calc(100vw - 18px);
       background: transparent;
     }
@@ -1863,7 +2063,7 @@
 
     .memo-quick-body {
       display: grid;
-      grid-template-columns: repeat(3, 32px);
+      grid-template-columns: repeat(4, 32px);
       gap: 4px;
       justify-content: center;
       padding: 6px 4px;
@@ -1901,6 +2101,42 @@
       border-color: #c8c8c0;
       background: #ecece4;
       color: #a2a29a;
+    }
+
+    .memo-parapara-btn {
+      color: #2f5f89;
+      background: #f9fbfd;
+    }
+
+    .memo-parapara-icon {
+      position: relative;
+      display: block;
+      width: 18px;
+      height: 18px;
+    }
+
+    .memo-parapara-icon::before,
+    .memo-parapara-icon::after {
+      content: '';
+      position: absolute;
+      border: 2px solid currentColor;
+      border-radius: 2px;
+      box-sizing: border-box;
+    }
+
+    .memo-parapara-icon::before {
+      left: 3px;
+      top: 5px;
+      width: 9px;
+      height: 9px;
+      opacity: 0.55;
+    }
+
+    .memo-parapara-icon::after {
+      left: 7px;
+      top: 3px;
+      width: 9px;
+      height: 9px;
     }
 
     .memo-nudge-window-wrap {
@@ -2972,6 +3208,50 @@
       object-fit: contain;
     }
 
+    .video-preview-layered .video-onion-skin-layer {
+      object-fit: contain;
+      opacity: var(--onion-opacity, 0.45);
+      mix-blend-mode: multiply;
+      pointer-events: none;
+      z-index: 90 !important;
+    }
+
+    .video-preview-layered .video-onion-skin-layer.previous:not(.original-color) {
+      filter: none;
+    }
+
+    .video-preview-layered .video-onion-skin-layer.next:not(.original-color) {
+      filter: none;
+    }
+
+    .video-preview-layered .video-onion-skin-layer.original-color {
+      filter: none;
+      mix-blend-mode: multiply;
+    }
+
+    .video-parapara-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      overflow: visible;
+      pointer-events: none;
+      background: #fff;
+    }
+
+    .video-preview-screen.paper-frame-active .video-parapara-overlay {
+      inset: auto;
+      left: var(--paper-frame-x, 0%);
+      top: var(--paper-frame-y, 0%);
+      width: var(--paper-frame-w, 100%);
+      height: var(--paper-frame-h, 100%);
+    }
+
+    .video-parapara-overlay .video-preview-layered {
+      position: absolute;
+      inset: 0;
+      background: transparent;
+    }
+
     .memo-selection-overlay-canvas {
       position: absolute;
       inset: auto;
@@ -3551,6 +3831,59 @@
       border: 2px solid currentColor;
       border-top-color: transparent;
       border-radius: 50%;
+    }
+
+    .timeline-icon.repeat::before,
+    .timeline-icon.repeat::after {
+      content: "";
+      position: absolute;
+      width: 10px;
+      height: 6px;
+      border: 2px solid currentColor;
+      box-sizing: border-box;
+    }
+
+    .timeline-icon.repeat::before {
+      left: 3px;
+      top: 2px;
+      border-left: 0;
+      border-bottom: 0;
+      border-radius: 0 7px 0 0;
+    }
+
+    .timeline-icon.repeat::after {
+      right: 3px;
+      bottom: 2px;
+      border-right: 0;
+      border-top: 0;
+      border-radius: 0 0 0 7px;
+    }
+
+    .timeline-icon.repeat .repeat-arrow-a,
+    .timeline-icon.repeat .repeat-arrow-b {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-top: 3px solid transparent;
+      border-bottom: 3px solid transparent;
+    }
+
+    .timeline-icon.repeat .repeat-arrow-a {
+      left: 1px;
+      top: 0;
+      border-right: 5px solid currentColor;
+    }
+
+    .timeline-icon.repeat .repeat-arrow-b {
+      right: 1px;
+      bottom: 0;
+      border-left: 5px solid currentColor;
+    }
+
+    #timelineRepeatBtn.active {
+      border-color: #3a79bd;
+      color: #1d64a4;
+      background: #eaf5ff;
     }
 
     #voicevoxGenerateTimelineBtn.generating {
@@ -5956,7 +6289,7 @@
         <div class="memo-controls" aria-label="Memo controls">
           <div id="memoWindowHeader" class="memo-window-header">
             <button id="memoToggleBtn" class="memo-btn" type="button">Memo Mode</button>
-            <span class="memo-window-title" data-memo-window-drag="true">Memo</span>
+            <span class="memo-window-title" data-memo-window-drag="true">Tools</span>
             <button id="memoWindowCollapseBtn" class="memo-btn" type="button" aria-label="Collapse memo window">-</button>
           </div>
           <div class="memo-window-body">
@@ -5982,7 +6315,7 @@
               </label>
             </div>
             <details id="shortcutDetails" class="shortcut-card">
-              <summary>Memo shortcuts</summary>
+              <summary>shortcuts</summary>
               <div class="shortcut-row">
                 <span>Brush</span>
                 <input class="shortcut-input" data-shortcut-action="brushCycle" readonly />
@@ -6008,6 +6341,11 @@
                 <input class="shortcut-input" data-shortcut-action="memoOff" readonly />
                 <button class="shortcut-clear" type="button" data-shortcut-clear="memoOff">x</button>
               </div>
+              <div class="shortcut-row">
+                <span>Onion skin</span>
+                <input class="shortcut-input" data-shortcut-action="onionSkinToggle" readonly />
+                <button class="shortcut-clear" type="button" data-shortcut-clear="onionSkinToggle">x</button>
+              </div>
               <div class="shortcut-actions">
                 <button id="shortcutDefaultsBtn" type="button">Defaults</button>
                 <button id="shortcutClearAllBtn" type="button">Clear all</button>
@@ -6022,6 +6360,7 @@
             <span>Edit</span>
           </div>
           <div class="memo-quick-body">
+            <button id="memoParaparaBtn" class="memo-quick-btn memo-parapara-btn" type="button" aria-label="Parapara previous panel" title="Parapara"><span class="memo-parapara-icon" aria-hidden="true"></span></button>
             <button id="memoClearDrawingBtn" class="memo-quick-btn memo-clear-drawing-btn" type="button" aria-label="Clear layer drawing" title="Backspace">×</button>
             <button id="memoUndoBtn" class="memo-quick-btn" type="button" aria-label="Undo" title="Undo"><span class="memo-undo-icon" aria-hidden="true"></span></button>
             <button id="memoRedoBtn" class="memo-quick-btn" type="button" aria-label="Redo" title="Redo"><span class="memo-redo-icon" aria-hidden="true"></span></button>
@@ -6205,6 +6544,41 @@
                 </div>
               </div>
             </div>
+            <div class="stage-onion-skin-wrap">
+              <button id="onionSkinBtn" class="stage-settings-btn stage-onion-btn" type="button" aria-label="Onion skin settings" aria-expanded="false" title="Onion Skin">
+                <span class="stage-onion-icon" aria-hidden="true"></span>
+              </button>
+              <span id="onionSkinIndicator" class="stage-onion-indicator" aria-hidden="true"></span>
+              <div id="onionSkinWindow" class="onion-skin-window" hidden>
+                <div class="onion-skin-title-row">
+                  <span>Onion Skin</span>
+                  <label class="onion-skin-check">
+                    <input id="onionSkinEnabledToggle" type="checkbox" />
+                    <span>ON</span>
+                  </label>
+                </div>
+                <div class="onion-skin-grid">
+                  <button id="onionSkinPreviousToggle" class="onion-frame-toggle previous" type="button">前</button>
+                  <div class="onion-opacity-rail">
+                    <input id="onionSkinOpacityRange" type="range" min="0" max="100" step="5" orient="vertical" />
+                  </div>
+                  <button id="onionSkinNextToggle" class="onion-frame-toggle next" type="button">後</button>
+                </div>
+                <div class="onion-skin-row">
+                  <span>Basis</span>
+                  <div class="onion-mode-group" role="group" aria-label="Onion skin basis">
+                    <button id="onionSkinModeLayerBtn" type="button" data-onion-mode="layer">Layer row</button>
+                    <button id="onionSkinModePanelBtn" type="button" data-onion-mode="panel">Panel</button>
+                  </div>
+                </div>
+                <div class="onion-skin-row">
+                  <label class="onion-skin-check">
+                    <input id="onionSkinOriginalColorToggle" type="checkbox" />
+                    <span>Original color</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="button-row paper-header-controls">
             <div class="paper-edit-controls" aria-label="Conte edit controls">
@@ -6362,13 +6736,15 @@
     const MEMO_LAYER_BITMAP_MAX_DIMENSION = 4096;
     const SHORTCUT_STORAGE_KEY = 'conteEditorShortcutSettings.v1';
     const EDITOR_UI_STORAGE_KEY = 'conteEditorUiState.v1';
-    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'memoOff'];
+    const ONION_SKIN_STORAGE_KEY = 'conteEditorOnionSkinSettings.v1';
+    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'memoOff', 'onionSkinToggle'];
     const SHORTCUT_DEFAULTS = {
       brushCycle: 'b',
       eraserToggle: 'e',
       sizeDown: '[',
       sizeUp: ']',
-      memoOff: 'backspace'
+      memoOff: 'backspace',
+      onionSkinToggle: 'w'
     };
     const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialogue', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
     const DIALOGUE_AREA_TYPES = ['dialogue', 'narration', 'telop', 'monologue'];
@@ -6469,6 +6845,7 @@
       timelineScrollbarRaf: 0,
       timelineScrollbarUpdateRoot: null,
       timelineScrollEls: [],
+      timelineRepeat: false,
       audioConflictClipIds: new Set(),
       sourceView: 'blocks',
       sourceOpenPages: {},
@@ -6554,6 +6931,8 @@
       videoPlaybackLastTimecodeUpdate: 0,
       videoPlaybackLastScrollUpdate: 0,
       videoPlaybackLastPreviewKey: '',
+      paraparaPreviewTimer: 0,
+      previewPanelFlipTouch: null,
       videoPlaybackStartAudioTime: 0,
       speechTimers: [],
       playbackClipQueue: [],
@@ -6632,6 +7011,8 @@
       indexedDbAutosaveStatus: '',
       zipPackageStatus: '',
       stageSettingsOpen: false,
+      onionSkinWindowOpen: false,
+      onionSkin: defaultOnionSkinSettings(),
       videoCameraFrameVisible: false,
       inspectorMode: 'open',
       inspectorWindowX: 0,
@@ -6698,6 +7079,19 @@
           w: clampFloat(frame.w, 0.02, 1, 0.8),
           h: clampFloat(frame.h, 0.02, 1, 0.45)
         }
+      };
+    }
+
+    function defaultOnionSkinSettings(settings) {
+      const current = settings && typeof settings === 'object' ? settings : {};
+      const mode = current.mode === 'panel' ? 'panel' : 'layer';
+      return {
+        enabled: Boolean(current.enabled),
+        previous: current.previous !== false,
+        next: current.next === true,
+        opacity: clampNumber(current.opacity, 0, 100, 45),
+        mode: mode,
+        originalColor: Boolean(current.originalColor)
       };
     }
 
@@ -6794,7 +7188,7 @@
         settings: {
           rowsPerPage: ROWS_PER_PAGE,
           templateId: 'hanyou_fixed_5_column',
-          targetDurationFrames: DEFAULT_TARGET_SECONDS * 24,
+          targetDurationFrames: 0,
           targetDurationManual: false,
           videoEditAutoCreateLayerKomaOnDraw: true,
           indexedDbAutosaveEnabled: defaultIndexedDbAutosaveEnabled(),
@@ -6817,6 +7211,7 @@
             memoColorSource: 'preset'
           },
           paperFrame: defaultPaperFrameSettings(),
+          onionSkin: defaultOnionSkinSettings(),
           localWorkspace: defaultWorkspaceSettings()
         },
         memoPages: {},
@@ -6988,7 +7383,7 @@
       state.project.settings = state.project.settings || {};
       state.project.settings.targetDurationFrames = Math.max(0, Math.round(Number(payload.targetDurationFrames) || 0));
       state.project.settings.targetDurationManual = Boolean(payload.targetDurationManual);
-      updateTargetTimeInputs(projectTargetFrames(state.project));
+      updateTargetTimeInputs(state.project.settings.targetDurationFrames);
       guardedRender('timing', renderTimingDashboard);
       guardedRender('inspector', renderInspector);
       guardedRender('chrome', refreshChromeControls);
@@ -7200,6 +7595,7 @@
         memoViewportPanY: Math.round(Number(state.memoViewportPanY) || 0),
         timelineVideoTracksCollapsed: Boolean(state.timelineVideoTracksCollapsed),
         timelineAudioTracksCollapsed: Boolean(state.timelineAudioTracksCollapsed),
+        timelineRepeat: Boolean(state.timelineRepeat),
         videoCameraFrameVisible: Boolean(state.videoCameraFrameVisible),
         scenarioWindowOpen: Boolean(state.scenarioWindowOpen),
         scenarioWindowX: Math.round(Number(state.scenarioWindowX) || 48),
@@ -7210,6 +7606,17 @@
         inspectorWindowY: Math.round(Number(state.inspectorWindowY) || 82),
         inspectorWindowWidth: Math.round(Number(state.inspectorWindowWidth) || 300),
         inspectorWindowHeight: Math.round(Number(state.inspectorWindowHeight) || 560),
+        memoWindowX: Math.round(Number(state.memoWindowX) || 320),
+        memoWindowY: Math.round(Number(state.memoWindowY) || 44),
+        memoWindowCollapsed: Boolean(state.memoWindowCollapsed),
+        memoQuickWindowX: Math.round(Number(state.memoQuickWindowX) || 206),
+        memoQuickWindowY: Math.round(Number(state.memoQuickWindowY) || 44),
+        memoNudgeWindowX: Math.round(Number(state.memoNudgeWindowX) || 895),
+        memoNudgeWindowY: Math.round(Number(state.memoNudgeWindowY) || 44),
+        memoColorPickerWindowX: Math.round(Number(state.memoColorPickerWindowX) || 620),
+        memoColorPickerWindowY: Math.round(Number(state.memoColorPickerWindowY) || 82),
+        memoEditToolWindowX: Math.round(Number(state.memoEditToolWindowX) || 1010),
+        memoEditToolWindowY: Math.round(Number(state.memoEditToolWindowY) || 44),
         memoColorSource: state.memoColorSource === 'custom' ? 'custom' : 'preset',
         memoCustomColor: normalizeMemoBaseColor(state.memoCustomColor || state.memoColor),
         memoColorHistory: normalizedMemoColorList(state.memoColorHistory, MEMO_PICKER_HISTORY_LIMIT, MEMO_PICKER_DEFAULT_HISTORY),
@@ -7228,6 +7635,7 @@
       state.memoViewportPanY = Math.round(Number(ui.memoViewportPanY) || 0);
       state.timelineVideoTracksCollapsed = Boolean(ui.timelineVideoTracksCollapsed);
       state.timelineAudioTracksCollapsed = Boolean(ui.timelineAudioTracksCollapsed);
+      if (Object.prototype.hasOwnProperty.call(ui, 'timelineRepeat')) state.timelineRepeat = Boolean(ui.timelineRepeat);
       if (Object.prototype.hasOwnProperty.call(ui, 'videoCameraFrameVisible')) state.videoCameraFrameVisible = Boolean(ui.videoCameraFrameVisible);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowOpen')) state.scenarioWindowOpen = Boolean(ui.scenarioWindowOpen);
       if (Object.prototype.hasOwnProperty.call(ui, 'scenarioWindowX')) state.scenarioWindowX = clampNumber(ui.scenarioWindowX, 8, Math.max(8, window.innerWidth - 42), state.scenarioWindowX);
@@ -7238,6 +7646,17 @@
       if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowY')) state.inspectorWindowY = Math.round(Number(ui.inspectorWindowY) || 82);
       if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowWidth')) state.inspectorWindowWidth = Math.round(Number(ui.inspectorWindowWidth) || 300);
       if (Object.prototype.hasOwnProperty.call(ui, 'inspectorWindowHeight')) state.inspectorWindowHeight = Math.round(Number(ui.inspectorWindowHeight) || 560);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoWindowX')) state.memoWindowX = Math.round(Number(ui.memoWindowX) || 320);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoWindowY')) state.memoWindowY = Math.round(Number(ui.memoWindowY) || 44);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoWindowCollapsed')) state.memoWindowCollapsed = Boolean(ui.memoWindowCollapsed);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoQuickWindowX')) state.memoQuickWindowX = Math.round(Number(ui.memoQuickWindowX) || 206);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoQuickWindowY')) state.memoQuickWindowY = Math.round(Number(ui.memoQuickWindowY) || 44);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoNudgeWindowX')) state.memoNudgeWindowX = Math.round(Number(ui.memoNudgeWindowX) || 895);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoNudgeWindowY')) state.memoNudgeWindowY = Math.round(Number(ui.memoNudgeWindowY) || 44);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoColorPickerWindowX')) state.memoColorPickerWindowX = Math.round(Number(ui.memoColorPickerWindowX) || 620);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoColorPickerWindowY')) state.memoColorPickerWindowY = Math.round(Number(ui.memoColorPickerWindowY) || 82);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoEditToolWindowX')) state.memoEditToolWindowX = Math.round(Number(ui.memoEditToolWindowX) || 1010);
+      if (Object.prototype.hasOwnProperty.call(ui, 'memoEditToolWindowY')) state.memoEditToolWindowY = Math.round(Number(ui.memoEditToolWindowY) || 44);
       if (Object.prototype.hasOwnProperty.call(ui, 'memoColorSource')) state.memoColorSource = ui.memoColorSource === 'custom' ? 'custom' : 'preset';
       if (Object.prototype.hasOwnProperty.call(ui, 'memoCustomColor')) state.memoCustomColor = normalizeMemoBaseColor(ui.memoCustomColor);
       if (Object.prototype.hasOwnProperty.call(ui, 'memoColorHistory')) state.memoColorHistory = normalizedMemoColorList(ui.memoColorHistory, MEMO_PICKER_HISTORY_LIMIT, MEMO_PICKER_DEFAULT_HISTORY);
@@ -7295,7 +7714,7 @@
       // 묶음 C: project 교체 시 audio cache 무효화
       bumpAudioCycle();
       if (state.project.settings && state.project.settings.shortcuts) {
-        state.shortcuts = Object.assign({}, SHORTCUT_DEFAULTS, state.project.settings.shortcuts);
+        state.shortcuts = normalizedShortcutSettings(state.project.settings.shortcuts);
         saveShortcutSettings();
       }
       loadEditorUiState();
@@ -8260,8 +8679,8 @@
       project.settings = project.settings || {};
       project.settings.rowsPerPage = ROWS_PER_PAGE;
       project.settings.templateId = 'hanyou_fixed_5_column';
-      project.settings.targetDurationFrames = Math.max(0, Math.round(Number(project.settings.targetDurationFrames) || DEFAULT_TARGET_SECONDS * (Number(project.fps) || 24)));
-      project.settings.targetDurationManual = Boolean(project.settings.targetDurationManual);
+      project.settings.targetDurationFrames = Math.max(0, Math.round(Number(project.settings.targetDurationFrames) || 0));
+      project.settings.targetDurationManual = project.settings.targetDurationFrames > 0 && Boolean(project.settings.targetDurationManual);
       project.settings.videoEditAutoCreateLayerKomaOnDraw = project.settings.videoEditAutoCreateLayerKomaOnDraw !== false;
       project.settings.indexedDbAutosaveEnabled = Object.prototype.hasOwnProperty.call(project.settings, 'indexedDbAutosaveEnabled')
         ? Boolean(project.settings.indexedDbAutosaveEnabled)
@@ -8270,6 +8689,7 @@
       project.settings.tts = normalizeTtsSettings(project.settings.tts);
       project.settings.localWorkspace = normalizeWorkspaceSettings(project.settings.localWorkspace);
       project.settings.paperFrame = defaultPaperFrameSettings(project.settings.paperFrame);
+      project.settings.onionSkin = defaultOnionSkinSettings(project.settings.onionSkin);
       project.memoPages = project.memoPages && typeof project.memoPages === 'object' ? project.memoPages : {};
       project.layerDrawings = project.layerDrawings && typeof project.layerDrawings === 'object' ? project.layerDrawings : {};
       project.audio = project.audio && typeof project.audio === 'object' ? project.audio : { clips: [] };
@@ -11108,7 +11528,7 @@
         state.selectedAudioTrackId = '';
         state.sourceText = '';
         state.sourceFileName = '';
-        state.videoPlayheadFrames = 0;
+        state.videoPlayheadFrames = timelineStartFrameIndex();
       });
       const input = document.getElementById('documentInput');
       const status = document.getElementById('fileStatus');
@@ -11688,6 +12108,7 @@
       if (!additive) set.clear();
       if (additive && set.has(cutId)) set.delete(cutId);
       else set.add(cutId);
+      const selectedPanelIds = Array.from(set);
       state.selectedCutId = cutId;
       state.selectedAudioClipId = '';
       state.selectedAudioTrackId = '';
@@ -11696,6 +12117,26 @@
       state.activeConteSelectionType = 'panel';
       if (options.keepLayer !== true) syncConteLayerSelectionToPanel(state.project, cutId);
       state.activeConteSelectionType = 'panel';
+      if (state.videoEditMode) {
+        const slot = videoSlotForCut(state.project, cutId);
+        const totalFrames = videoTimelineDisplayTotalFrames(state.project);
+        if (slot) state.videoPlayheadFrames = clampTimelinePlayheadFrame(Math.max(0, Math.round(Number(slot.startFrame) || 0)), totalFrames);
+        if (options.keepLayer !== true) {
+          syncPlayheadConteLayerCellSelection(state.project, cutId, { activate: false });
+          const restoredPanels = selectedPicturePanelSet();
+          restoredPanels.clear();
+          selectedPanelIds.forEach(function(id) { restoredPanels.add(id); });
+          state.selectedCutId = cutId;
+          state.activeConteSelectionType = 'panel';
+        }
+        const timelineRoot = document.getElementById('timingDashboard');
+        if (timelineRoot) {
+          updateTimelinePlayheadDom(timelineRoot, totalFrames);
+          updateTimelineTimecodeDom(timelineRoot, totalFrames, true);
+          updateTransportRuntimeDom(timelineRoot);
+          renderVideoPreviewIfChanged(totalFrames);
+        }
+      }
       if (options.updateCurrentPage !== false) setCurrentPageToCut(state.project, cutId);
       if (options.render === 'timeline') {
         refreshTimelineSelectionDom(document.getElementById('timingDashboard'), { thumbnails: false });
@@ -12173,7 +12614,7 @@
       const targetCutId = String(cutId || '');
       const lineKey = selectedConteLayerPrimaryLineKey(project);
       if (!project || !targetCutId || !lineKey) return false;
-      const entry = conteLayerLineAnchorForCut(project, targetCutId, lineKey);
+      const entry = playheadConteLayerEntryForCut(project, targetCutId, lineKey);
       if (entry && entry.layer && entry.layer.id) {
         return state.selectedConteLayerId === entry.layer.id;
       }
@@ -12190,14 +12631,27 @@
       const previousActiveType = state.activeConteSelectionType;
       let lineKey = selectedConteLayerPrimaryLineKey(project);
       let entry = null;
-      if (lineKey) {
-        entry = setConteLayerLineOnlySelection(project, lineKey, targetCutId, [targetCutId]);
-      } else {
+      if (!lineKey) {
         entry = syncConteLayerSelectionToPanel(project, targetCutId);
         lineKey = selectedConteLayerPrimaryLineKey(project) || (entry && entry.layer ? conteLayerLineKey(entry.layer) : '');
-        if (lineKey) {
-          entry = setConteLayerLineOnlySelection(project, lineKey, targetCutId, [targetCutId]) || entry;
-        }
+      }
+      const selectedPanels = selectedPicturePanelSet();
+      selectedPanels.clear();
+      selectedPanels.add(targetCutId);
+      state.selectedCutId = targetCutId;
+      state.selectedAudioClipId = '';
+      state.selectedAudioTrackId = '';
+      state.selectedVideoClipId = '';
+      state.selectedVideoTrackId = '';
+      state.selectedConteLayerLineKey = String(lineKey || '');
+      entry = playheadConteLayerEntryForCut(project, targetCutId, lineKey);
+      if (entry && entry.layer && entry.layer.id) {
+        state.selectedConteLayerLineKey = conteLayerLineKey(entry.layer) || state.selectedConteLayerLineKey;
+        state.selectedConteLayerId = entry.layer.id;
+        state.selectedConteLayerIds = new Set([entry.layer.id]);
+      } else {
+        state.selectedConteLayerId = '';
+        state.selectedConteLayerIds = new Set();
       }
       state.activeConteSelectionType = options.activate === false ? previousActiveType : 'layer';
       return entry;
@@ -12261,6 +12715,40 @@
       return activeConteLayersForCut(project, cutId).find(function(entry) {
         return entry && entry.layer && conteLayerLineKey(entry.layer) === key;
       }) || null;
+    }
+
+    function selectedConteLayerPreferredLane(project, lineKey) {
+      const key = String(lineKey || '');
+      let found = state.selectedConteLayerId ? findConteLayerById(project, state.selectedConteLayerId) : null;
+      if (found && found.layer && key && conteLayerLineKey(found.layer) !== key) found = null;
+      if (!found && key && project && Array.isArray(project.cuts)) {
+        for (let cutIndex = 0; cutIndex < project.cuts.length; cutIndex += 1) {
+          const cut = project.cuts[cutIndex];
+          const layers = Array.isArray(cut && cut.conteLayers) ? cut.conteLayers : [];
+          const layer = layers.find(function(item) { return item && conteLayerLineKey(item) === key; });
+          if (layer) {
+            found = { ownerCut: cut, layer: layer, layerIndex: layers.indexOf(layer) };
+            break;
+          }
+        }
+      }
+      if (!found || !found.ownerCut || !found.layer) return -1;
+      const laneMap = conteLayerLaneMapForOwner(project, found.ownerCut);
+      return laneMap.has(found.layer.id) ? laneMap.get(found.layer.id) : conteLayerLaneIndex(found.layer, found.layerIndex);
+    }
+
+    function playheadConteLayerEntryForCut(project, cutId, lineKey) {
+      const key = String(lineKey || '');
+      const activeLayers = activeConteLayersForCut(project, cutId);
+      if (!activeLayers.length) return null;
+      const lane = selectedConteLayerPreferredLane(project, key);
+      const laneMatch = lane >= 0 ? activeLayers.find(function(entry) {
+        return Math.max(0, Math.round(Number(entry && entry.lane) || 0)) === lane;
+      }) : null;
+      if (laneMatch) return laneMatch;
+      return key ? activeLayers.find(function(entry) {
+        return entry && entry.layer && conteLayerLineKey(entry.layer) === key;
+      }) || null : null;
     }
 
     function conteLayerOriginCounts(project) {
@@ -14299,8 +14787,17 @@
       const fps = Math.max(1, Number(state.project.fps) || 24);
       const index = Math.max(0, Math.round(Number(frames) || 0));
       const seconds = Math.floor(index / fps);
-      const frame = index % fps + 1;
+      const frame = index % fps;
       return String(seconds).padStart(2, '0') + '+' + String(frame).padStart(2, '0');
+    }
+
+    function timelineStartFrameIndex() {
+      return 0;
+    }
+
+    function clampTimelinePlayheadFrame(frame, totalFrames) {
+      const total = Math.max(timelineStartFrameIndex(), Math.round(Number(totalFrames) || 0));
+      return clampNumber(frame, timelineStartFrameIndex(), total, timelineStartFrameIndex());
     }
 
     function durationParts(frames) {
@@ -14351,7 +14848,11 @@
 
     function projectTargetFrames(project) {
       const target = Number(project && project.settings && project.settings.targetDurationFrames);
-      return Math.max(0, Math.round(Number.isFinite(target) && target > 0 ? target : defaultTargetDurationFrames(project)));
+      return Math.max(0, Math.round(Number.isFinite(target) && target > 0 ? target : 0));
+    }
+
+    function projectTargetFramesIsSet(project) {
+      return projectTargetFrames(project) > 0;
     }
 
     function totalConteFrames(project) {
@@ -15181,7 +15682,7 @@
     }
 
     function videoTimelineDisplayTotalFrames(project) {
-      return Math.max(1, audioTimelineTotalFrames(project), projectTargetFrames(project));
+      return Math.max(1, oneSecondFrames(project || state.project), audioTimelineTotalFrames(project), projectTargetFrames(project));
     }
 
     function invalidateVideoTimelineCache() {
@@ -15259,6 +15760,16 @@
       return slots[slots.length - 1] || null;
     }
 
+    function videoSlotForCut(project, cutId) {
+      const targetId = String(cutId || '');
+      if (!targetId) return null;
+      const video = buildVideoTimelineCached(project);
+      const slots = Array.isArray(video && video.slots) ? video.slots : [];
+      return slots.find(function(slot) {
+        return slot && slot.cut && slot.cut.id === targetId;
+      }) || null;
+    }
+
     function syncSelectedPicturePanelToPlayhead(root, options) {
       options = options || {};
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
@@ -15289,7 +15800,7 @@
         activate: !preserveCameraSelection
       });
       const layerChanged = beforeLayerId !== state.selectedConteLayerId || beforeLayerLineKey !== state.selectedConteLayerLineKey;
-      if (!changed && !layerChanged) return false;
+      if (!changed && !layerChanged && options.refreshDom === false && !options.renderInspector) return false;
       setCurrentPageToCut(state.project, cutId);
       if (options.refreshDom !== false) {
         refreshTimelineSelectionDom(root || document.getElementById('timingDashboard'), {
@@ -15329,6 +15840,13 @@
     }
 
     function selectedVideoPanelSlotIndex(project, slots) {
+      const currentSlot = videoSlotAtFrame(project, state.videoPlayheadFrames);
+      if (currentSlot && currentSlot.cut) {
+        const currentIndex = slots.findIndex(function(slot) {
+          return slot && slot.cut && slot.cut.id === currentSlot.cut.id && slot.startFrame === currentSlot.startFrame;
+        });
+        if (currentIndex >= 0) return currentIndex;
+      }
       const targetIds = selectedPicturePanelIdArray(false);
       if (state.selectedCutId) targetIds.unshift(state.selectedCutId);
       for (let targetIndex = 0; targetIndex < targetIds.length; targetIndex += 1) {
@@ -15339,11 +15857,8 @@
         });
         if (foundIndex >= 0) return foundIndex;
       }
-      const currentSlot = videoSlotAtFrame(project, state.videoPlayheadFrames);
       if (!currentSlot || !currentSlot.cut) return slots.length ? 0 : -1;
-      return slots.findIndex(function(slot) {
-        return slot && slot.cut && slot.cut.id === currentSlot.cut.id && slot.startFrame === currentSlot.startFrame;
-      });
+      return -1;
     }
 
     function moveVideoTimelinePanelByStep(delta) {
@@ -15367,7 +15882,9 @@
       state.selectedVideoClipId = '';
       state.selectedVideoTrackId = '';
       state.activeConteSelectionType = 'panel';
-      syncConteLayerSelectionToPanel(state.project, slot.cut.id);
+      syncPlayheadConteLayerCellSelection(state.project, slot.cut.id, {
+        activate: true
+      });
       setCurrentPageToCut(state.project, slot.cut.id);
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
       const root = document.getElementById('timingDashboard');
@@ -15882,7 +16399,7 @@
       const targetFrames = projectTargetFrames(state.project);
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
       updateTargetTimeInputs(targetFrames);
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       if (!options.skipPlayheadSelectionSync) syncTimelineRenderSelectionToPlayhead(state.project);
       const playheadLeft = framePercent(state.videoPlayheadFrames, totalFrames);
       const framePx = Math.max(1, Math.min(6, Math.round(Number(state.timelineFramePx) || 5)));
@@ -16173,7 +16690,7 @@
       const targetFrames = projectTargetFrames(state.project);
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
       updateTargetTimeInputs(targetFrames);
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       if (!options.skipPlayheadSelectionSync) syncTimelineRenderSelectionToPlayhead(state.project);
 
       const framePx = Math.max(1, Math.min(6, Math.round(Number(state.timelineFramePx) || 5)));
@@ -16520,10 +17037,12 @@
         '<button id="timelinePlayPauseBtn" class="' + (state.videoPlaying ? 'primary' : '') + '" type="button" title="' + (state.videoPlaying ? 'Pause' : 'Play') + '" aria-label="' + (state.videoPlaying ? 'Pause' : 'Play') + '">' + timelinePlayPauseIcon() + '</button>' +
         '<button id="timelineStopBtn" type="button" title="Stop" aria-label="Stop">' + timelineIconHtml('stop') + '</button>' +
         '<button id="timelineStepForwardBtn" type="button" title="1 frame forward" aria-label="1 frame forward">' + timelineIconHtml('step-forward') + '</button>' +
+        '<button id="timelineRepeatBtn" class="' + (state.timelineRepeat ? 'active' : '') + '" type="button" title="Repeat" aria-label="Repeat" aria-pressed="' + (state.timelineRepeat ? 'true' : 'false') + '">' + timelineIconHtml('repeat') + '</button>' +
       '</span>';
     }
 
     function timelineIconHtml(name) {
+      if (name === 'repeat') return '<span class="timeline-icon repeat" aria-hidden="true"><span class="repeat-arrow-a"></span><span class="repeat-arrow-b"></span></span>';
       return '<span class="timeline-icon ' + escapeAttr(name) + '" aria-hidden="true"></span>';
     }
 
@@ -16623,6 +17142,7 @@
         '<span class="timeline-track-label provisional"><span>CUT</span></span>' +
         '<div class="timeline-lane">' +
           conteCutPanelSelectionMarkersHtml(video.slots, totalFrames) +
+          contePanelSlotsHtml(video.slots, totalFrames, { interactive: true }) +
           (video.groups || []).map(function(item) { return conteCutNumberSegmentHtml(item, totalFrames); }).join('') +
           contePanelBoundaryHandlesHtml(video.slots, totalFrames) +
           conteGroupBoundaryHtml(video.groups, totalFrames) +
@@ -17265,7 +17785,7 @@
     function framesToTimelineClock(frames) {
       const fps = fpsForProject(state.project);
       const index = Math.max(0, Math.round(Number(frames) || 0));
-      const frame = index % fps + 1;
+      const frame = index % fps;
       const totalSeconds = Math.floor(index / fps);
       const seconds = totalSeconds % 60;
       const minutes = Math.floor(totalSeconds / 60) % 60;
@@ -19686,7 +20206,7 @@
       const stop = root.querySelector('#timelineStopBtn');
       if (stop) stop.addEventListener('click', function() {
         stopTimelinePlayback(false);
-        state.videoPlayheadFrames = 0;
+        state.videoPlayheadFrames = timelineStartFrameIndex();
         if (state.videoEditMode) {
           const totalFrames = videoTimelineDisplayTotalFrames(state.project);
           jumpTimelineViewportToStart(root, totalFrames);
@@ -19700,6 +20220,13 @@
       if (back) back.addEventListener('click', function() { stepTimelineFrame(-1); });
       const forward = root.querySelector('#timelineStepForwardBtn');
       if (forward) forward.addEventListener('click', function() { stepTimelineFrame(1); });
+      const repeat = root.querySelector('#timelineRepeatBtn');
+      if (repeat) repeat.addEventListener('click', function(event) {
+        event.preventDefault();
+        state.timelineRepeat = !state.timelineRepeat;
+        updateTransportRuntimeDom(root);
+        saveEditorUiState();
+      });
       bindTimelineTrackLabelControls(root);
       const generate = root.querySelector('#voicevoxGenerateTimelineBtn');
       if (generate) generate.addEventListener('click', function() {
@@ -19762,7 +20289,7 @@
     function stepTimelineFrame(delta) {
       stopTimelinePlayback(false);
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames + delta, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames + delta, totalFrames);
       if (state.videoEditMode) {
         updateTimelineRuntimeDom(totalFrames, { lightweight: true, updateTimecode: true });
         renderVideoPreviewIfChanged(totalFrames);
@@ -19940,7 +20467,6 @@
           if (event.target.closest('.conte-layer-cell-hit')) return;
           if (event.target.closest('.timeline-track-label')) return;
           if (event.target.closest('[data-timeline-lower-resize="true"]')) return;
-          if (!playheadDrag && pointerNearTimelinePlayhead(track, event, totalFrames)) return;
           event.preventDefault();
           setTimelinePlayheadDragging(root, true);
           seekTimelineFromPointer(root, track, event, totalFrames, false, { playheadDrag: playheadDrag });
@@ -19948,6 +20474,12 @@
           let edgeRaf = 0;
           let dragging = true;
           const pointerId = event.pointerId;
+          if (track.setPointerCapture && pointerId != null) {
+            try { track.setPointerCapture(pointerId); } catch (error) {}
+          }
+          const isSeekPointerEvent = function(candidate) {
+            return !candidate || pointerId == null || candidate.pointerId == null || candidate.pointerId === pointerId;
+          };
           const schedulePlayheadEdgeDrag = function() {
             if (!playheadDrag || edgeRaf || !timelinePointerInSeekEdgeHotZone(root, latestPointerEvent)) return;
             edgeRaf = requestAnimationFrame(tickPlayheadEdgeDrag);
@@ -19961,7 +20493,7 @@
           };
           schedulePlayheadEdgeDrag();
           const move = function(moveEvent) {
-            if (moveEvent.pointerId !== pointerId) return;
+            if (!isSeekPointerEvent(moveEvent)) return;
             latestPointerEvent = moveEvent;
             moveEvent.preventDefault();
             deferTimelineLayerThumbnails(600);
@@ -19973,7 +20505,7 @@
             schedulePlayheadEdgeDrag();
           };
           const up = function(upEvent) {
-            if (upEvent.pointerId !== pointerId) return;
+            if (!isSeekPointerEvent(upEvent)) return;
             dragging = false;
             if (edgeRaf) cancelAnimationFrame(edgeRaf);
             edgeRaf = 0;
@@ -19984,6 +20516,9 @@
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', up);
             window.removeEventListener('pointercancel', up);
+            if (track.releasePointerCapture && pointerId != null) {
+              try { track.releasePointerCapture(pointerId); } catch (error) {}
+            }
           };
           window.addEventListener('pointermove', move, { passive: false });
           window.addEventListener('pointerup', up);
@@ -20123,7 +20658,7 @@
       const framePx = Math.max(1, Math.min(6, Math.round(Number(state.timelineFramePx) || 5)));
       const viewportWidth = scroll ? Math.max(1, scroll.clientWidth || state.timelineViewportWidth || 960) : Math.max(1, state.timelineViewportWidth || 960);
       const oldInnerWidth = Math.max(1, state.timelineInnerWidth || Math.max(1, inner.scrollWidth - TIMELINE_TRACK_LABEL_WIDTH) || inner.offsetWidth || 1);
-      const playheadFrame = clampNumber(state.videoPlayheadFrames, 0, Math.max(1, totalFrames), 0);
+      const playheadFrame = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       const oldPlayheadContentX = TIMELINE_TRACK_LABEL_WIDTH + framePercent(playheadFrame, totalFrames) / 100 * oldInnerWidth;
       const oldPlayheadViewportX = scroll ? oldPlayheadContentX - scroll.scrollLeft : oldPlayheadContentX;
       const innerWidth = timelineInnerWidthForFramePx(totalFrames, framePx, viewportWidth);
@@ -20146,14 +20681,6 @@
       updateTimelinePlayheadDom(root, totalFrames);
       updateTimelineTimecodeDom(root, totalFrames, true);
       updateTimelineScrollbarDom(root);
-    }
-
-    function pointerNearTimelinePlayhead(track, event, totalFrames) {
-      const rect = track.getBoundingClientRect();
-      if (!rect.width) return false;
-      const x = timelineFrameToPixel(state.videoPlayheadFrames, totalFrames);
-      const localX = event.clientX - rect.left - TIMELINE_TRACK_LABEL_WIDTH;
-      return Math.abs(localX - x) <= 7;
     }
 
     function timelineSeekContentXFromPointer(root, track, event, options) {
@@ -20204,7 +20731,7 @@
       if (options.stopPlayback !== false) stopTimelinePlayback(false);
       const width = Math.max(1, Math.round(Number(state.timelineInnerWidth) || 1));
       const percent = timelineSeekContentXFromPointer(root, track, event, options) / width;
-      state.videoPlayheadFrames = clampNumber(Math.round(percent * totalFrames), 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(Math.round(percent * totalFrames), totalFrames);
       updateTimelinePlayheadDom(root, totalFrames);
       updateTimelineTimecodeDom(root, totalFrames);
       if (shouldRender) {
@@ -20215,7 +20742,9 @@
           updateCurrentPage: true
         });
       }
-      if (!shouldRender && state.videoEditMode) renderVideoPreviewDuringSeekIfChanged(totalFrames);
+      if (!shouldRender && state.videoEditMode) {
+        renderVideoPreviewDuringSeekIfChanged(totalFrames);
+      }
       if (shouldRender && state.videoEditMode) renderVideoPreview(totalFrames);
     }
 
@@ -20313,13 +20842,19 @@
 
     function updateTransportRuntimeDom(root) {
       const button = (root || document).querySelector('#timelinePlayPauseBtn');
-      if (!button) return;
-      const label = state.videoPlaybackStarting ? 'Starting' : (state.videoPlaying ? 'Pause' : 'Play');
-      button.innerHTML = timelinePlayPauseIcon();
-      button.title = label;
-      button.setAttribute('aria-label', label);
-      button.classList.toggle('primary', state.videoPlaying || state.videoPlaybackStarting);
-      button.disabled = Boolean(state.videoPlaybackStarting);
+      if (button) {
+        const label = state.videoPlaybackStarting ? 'Starting' : (state.videoPlaying ? 'Pause' : 'Play');
+        button.innerHTML = timelinePlayPauseIcon();
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        button.classList.toggle('primary', state.videoPlaying || state.videoPlaybackStarting);
+        button.disabled = Boolean(state.videoPlaybackStarting);
+      }
+      const repeat = (root || document).querySelector('#timelineRepeatBtn');
+      if (repeat) {
+        repeat.classList.toggle('active', Boolean(state.timelineRepeat));
+        repeat.setAttribute('aria-pressed', state.timelineRepeat ? 'true' : 'false');
+      }
     }
 
     function keepTimelinePlayheadVisible(root, totalFrames) {
@@ -21268,7 +21803,7 @@
 
     function restartTimelinePlaybackFromFrame(frame) {
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
-      state.videoPlayheadFrames = clampNumber(frame, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(frame, totalFrames);
       if (state.videoPlaying || state.videoPlaybackStarting) {
         stopTimelinePlayback(false);
         startTimelinePlayback();
@@ -21337,6 +21872,10 @@
           updatePaperPlaybackPlayheadDom(root, totalFrames);
         }
         if (state.videoPlayheadFrames >= totalFrames) {
+          if (state.timelineRepeat) {
+            restartTimelinePlaybackFromFrame(timelineStartFrameIndex());
+            return;
+          }
           stopTimelinePlayback(true);
           return;
         }
@@ -21355,7 +21894,7 @@
       resetTimelineLayerThumbnailScheduler();
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
       const fps = fpsForProject(state.project);
-      const startFrame = state.videoPlayheadFrames >= totalFrames - 1 ? 0 : clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      const startFrame = state.videoPlayheadFrames >= totalFrames - 1 ? timelineStartFrameIndex() : clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       state.videoPlayheadFrames = startFrame;
       state.videoPlaying = true;
       preloadVideoPicturesAroundFrame(state.project, startFrame, { force: true, seconds: 12, layerLimit: 72 });
@@ -21403,7 +21942,7 @@
       state.voicevoxPlaybackCacheWarned = false;
       primePlaybackCachesForRange(state.project, startFrame, totalFrames);
       updateTransportRuntimeDom(document);
-      updateTimelineRuntimeDom(totalFrames);
+      updateTimelineRuntimeDom(totalFrames, { lightweight: true, updateTimecode: true });
       if (state.videoEditMode) renderVideoPreview(totalFrames);
       else renderTimingDashboard();
       startTimelineVisualLoop(totalFrames, fps);
@@ -21425,7 +21964,10 @@
         } else {
           updateActiveAudioClipDom(document.getElementById('timingDashboard'));
         }
-        if (state.videoPlayheadFrames >= totalFrames) stopTimelinePlayback(true);
+        if (state.videoPlayheadFrames >= totalFrames) {
+          if (state.timelineRepeat) restartTimelinePlaybackFromFrame(timelineStartFrameIndex());
+          else stopTimelinePlayback(true);
+        }
       }, 120);
     }
 
@@ -21582,6 +22124,12 @@
       const frameInput = document.getElementById('targetKomaInput');
       updateTargetBalanceStatus(targetFrames);
       if (!secondsInput || !frameInput) return;
+      const targetSet = Math.max(0, Math.round(Number(targetFrames) || 0)) > 0;
+      if (!targetSet) {
+        if (document.activeElement !== secondsInput) secondsInput.value = '';
+        if (document.activeElement !== frameInput) frameInput.value = '';
+        return;
+      }
       const parts = durationParts(targetFrames);
       if (document.activeElement !== secondsInput) secondsInput.value = String(parts.seconds).padStart(2, '0');
       if (document.activeElement !== frameInput) frameInput.value = String(parts.frames).padStart(2, '0');
@@ -21595,11 +22143,12 @@
       const delta = total - target;
       const over = Math.max(0, delta);
       const short = Math.max(0, -delta);
+      const targetSet = target > 0;
       el.innerHTML = [
         '<div class="status-line"><span class="status-key">現在総尺</span><strong>' + framesToTimeInput(total) + '</strong></div>',
-        '<div class="status-line"><span class="status-key">Target</span><strong>' + framesToTimeInput(target) + '</strong></div>',
-        '<div class="status-line over"><span class="status-key">超過尺</span><strong>' + framesToTimeInput(over) + '</strong></div>',
-        '<div class="status-line short"><span class="status-key">不足尺</span><strong>' + framesToTimeInput(short) + '</strong></div>'
+        '<div class="status-line"><span class="status-key">目標総尺</span><strong>' + (targetSet ? framesToTimeInput(target) : '未設定') + '</strong></div>',
+        '<div class="status-line over"><span class="status-key">超過尺</span><strong>' + (targetSet ? framesToTimeInput(over) : '-') + '</strong></div>',
+        '<div class="status-line short"><span class="status-key">不足尺</span><strong>' + (targetSet ? framesToTimeInput(short) : '-') + '</strong></div>'
       ].join('');
     }
 
@@ -21658,11 +22207,13 @@
       const frameInput = document.getElementById('targetKomaInput');
       if (!secondsInput || !frameInput) return;
       const update = function() {
-        const frames = durationFromParts(secondsInput.value, frameInput.value);
+        const secondsText = String(secondsInput.value || '').trim();
+        const frameText = String(frameInput.value || '').trim();
+        const frames = secondsText || frameText ? durationFromParts(secondsText, frameText) : 0;
         runTargetTimeCommand('Edit target time', function(project) {
           project.settings = project.settings || {};
           project.settings.targetDurationFrames = frames;
-          project.settings.targetDurationManual = true;
+          project.settings.targetDurationManual = frames > 0;
         });
       };
       secondsInput.addEventListener('change', update);
@@ -21771,9 +22322,9 @@
     }
 
     function timingPlaybackPosition(project, targetFrames) {
-      const frames = clampNumber(state.videoPlayheadFrames, 0, targetFrames, 0);
+      const frames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, targetFrames);
       const positioned = timingPositionedGroups(project || state.project);
-      let cutNo = framesToTimeInput(frames);
+      let cutNo = framesToTimelinePositionInput(frames);
       for (let index = 0; index < positioned.length; index += 1) {
         const group = positioned[index];
         if (frames >= group.startFrame && frames <= group.endFrame) {
@@ -21867,7 +22418,7 @@
           pendingGroup = groupFromEvent(upEvent) || pendingGroup;
           if (!pendingGroup || !state.project.cuts[pendingGroup.startIndex]) return;
           const wasPlaying = state.videoPlaying || state.videoPlaybackStarting;
-          state.videoPlayheadFrames = clampNumber(pendingGroup.startFrame, 0, targetFrames, 0);
+          state.videoPlayheadFrames = clampTimelinePlayheadFrame(pendingGroup.startFrame, targetFrames);
           state.selectedCutId = state.project.cuts[pendingGroup.startIndex].id;
           setCurrentPageToCut(state.project, state.selectedCutId);
           if (wasPlaying) {
@@ -22367,7 +22918,7 @@
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl) return;
       const totalFrames = Math.max(1, Math.round(Number(totalFramesOverride) || videoTimelineDisplayTotalFrames(state.project)));
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       preloadVideoPicturesAroundFrame(state.project, state.videoPlayheadFrames);
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       const activeClips = videoPreviewActiveAudioClips(state.project, state.videoPlayheadFrames, activeClipsOverride);
@@ -22379,7 +22930,7 @@
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl) return;
       const totalFrames = Math.max(1, Math.round(Number(totalFramesOverride) || videoTimelineDisplayTotalFrames(state.project)));
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       const activeClips = videoPreviewActiveAudioClips(state.project, state.videoPlayheadFrames, activeClipsOverride);
       const previewKey = videoPreviewKeyFor(slot, activeClips);
@@ -22408,7 +22959,7 @@
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl || stageEl.hidden) return false;
       const totalFrames = Math.max(1, Math.round(Number(totalFramesOverride) || videoTimelineDisplayTotalFrames(state.project)));
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       if (!slot || !slot.cut) return false;
       const previewLayerMode = videoPreviewLayerMode();
@@ -22487,7 +23038,7 @@
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl || stageEl.hidden) return;
       const totalFrames = Math.max(1, Math.round(Number(totalFramesOverride) || videoTimelineDisplayTotalFrames(state.project)));
-      state.videoPlayheadFrames = clampNumber(state.videoPlayheadFrames, 0, totalFrames, 0);
+      state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
       const seekUnitKey = videoPreviewSeekUnitKeyFor(slot);
       const previewLayerMode = videoPreviewLayerMode();
@@ -22775,7 +23326,8 @@
         videoClipKey,
         layerKey,
         activeKey,
-        paperFrameKey
+        paperFrameKey,
+        onionSkinPreviewKeyForSlot(state.project, slot)
       ].join('|');
     }
 
@@ -22785,6 +23337,159 @@
 
     function videoPreviewLayerMode() {
       return videoPreviewFastLayerImageMode() ? 'image' : 'mixed';
+    }
+
+    function staticVideoPreviewLayeredHtmlForSlot(slot) {
+      const slotPictureSrc = slot && slot.cut ? pictureSrcForCut(slot.cut) : '';
+      const frame = slot ? Math.max(0, Math.round(Number(slot.startFrame) || 0)) : state.videoPlayheadFrames;
+      const videoClip = !videoMediaTrackIsHidden(state.project)
+        ? videoMediaClipAtFrame(state.project, frame, slot && slot.cut && slot.cut.id)
+        : null;
+      const videoClipSrc = videoClipMediaSrc(videoClip);
+      const layerEntries = !videoTrackIsHidden(state.project) && slot && slot.cut ? layerDrawingEntriesForCut(state.project, slot.cut.id) : [];
+      if (!slotPictureSrc && !videoClipSrc && !layerEntries.length) {
+        return '<div class="video-preview-layered video-empty-preview video-preview-camera-target"></div>';
+      }
+      const parts = [];
+      if (slotPictureSrc) {
+        parts.push('<img src="' + escapeAttr(slotPictureSrc) + '" alt="" draggable="false">');
+      }
+      if (videoClipSrc) {
+        if (videoClip && videoClip.sourceType === 'video') {
+          parts.push('<video src="' + escapeAttr(videoClipSrc) + '" muted playsinline preload="metadata" draggable="false"></video>');
+        } else {
+          parts.push('<img src="' + escapeAttr(videoClipSrc) + '" alt="" draggable="false">');
+        }
+      }
+      const layerOrderMaps = layerStackOrderMapsForCut(state.project, slot && slot.cut && slot.cut.id);
+      layerEntries.forEach(function(entry) {
+        const ref = entry.layer && entry.layer.drawingRef || '';
+        if (!ref) return;
+        const layerId = entry.layer && entry.layer.id || '';
+        const drawing = getLayerDrawingData(state.project, ref);
+        if (!drawing || !drawing.bitmapDataUrl) return;
+        const z = layerOrderMaps.byLayerId.get(layerId) || layerOrderMaps.byDrawingRef.get(ref) || 1;
+        parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '" src="' + escapeAttr(drawing.bitmapDataUrl) + '" decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + '">');
+      });
+      return '<div class="video-preview-layered video-preview-camera-target">' + parts.join('') + '</div>';
+    }
+
+    function paraparaSlotByOffset(project, offset) {
+      const video = buildVideoTimelineCached(project);
+      const slots = Array.isArray(video.slots) ? video.slots : [];
+      if (!slots.length) return null;
+      const currentSlot = videoSlotAtFrame(project, state.videoPlayheadFrames);
+      if (!currentSlot || !currentSlot.cut) return null;
+      const currentIndex = slots.findIndex(function(slot) {
+        return slot && slot.cut && slot.cut.id === currentSlot.cut.id
+          && Math.round(Number(slot.startFrame) || 0) === Math.round(Number(currentSlot.startFrame) || 0);
+      });
+      if (currentIndex < 0) return null;
+      const targetIndex = clampNumber(currentIndex + Math.round(Number(offset) || 0), 0, slots.length - 1, currentIndex);
+      if (targetIndex === currentIndex) return null;
+      return slots[targetIndex] || null;
+    }
+
+    function paraparaPreviousSlot(project) {
+      return paraparaSlotByOffset(project, -1);
+    }
+
+    function clearParaparaPreviewOverlay() {
+      if (state.paraparaPreviewTimer) clearTimeout(state.paraparaPreviewTimer);
+      state.paraparaPreviewTimer = 0;
+      document.querySelectorAll('.video-parapara-overlay[data-parapara-preview="true"]').forEach(function(el) {
+        el.remove();
+      });
+    }
+
+    function showParaparaPanelPreviewForSlot(slot, durationMs) {
+      if (!state.videoEditMode) return;
+      const stageEl = document.getElementById('videoPreviewStage');
+      const screen = stageEl && stageEl.querySelector ? stageEl.querySelector('.video-preview-screen') : null;
+      if (!screen || !slot) return;
+      clearParaparaPreviewOverlay();
+      const overlay = document.createElement('div');
+      overlay.className = 'video-parapara-overlay';
+      overlay.dataset.paraparaPreview = 'true';
+      overlay.innerHTML = staticVideoPreviewLayeredHtmlForSlot(slot);
+      screen.appendChild(overlay);
+      state.paraparaPreviewTimer = setTimeout(clearParaparaPreviewOverlay, Math.max(50, Math.round(Number(durationMs) || 100)));
+    }
+
+    function showParaparaPanelPreviewByOffset(offset, durationMs) {
+      showParaparaPanelPreviewForSlot(paraparaSlotByOffset(state.project, offset), durationMs);
+    }
+
+    function showParaparaPreviousPanelPreview() {
+      showParaparaPanelPreviewByOffset(-1, 100);
+    }
+
+    function previewPanelFlipStartZone(event, stageEl) {
+      if (!mobileOrTabletRuntime() || !event || event.pointerType !== 'touch') return null;
+      const screen = stageEl && stageEl.querySelector ? stageEl.querySelector('.video-preview-screen') : null;
+      const target = screen && screen.querySelector ? screen.querySelector('.video-preview-camera-target') : null;
+      if (!screen || !target) return null;
+      const screenRect = screen.getBoundingClientRect();
+      if (event.clientX < screenRect.left || event.clientX > screenRect.right || event.clientY < screenRect.top || event.clientY > screenRect.bottom) return null;
+      const targetRect = target.getBoundingClientRect();
+      const insideTarget = event.clientX >= targetRect.left && event.clientX <= targetRect.right && event.clientY >= targetRect.top && event.clientY <= targetRect.bottom;
+      if (insideTarget) return null;
+      if (event.clientX < targetRect.left) return { side: 'left' };
+      if (event.clientX > targetRect.right) return { side: 'right' };
+      return null;
+    }
+
+    function beginPreviewPanelFlipTouch(event) {
+      const stageEl = event.currentTarget;
+      const zone = previewPanelFlipStartZone(event, stageEl);
+      if (!zone) return;
+      state.previewPanelFlipTouch = {
+        pointerId: event.pointerId,
+        lastY: event.clientY,
+        offset: 0,
+        side: zone.side
+      };
+      if (stageEl && stageEl.setPointerCapture) {
+        try { stageEl.setPointerCapture(event.pointerId); } catch (error) {}
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function continuePreviewPanelFlipTouch(event) {
+      const touch = state.previewPanelFlipTouch;
+      if (!touch || touch.pointerId !== event.pointerId) return;
+      const deltaY = event.clientY - touch.lastY;
+      const steps = deltaY > 0 ? Math.floor(deltaY / 40) : Math.ceil(deltaY / 40);
+      if (steps) {
+        touch.offset += steps;
+        touch.lastY += steps * 40;
+        showParaparaPanelPreviewByOffset(touch.offset, 160);
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function endPreviewPanelFlipTouch(event) {
+      const touch = state.previewPanelFlipTouch;
+      if (!touch || touch.pointerId !== event.pointerId) return;
+      state.previewPanelFlipTouch = null;
+      const stageEl = event.currentTarget;
+      if (stageEl && stageEl.releasePointerCapture) {
+        try { stageEl.releasePointerCapture(event.pointerId); } catch (error) {}
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function bindMobilePreviewPanelFlip(root) {
+      const stageEl = root && root.id === 'videoPreviewStage' ? root : document.getElementById('videoPreviewStage');
+      if (!stageEl || stageEl.dataset.mobilePanelFlipBound === 'true') return;
+      stageEl.dataset.mobilePanelFlipBound = 'true';
+      stageEl.addEventListener('pointerdown', beginPreviewPanelFlipTouch);
+      stageEl.addEventListener('pointermove', continuePreviewPanelFlipTouch);
+      stageEl.addEventListener('pointerup', endPreviewPanelFlipTouch);
+      stageEl.addEventListener('pointercancel', endPreviewPanelFlipTouch);
     }
 
     function layerDrawingUsesDirectPreviewImage(drawingRef, layerId, drawing) {
@@ -22816,6 +23521,7 @@
         : null;
       const videoClipSrc = videoClipMediaSrc(videoClip);
       const layerEntries = !videoTrackIsHidden(state.project) && slot && slot.cut ? layerDrawingEntriesForCut(state.project, slot.cut.id) : [];
+      const onionHtml = onionSkinPreviewHtml(state.project, slot);
       const fastLayerMode = videoPreviewFastLayerImageMode();
       const previewLayerMode = fastLayerMode ? 'image' : 'mixed';
       if (stageEl.dataset.previewKey === previewKey && stageEl.dataset.previewLayerMode === previewLayerMode) {
@@ -22824,7 +23530,7 @@
         return;
       }
       let mediaHtml = '<div class="video-preview-layered video-empty-preview video-preview-camera-target"></div>';
-      if (slotPictureSrc || videoClipSrc || layerEntries.length) {
+      if (slotPictureSrc || videoClipSrc || layerEntries.length || onionHtml) {
         const parts = [];
         if (slotPictureSrc) {
           parts.push('<img src="' + escapeAttr(slotPictureSrc) + '" alt="" draggable="false">');
@@ -22836,6 +23542,7 @@
             parts.push('<img src="' + escapeAttr(videoClipSrc) + '" alt="" draggable="false">');
           }
         }
+        if (onionHtml) parts.push(onionHtml);
         const layerOrderMaps = layerStackOrderMapsForCut(state.project, slot && slot.cut && slot.cut.id);
         layerEntries.forEach(function(entry) {
           const ref = entry.layer && entry.layer.drawingRef || '';
@@ -22869,7 +23576,9 @@
       updateVideoPreviewZoomDom(stageEl);
       hydrateVideoPreviewLayerImages(stageEl);
       drawVideoPreviewLayerCanvases(stageEl);
+      drawOnionSkinLayerCanvases(stageEl);
       bindVideoMemoCanvas(stageEl);
+      bindMobilePreviewPanelFlip(stageEl);
       redrawVideoMemoCanvas();
       renderCameraFrameOverlay(stageEl);
       stageEl.dataset.previewKey = previewKey;
@@ -23737,6 +24446,82 @@
       });
     }
 
+    function onionSkinTintColor(direction) {
+      return direction === 'next'
+        ? { r: 238, g: 126, b: 24 }
+        : { r: 22, g: 168, b: 76 };
+    }
+
+    function drawOnionSkinLayerCanvas(canvas) {
+      const ref = canvas && canvas.dataset ? String(canvas.dataset.layerDrawingRef || '') : '';
+      if (!canvas || !ref) return;
+      const drawing = getLayerDrawingData(state.project, ref);
+      if (!drawing || !drawing.bitmapDataUrl) return;
+      const rect = layerDrawingBitmapRect(drawing);
+      const direction = String(canvas.dataset.onionDirection || 'previous');
+      const originalColor = canvas.dataset.onionOriginalColor === 'true';
+      const key = [
+        ref,
+        Math.max(0, Math.round(Number(drawing.version) || 0)),
+        String(drawing.bitmapDataUrl || '').length,
+        rect.x,
+        rect.y,
+        rect.w,
+        rect.h,
+        direction,
+        originalColor ? 1 : 0
+      ].join(':');
+      canvas.dataset.onionDrawKey = key;
+      applyLayerCanvasBitmapRectGeometry(canvas, rect);
+      const image = new Image();
+      image.onload = function() {
+        if (canvas.dataset.onionDrawKey !== key) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        let imageData = null;
+        try {
+          imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        } catch (error) {
+          return;
+        }
+        const data = imageData.data;
+        const tint = onionSkinTintColor(direction);
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+          if (!a) continue;
+          const luma = r * 0.299 + g * 0.587 + b * 0.114;
+          const nearWhite = r > 244 && g > 244 && b > 244;
+          const ink = Math.max(0, Math.min(1, (255 - luma) / 180));
+          if (nearWhite || ink < 0.035) {
+            data[i + 3] = 0;
+            continue;
+          }
+          if (!originalColor) {
+            data[i] = tint.r;
+            data[i + 1] = tint.g;
+            data[i + 2] = tint.b;
+            data[i + 3] = Math.max(0, Math.min(255, Math.round(a * Math.max(0.35, ink))));
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+      };
+      image.onerror = function() {
+        if (canvas.dataset.onionDrawKey !== key) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      };
+      image.src = drawing.bitmapDataUrl;
+    }
+
+    function drawOnionSkinLayerCanvases(root) {
+      const scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll('canvas.video-onion-skin-layer[data-layer-drawing-ref]').forEach(drawOnionSkinLayerCanvas);
+    }
+
     function drawPaperPictureLayerCanvases(root) {
       const scope = root && root.querySelectorAll ? root : document;
       scope.querySelectorAll('.picture-layer-canvas[data-layer-drawing-ref]').forEach(function(canvas) {
@@ -23967,6 +24752,119 @@
       return activeConteLayersForCut(project, cutId).filter(function(entry) {
         return entry.layer && entry.layer.visible !== false && layerDrawingHasInk(getLayerDrawingData(project, entry.layer.drawingRef));
       });
+    }
+
+    function onionSkinSettings(project) {
+      state.onionSkin = defaultOnionSkinSettings(state.onionSkin);
+      return state.onionSkin;
+    }
+
+    function onionSkinEnabled(project) {
+      const settings = onionSkinSettings(project);
+      return Boolean(settings.enabled && (settings.previous || settings.next));
+    }
+
+    function onionSkinSettingsKey(project) {
+      const settings = onionSkinSettings(project);
+      return [
+        settings.enabled ? 1 : 0,
+        settings.previous ? 1 : 0,
+        settings.next ? 1 : 0,
+        settings.opacity,
+        settings.mode,
+        settings.originalColor ? 1 : 0,
+        selectedConteLayerPrimaryLineKey(project)
+      ].join(':');
+    }
+
+    function onionSkinAdjacentSlot(project, slot, direction) {
+      if (!slot || !slot.cut) return null;
+      const slots = buildVideoTimelineCached(project).slots || [];
+      const index = slots.findIndex(function(item) {
+        return item && item.cut && item.cut.id === slot.cut.id
+          && Math.round(Number(item.startFrame) || 0) === Math.round(Number(slot.startFrame) || 0);
+      });
+      if (index < 0) return null;
+      return slots[index + direction] || null;
+    }
+
+    function onionSkinEntriesForSlot(project, slot, settings) {
+      if (!slot || !slot.cut) return [];
+      if (settings.mode === 'panel') return layerDrawingEntriesForCut(project, slot.cut.id);
+      const lineKey = selectedConteLayerPrimaryLineKey(project);
+      const entry = playheadConteLayerEntryForCut(project, slot.cut.id, lineKey);
+      if (!entry || !entry.layer || entry.layer.visible === false) return [];
+      return layerDrawingHasInk(getLayerDrawingData(project, entry.layer.drawingRef)) ? [entry] : [];
+    }
+
+    function onionSkinLayerHtml(entry, direction, opacity, originalColor) {
+      const layer = entry && entry.layer || null;
+      const ref = layer && layer.drawingRef || '';
+      const drawing = ref ? getLayerDrawingData(state.project, ref) : null;
+      const src = drawing && drawing.bitmapDataUrl || '';
+      if (!ref || !src) return '';
+      const classes = ['video-onion-skin-layer', direction];
+      if (originalColor) classes.push('original-color');
+      return '<canvas class="' + classes.join(' ') + '" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layer.id || '') + '" data-onion-direction="' + escapeAttr(direction) + '" data-onion-original-color="' + (originalColor ? 'true' : 'false') + '" style="--onion-opacity:' + clampNumber(opacity, 0, 100, 45) / 100 + ';' + layerDrawingBitmapGeometryStyle(drawing) + '"></canvas>';
+    }
+
+    function onionSkinPreviewHtml(project, slot) {
+      const settings = onionSkinSettings(project);
+      if (!state.videoEditMode || !onionSkinEnabled(project) || !slot || !slot.cut) return '';
+      const parts = [];
+      if (settings.previous) {
+        const previousSlot = onionSkinAdjacentSlot(project, slot, -1);
+        onionSkinEntriesForSlot(project, previousSlot, settings).forEach(function(entry) {
+          parts.push(onionSkinLayerHtml(entry, 'previous', settings.opacity, settings.originalColor));
+        });
+      }
+      if (settings.next) {
+        const nextSlot = onionSkinAdjacentSlot(project, slot, 1);
+        onionSkinEntriesForSlot(project, nextSlot, settings).forEach(function(entry) {
+          parts.push(onionSkinLayerHtml(entry, 'next', settings.opacity, settings.originalColor));
+        });
+      }
+      return parts.join('');
+    }
+
+    function onionSkinPreviewKeyForSlot(project, slot) {
+      const settings = onionSkinSettings(project);
+      if (!state.videoEditMode || !onionSkinEnabled(project) || !slot || !slot.cut) return 'onion-off';
+      const keys = [onionSkinSettingsKey(project), slot.cut.id || ''];
+      [['previous', -1, settings.previous], ['next', 1, settings.next]].forEach(function(item) {
+        if (!item[2]) return;
+        const neighbor = onionSkinAdjacentSlot(project, slot, item[1]);
+        keys.push(item[0] + ':' + (neighbor && neighbor.cut ? neighbor.cut.id : ''));
+        onionSkinEntriesForSlot(project, neighbor, settings).forEach(function(entry) {
+          const layer = entry && entry.layer || null;
+          const drawing = layer && layer.drawingRef ? getLayerDrawingData(project, layer.drawingRef) : null;
+          keys.push([
+            layer && layer.id || '',
+            layer && layer.drawingRef || '',
+            drawing && drawing.version || 0,
+            String(drawing && drawing.bitmapDataUrl || '').length,
+            Math.round(Number(drawing && drawing.bitmapX) || 0),
+            Math.round(Number(drawing && drawing.bitmapY) || 0),
+            Math.max(1, Math.round(Number(drawing && drawing.bitmapWidth) || LAYER_DRAWING_WIDTH)),
+            Math.max(1, Math.round(Number(drawing && drawing.bitmapHeight) || LAYER_DRAWING_HEIGHT))
+          ].join(':'));
+        });
+      });
+      return keys.join('|');
+    }
+
+    function loadOnionSkinSettings() {
+      try {
+        state.onionSkin = defaultOnionSkinSettings(JSON.parse(localStorage.getItem(ONION_SKIN_STORAGE_KEY) || '{}'));
+      } catch (error) {
+        state.onionSkin = defaultOnionSkinSettings();
+      }
+    }
+
+    function saveOnionSkinSettings() {
+      try {
+        localStorage.setItem(ONION_SKIN_STORAGE_KEY, JSON.stringify(defaultOnionSkinSettings(state.onionSkin)));
+      } catch (error) {}
     }
 
     function layerStackOrderMapsForCut(project, cutId) {
@@ -28563,7 +29461,7 @@
       state.project = normalizeProjectSnapshot(project);
       state.project.settings.localWorkspace = workspaceSettings;
       if (state.project.settings && state.project.settings.shortcuts) {
-        state.shortcuts = Object.assign({}, SHORTCUT_DEFAULTS, state.project.settings.shortcuts);
+        state.shortcuts = normalizedShortcutSettings(state.project.settings.shortcuts);
         saveShortcutSettings();
       }
       loadEditorUiState();
@@ -30735,11 +31633,19 @@
       refreshMemoCompositeDirtyFlag();
     }
 
+    function invalidateVideoPreviewRenderCache() {
+      const stage = document.getElementById('videoPreviewStage');
+      if (!stage) return;
+      stage.dataset.previewKey = '';
+      stage.dataset.previewSeekUnitKey = '';
+    }
+
     function clearLayerDrawingDataUrlCacheForRef(drawingRef) {
       const ref = String(drawingRef || '');
       if (ref && state.layerDrawingDataUrlCache) delete state.layerDrawingDataUrlCache[ref];
       if (ref && state.memoLayerPreviewCache) delete state.memoLayerPreviewCache[ref];
       if (ref) invalidateVideoPreviewForDrawingRef(ref);
+      if (ref && onionSkinEnabled(state.project)) invalidateVideoPreviewRenderCache();
     }
 
     function flushDeferredMemoComposition(options) {
@@ -34793,6 +35699,7 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       state.memoColorPickerWindowDrag = null;
       applyMemoColorPickerWindowState();
+      saveEditorUiState();
     }
 
     function applyMemoEditToolWindowState() {
@@ -34840,6 +35747,7 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       state.memoEditToolWindowDrag = null;
       applyMemoEditToolWindowState();
+      saveEditorUiState();
     }
 
     function memoEditToolLabel(tool) {
@@ -34908,6 +35816,7 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       state.memoNudgeWindowDrag = null;
       applyMemoNudgeWindowState();
+      saveEditorUiState();
     }
 
     function beginMemoQuickWindowDrag(event) {
@@ -34941,6 +35850,7 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       state.memoQuickWindowDrag = null;
       applyMemoQuickWindowState();
+      saveEditorUiState();
     }
 
     function beginMemoWindowDrag(event) {
@@ -34974,6 +35884,7 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       state.memoWindowDrag = null;
       applyMemoWindowState();
+      saveEditorUiState();
     }
 
     function bindScenarioWindowControls() {
@@ -35378,12 +36289,18 @@
       return String(value || '').replace(/\bctrl\b/g, 'Ctrl').replace(/\balt\b/g, 'Alt').replace(/\bshift\b/g, 'Shift').replace(/\bmeta\b/g, 'Meta').replace(/\bspace\b/g, 'Space').replace(/\bbackspace\b/g, 'Backspace');
     }
 
+    function normalizedShortcutSettings(settings) {
+      const next = Object.assign({}, SHORTCUT_DEFAULTS, settings || {});
+      if (!next.onionSkinToggle || next.onionSkinToggle === 'ctrl+w') {
+        next.onionSkinToggle = SHORTCUT_DEFAULTS.onionSkinToggle;
+      }
+      return next;
+    }
+
     function loadShortcutSettings() {
       try {
         const saved = JSON.parse(localStorage.getItem(SHORTCUT_STORAGE_KEY) || '{}');
-        SHORTCUT_ACTIONS.forEach(function(action) {
-          if (typeof saved[action] === 'string') state.shortcuts[action] = saved[action];
-        });
+        state.shortcuts = normalizedShortcutSettings(saved);
       } catch (error) {
         state.shortcuts = Object.assign({}, SHORTCUT_DEFAULTS);
       }
@@ -35449,11 +36366,13 @@
       if (!memoInteractionActive()) return false;
       if (action === 'memoOff' && state.videoEditMode) return false;
       event.preventDefault();
+      event.stopPropagation();
       if (action === 'brushCycle') activateMemoBrush();
       if (action === 'eraserToggle') state.memoTool = state.memoTool === 'eraser' ? 'pen' : 'eraser';
       if (action === 'sizeDown') changeActiveMemoSize(-1);
       if (action === 'sizeUp') changeActiveMemoSize(1);
       if (action === 'memoOff') setMemoModeEnabled(false);
+      if (action === 'onionSkinToggle') toggleOnionSkinEnabled();
       updateMemoUI();
       return true;
     }
@@ -35548,7 +36467,7 @@
         event.preventDefault();
         if (event.repeat) return;
         const selectedPanelIdsForDelete = selectedPicturePanelIdArray(state.activeConteSelectionType === 'panel');
-        const selectedLayerIdsForDelete = selectedConteLayerIdArray();
+        const selectedLayerIdsForDelete = state.activeConteSelectionType === 'layer' ? selectedConteLayerIdArray() : [];
         if (state.activeConteSelectionType === 'audio' && state.videoEditMode && state.selectedAudioClipId) {
           const clipId = state.selectedAudioClipId;
           if (commitAudioClipHideFast(clipId)) {
@@ -35679,6 +36598,7 @@
         collapseBtn.addEventListener('click', function() {
           state.memoWindowCollapsed = !state.memoWindowCollapsed;
           applyMemoWindowState();
+          saveEditorUiState();
         });
       }
       const memoHeader = document.getElementById('memoWindowHeader');
@@ -35715,6 +36635,14 @@
       document.addEventListener('pointercancel', endMemoTransformDocument);
       document.addEventListener('pointercancel', endCameraFrameDrag);
       document.addEventListener('contextmenu', handleMemoContextMenu);
+      const paraparaBtn = document.getElementById('memoParaparaBtn');
+      if (paraparaBtn) {
+        paraparaBtn.addEventListener('click', function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          showParaparaPreviousPanelPreview();
+        });
+      }
       const clearDrawingBtn = document.getElementById('memoClearDrawingBtn');
       if (clearDrawingBtn) {
         clearDrawingBtn.addEventListener('click', function(event) {
@@ -36694,9 +37622,59 @@
       updateWorkspaceUI();
       updateMemoUI();
       updateStageSettingsUI();
+      updateOnionSkinUI();
       updateVideoCameraFrameToggleUI();
       applyScenarioWindowState();
       updateAutoTimingToggleUI();
+    }
+
+    function refreshOnionSkinPreview() {
+      if (!state.videoEditMode) return;
+      renderVideoPreviewIfChanged(videoTimelineDisplayTotalFrames(state.project));
+    }
+
+    function updateOnionSkinUI() {
+      const settings = onionSkinSettings(state.project);
+      const button = document.getElementById('onionSkinBtn');
+      const indicator = document.getElementById('onionSkinIndicator');
+      const windowEl = document.getElementById('onionSkinWindow');
+      const enabledToggle = document.getElementById('onionSkinEnabledToggle');
+      const previousToggle = document.getElementById('onionSkinPreviousToggle');
+      const nextToggle = document.getElementById('onionSkinNextToggle');
+      const opacityRange = document.getElementById('onionSkinOpacityRange');
+      const originalToggle = document.getElementById('onionSkinOriginalColorToggle');
+      const layerMode = document.getElementById('onionSkinModeLayerBtn');
+      const panelMode = document.getElementById('onionSkinModePanelBtn');
+      if (button) {
+        button.classList.toggle('active', Boolean(state.onionSkinWindowOpen));
+        button.classList.toggle('enabled', Boolean(settings.enabled));
+        button.setAttribute('aria-expanded', state.onionSkinWindowOpen ? 'true' : 'false');
+        button.setAttribute('aria-pressed', settings.enabled ? 'true' : 'false');
+      }
+      if (indicator) indicator.classList.toggle('enabled', Boolean(settings.enabled));
+      if (windowEl) windowEl.hidden = !state.onionSkinWindowOpen;
+      if (enabledToggle && document.activeElement !== enabledToggle) enabledToggle.checked = Boolean(settings.enabled);
+      if (previousToggle) previousToggle.classList.toggle('active', Boolean(settings.previous));
+      if (nextToggle) nextToggle.classList.toggle('active', Boolean(settings.next));
+      if (opacityRange && document.activeElement !== opacityRange) opacityRange.value = String(settings.opacity);
+      if (originalToggle && document.activeElement !== originalToggle) originalToggle.checked = Boolean(settings.originalColor);
+      if (layerMode) layerMode.classList.toggle('active', settings.mode !== 'panel');
+      if (panelMode) panelMode.classList.toggle('active', settings.mode === 'panel');
+    }
+
+    function mutateOnionSkinSettings(mutator) {
+      const settings = onionSkinSettings(state.project);
+      mutator(settings);
+      state.onionSkin = defaultOnionSkinSettings(settings);
+      saveOnionSkinSettings();
+      updateOnionSkinUI();
+      refreshOnionSkinPreview();
+    }
+
+    function toggleOnionSkinEnabled() {
+      mutateOnionSkinSettings(function(settings) {
+        settings.enabled = !settings.enabled;
+      });
     }
 
     function updateStageSettingsUI() {
@@ -36848,6 +37826,7 @@
         }
       } catch (e) { console.error('LLM/OPS toggle binding failed', e); }
       loadShortcutSettings();
+      loadOnionSkinSettings();
       loadSpeechVoices();
       if (speechSynthesisAvailable()) {
         window.speechSynthesis.onvoiceschanged = function() {
@@ -36905,6 +37884,50 @@
       });
       document.getElementById('stageSettingsPopover').addEventListener('click', function(event) {
         event.stopPropagation();
+      });
+      document.getElementById('onionSkinBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.onionSkinWindowOpen = !state.onionSkinWindowOpen;
+        updateOnionSkinUI();
+      });
+      document.getElementById('onionSkinWindow').addEventListener('click', function(event) {
+        event.stopPropagation();
+      });
+      document.getElementById('onionSkinEnabledToggle').addEventListener('change', function(event) {
+        mutateOnionSkinSettings(function(settings) {
+          settings.enabled = Boolean(event.currentTarget.checked);
+        });
+      });
+      document.getElementById('onionSkinPreviousToggle').addEventListener('click', function(event) {
+        event.preventDefault();
+        mutateOnionSkinSettings(function(settings) {
+          settings.previous = !settings.previous;
+        });
+      });
+      document.getElementById('onionSkinNextToggle').addEventListener('click', function(event) {
+        event.preventDefault();
+        mutateOnionSkinSettings(function(settings) {
+          settings.next = !settings.next;
+        });
+      });
+      document.getElementById('onionSkinOpacityRange').addEventListener('input', function(event) {
+        mutateOnionSkinSettings(function(settings) {
+          settings.opacity = clampNumber(event.currentTarget.value, 0, 100, 45);
+        });
+      });
+      document.getElementById('onionSkinOriginalColorToggle').addEventListener('change', function(event) {
+        mutateOnionSkinSettings(function(settings) {
+          settings.originalColor = Boolean(event.currentTarget.checked);
+        });
+      });
+      document.querySelectorAll('[data-onion-mode]').forEach(function(button) {
+        button.addEventListener('click', function(event) {
+          event.preventDefault();
+          mutateOnionSkinSettings(function(settings) {
+            settings.mode = event.currentTarget.dataset.onionMode === 'panel' ? 'panel' : 'layer';
+          });
+        });
       });
       document.getElementById('videoAutoCreateLayerKomaToggle').addEventListener('change', function(event) {
         state.project.settings = state.project.settings || {};
@@ -37029,6 +38052,12 @@
         if (event.target && event.target.closest && event.target.closest('.stage-mode-settings-wrap')) return;
         state.stageSettingsOpen = false;
         updateStageSettingsUI();
+      });
+      document.addEventListener('pointerdown', function(event) {
+        if (!state.onionSkinWindowOpen) return;
+        if (event.target && event.target.closest && event.target.closest('.stage-onion-skin-wrap')) return;
+        state.onionSkinWindowOpen = false;
+        updateOnionSkinUI();
       });
       document.getElementById('blockList').addEventListener('dragover', function(event) {
         if (hasDragType(event, 'conte/cut-field') || hasDragType(event, 'conte/block-id')) {
