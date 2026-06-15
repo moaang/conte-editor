@@ -6345,9 +6345,9 @@
                 <button class="shortcut-clear" type="button" data-shortcut-clear="sizeUp">x</button>
               </div>
               <div class="shortcut-row">
-                <span>Memo mode off</span>
-                <input class="shortcut-input" data-shortcut-action="memoOff" readonly />
-                <button class="shortcut-clear" type="button" data-shortcut-clear="memoOff">x</button>
+                <span>Clear drawing</span>
+                <input class="shortcut-input" data-shortcut-action="clearDrawing" readonly />
+                <button class="shortcut-clear" type="button" data-shortcut-clear="clearDrawing">x</button>
               </div>
               <div class="shortcut-row">
                 <span>Onion skin</span>
@@ -6421,6 +6421,7 @@
               <div class="memo-tool-section-title">Lasso Stamp</div>
               <div class="memo-tool-row">Step <strong>12.5%</strong></div>
               <button id="memoStampInPlaceBtn" class="memo-tool-command-btn" type="button">Stamp in place</button>
+              <button id="memoStampClearBtn" class="memo-tool-command-btn" type="button">Clear</button>
             </section>
             <section class="memo-tool-section" data-memo-tool-section="lasso-select" hidden>
               <div class="memo-tool-section-title">Lasso Select</div>
@@ -6744,13 +6745,13 @@
     const SHORTCUT_STORAGE_KEY = 'conteEditorShortcutSettings.v1';
     const EDITOR_UI_STORAGE_KEY = 'conteEditorUiState.v1';
     const ONION_SKIN_STORAGE_KEY = 'conteEditorOnionSkinSettings.v1';
-    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'memoOff', 'onionSkinToggle', 'paraparaPreview'];
+    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'clearDrawing', 'onionSkinToggle', 'paraparaPreview'];
     const SHORTCUT_DEFAULTS = {
       brushCycle: 'b',
       eraserToggle: 'e',
       sizeDown: '[',
       sizeUp: ']',
-      memoOff: 'backspace',
+      clearDrawing: 'backspace',
       onionSkinToggle: 'w',
       paraparaPreview: 's'
     };
@@ -34234,7 +34235,7 @@
     }
 
     function beginMemoLassoOp(event, canvas, layerTarget, localPoint) {
-      const opTarget = memoRasterOpTargetFromLayerTarget(layerTarget);
+      const opTarget = memoRasterOpTargetFromLayerTarget(layerTarget, { bitmapEdit: true });
       if (!opTarget) return false;
       state.memoRasterOp = Object.assign(opTarget, {
         type: state.memoEditTool === 'lasso-select' ? 'lasso-select' : 'lasso-stamp',
@@ -34248,6 +34249,7 @@
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
       safeMemoSetPointerCapture(canvas, event.pointerId);
+      ensureMemoRasterOpBounds(state.memoRasterOp, memoLayerPointsBounds([localPoint], 2));
       refreshMemoEditOverlays(layerTarget.drawingRef);
       return true;
     }
@@ -34265,16 +34267,18 @@
       return true;
     }
 
-    function memoLassoBounds(points, width, height) {
+    function memoLassoBounds(points, width, height, offsetX, offsetY) {
       const list = Array.isArray(points) ? points : [];
       if (!list.length) return null;
+      const ox = Math.round(Number(offsetX) || 0);
+      const oy = Math.round(Number(offsetY) || 0);
       let minX = width;
       let minY = height;
       let maxX = 0;
       let maxY = 0;
       list.forEach(function(point) {
-        const x = Math.max(0, Math.min(width, point.x * width));
-        const y = Math.max(0, Math.min(height, point.y * height));
+        const x = Math.max(0, Math.min(width, (Number(point.x) || 0) * LAYER_DRAWING_WIDTH - ox));
+        const y = Math.max(0, Math.min(height, (Number(point.y) || 0) * LAYER_DRAWING_HEIGHT - oy));
         if (x < minX) minX = x;
         if (y < minY) minY = y;
         if (x > maxX) maxX = x;
@@ -34289,7 +34293,9 @@
 
     function finishMemoLassoStamp(op) {
       if (!op || !op.canvas || !Array.isArray(op.points) || op.points.length < 3) return false;
-      const bounds = memoLassoBounds(op.points, op.canvas.width, op.canvas.height);
+      const offsetX = Math.round(Number(op.bitmapX) || 0);
+      const offsetY = Math.round(Number(op.bitmapY) || 0);
+      const bounds = memoLassoBounds(op.points, op.canvas.width, op.canvas.height, offsetX, offsetY);
       if (!bounds || bounds.w < 1 || bounds.h < 1) return false;
       const patch = document.createElement('canvas');
       patch.width = bounds.w;
@@ -34298,7 +34304,7 @@
       patchCtx.drawImage(op.canvas, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, bounds.w, bounds.h);
       patchCtx.globalCompositeOperation = 'destination-in';
       patchCtx.fillStyle = '#000';
-      if (memoRasterPath(patchCtx, op.points, op.canvas.width, op.canvas.height, bounds.x, bounds.y)) patchCtx.fill();
+      if (memoRasterPath(patchCtx, op.points, LAYER_DRAWING_WIDTH, LAYER_DRAWING_HEIGHT, offsetX + bounds.x, offsetY + bounds.y)) patchCtx.fill();
       patchCtx.globalCompositeOperation = 'source-over';
       const image = new Image();
       const dataUrl = patch.toDataURL('image/png');
@@ -34311,8 +34317,8 @@
         image: image,
         width: patch.width,
         height: patch.height,
-        originX: bounds.x + bounds.w / 2,
-        originY: bounds.y + bounds.h / 2,
+        originX: offsetX + bounds.x + bounds.w / 2,
+        originY: offsetY + bounds.y + bounds.h / 2,
         stepRatio: 0.125
       };
       if (state.memoSelection && String(state.memoSelection.drawingRef || '') === String(op.drawingRef || '')) {
@@ -34967,9 +34973,7 @@
       };
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
-      if (canvas && canvas.setPointerCapture) {
-        try { canvas.setPointerCapture(event.pointerId); } catch (error) {}
-      }
+      safeMemoSetPointerCapture(canvas, event.pointerId);
       return true;
     }
 
@@ -35095,11 +35099,30 @@
       const canvas = firstActiveLayerCanvas();
       if (!canvas) return;
       const drawing = getLayerDrawingData(state.project, ref);
-      prepareLayerCanvasForRasterEdit(canvas, drawing);
       const before = layerDrawingSnapshot(drawing);
+      const rect = prepareLayerCanvasForBitmapEdit(canvas, drawing);
+      const op = {
+        canvas: canvas,
+        bitmapX: rect.x,
+        bitmapY: rect.y,
+        bitmapWidth: rect.w,
+        bitmapHeight: rect.h
+      };
+      ensureMemoRasterOpBounds(op, {
+        x: Math.floor(stamp.originX - stamp.width / 2),
+        y: Math.floor(stamp.originY - stamp.height / 2),
+        w: Math.max(1, Math.ceil(stamp.width)),
+        h: Math.max(1, Math.ceil(stamp.height))
+      });
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(stamp.image, stamp.originX - stamp.width / 2, stamp.originY - stamp.height / 2, stamp.width, stamp.height);
-      setLayerDrawingBitmapFromCanvas(ref, canvas, before);
+      ctx.drawImage(stamp.image, stamp.originX - op.bitmapX - stamp.width / 2, stamp.originY - op.bitmapY - stamp.height / 2, stamp.width, stamp.height);
+      setLayerDrawingBitmapFromCanvas(ref, canvas, before, {
+        bitmapX: op.bitmapX,
+        bitmapY: op.bitmapY,
+        bitmapWidth: canvas.width,
+        bitmapHeight: canvas.height,
+        trimAlpha: true
+      });
     }
 
     function translateMemoStrokePoints(stroke, dx, dy) {
@@ -35427,6 +35450,7 @@
       }
       if ((op.type === 'lasso-stamp' || op.type === 'lasso-select') && shouldAppendMemoPoint({ points: op.points, size: 1 }, nextPoint)) {
         op.points.push(nextPoint);
+        ensureMemoRasterOpBounds(op, memoLayerPointsBounds([nextRawPoint], 2));
         state.memoLassoPreview = {
           drawingRef: op.drawingRef,
           points: op.points.map(function(point) { return { x: Number(point.x) || 0, y: Number(point.y) || 0 }; }),
@@ -35525,7 +35549,7 @@
       if (state.timelinePlayheadDragging) {
         setTimelinePlayheadDragging(document.getElementById('timingDashboard') || document, false);
       }
-      if (preferredCanvas && preferredCanvas.isConnected) return preferredCanvas;
+      if (preferredCanvas && preferredCanvas.isConnected && preferredCanvas.id === 'videoMemoCanvas') return preferredCanvas;
       return document.getElementById('videoMemoCanvas');
     }
 
@@ -35568,6 +35592,21 @@
       const target = screen && screen.querySelector ? screen.querySelector('.video-preview-camera-target') : null;
       const rectSource = target || source;
       return rectSource ? rectSource.getBoundingClientRect() : { left: 0, top: 0, width: 1, height: 1 };
+    }
+
+    function videoMemoCanvasElement() {
+      return document.getElementById('videoMemoCanvas');
+    }
+
+    function videoMemoCanvasHitRect(canvas) {
+      const source = canvas || videoMemoCanvasElement();
+      return source && source.getBoundingClientRect ? source.getBoundingClientRect() : null;
+    }
+
+    function eventHitsVideoMemoCanvas(event, canvas) {
+      const rect = videoMemoCanvasHitRect(canvas);
+      if (!rect || !event) return false;
+      return pointInsideClientRect(Number(event.clientX), Number(event.clientY), rect);
     }
 
     function getVideoMemoPointFromEvent(event) {
@@ -35651,6 +35690,7 @@
       }
       if ((op.type === 'lasso-stamp' || op.type === 'lasso-select') && shouldAppendMemoPoint({ points: op.points, size: 1 }, rawPoint)) {
         op.points.push(rawPoint);
+        ensureMemoRasterOpBounds(op, memoLayerPointsBounds([rawPoint], 2));
         state.memoLassoPreview = {
           drawingRef: op.drawingRef,
           points: op.points.map(function(item) { return { x: Number(item.x) || 0, y: Number(item.y) || 0 }; }),
@@ -35722,15 +35762,48 @@
       updateMemoUndoRedoButtonsOnly();
     }
 
+    function beginVideoMemoStrokeFromSurface(event) {
+      if (!state.videoEditMode || !memoInteractionActive() || event.button !== 0) return;
+      const target = event.target;
+      if (target && target.closest && target.closest('#videoMemoCanvas, button, input, textarea, select, [contenteditable="true"], .memo-controls-wrap, .memo-quick-window-wrap, .memo-nudge-window-wrap, .memo-color-picker-window-wrap, .memo-tool-options-window-wrap, .scenario-board-window-wrap, .inspector-panel, .video-preview-zoom-controls')) return;
+      const canvas = videoMemoCanvasElement();
+      if (!canvas || !eventHitsVideoMemoCanvas(event, canvas)) return;
+      beginVideoMemoStroke(event);
+      if (state.memoPointerId === event.pointerId) safeMemoSetPointerCapture(event.currentTarget, event.pointerId);
+    }
+
+    function continueVideoMemoStrokeFromSurface(event) {
+      if (!state.videoEditMode) return;
+      continueVideoMemoStroke(event);
+    }
+
+    function endVideoMemoStrokeFromSurface(event) {
+      if (!state.videoEditMode) return;
+      endVideoMemoStroke(event);
+      if (event.currentTarget && event.currentTarget.releasePointerCapture) {
+        try { event.currentTarget.releasePointerCapture(event.pointerId); } catch (error) {}
+      }
+    }
+
     function bindVideoMemoCanvas(root) {
       const canvas = root && root.querySelector ? root.querySelector('#videoMemoCanvas') : document.getElementById('videoMemoCanvas');
-      if (!canvas || canvas.dataset.memoBound === 'true') return;
-      canvas.dataset.memoBound = 'true';
-      canvas.addEventListener('pointerdown', beginVideoMemoStroke);
-      canvas.addEventListener('pointermove', continueVideoMemoStroke);
-      canvas.addEventListener('pointerup', endVideoMemoStroke);
-      canvas.addEventListener('pointercancel', endVideoMemoStroke);
-      canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
+      if (!canvas) return;
+      if (canvas.dataset.memoBound !== 'true') {
+        canvas.dataset.memoBound = 'true';
+        canvas.addEventListener('pointerdown', beginVideoMemoStroke);
+        canvas.addEventListener('pointermove', continueVideoMemoStroke);
+        canvas.addEventListener('pointerup', endVideoMemoStroke);
+        canvas.addEventListener('pointercancel', endVideoMemoStroke);
+        canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
+      }
+      const surface = canvas.closest && (canvas.closest('.paper-stage') || canvas.closest('#videoPreviewStage'));
+      if (surface && surface.dataset.videoMemoSurfaceBound !== 'true') {
+        surface.dataset.videoMemoSurfaceBound = 'true';
+        surface.addEventListener('pointerdown', beginVideoMemoStrokeFromSurface);
+        surface.addEventListener('pointermove', continueVideoMemoStrokeFromSurface);
+        surface.addEventListener('pointerup', endVideoMemoStrokeFromSurface);
+        surface.addEventListener('pointercancel', endVideoMemoStrokeFromSurface);
+      }
     }
 
     function updateMemoUndoRedoButtonsOnly() {
@@ -36688,14 +36761,16 @@
       const action = SHORTCUT_ACTIONS.find(function(name) { return state.shortcuts[name] && state.shortcuts[name] === key; });
       if (!action) return false;
       if (!memoInteractionActive()) return false;
-      if (action === 'memoOff' && state.videoEditMode) return false;
       event.preventDefault();
       event.stopPropagation();
       if (action === 'brushCycle') activateMemoBrush();
       if (action === 'eraserToggle') state.memoTool = state.memoTool === 'eraser' ? 'pen' : 'eraser';
       if (action === 'sizeDown') changeActiveMemoSize(-1);
       if (action === 'sizeUp') changeActiveMemoSize(1);
-      if (action === 'memoOff') setMemoModeEnabled(false);
+      if (action === 'clearDrawing') {
+        clearSelectedConteLayerDrawings();
+        updateMemoUndoRedoButtonsOnly();
+      }
       if (action === 'onionSkinToggle') toggleOnionSkinEnabled();
       if (action === 'paraparaPreview') showParaparaPreviousPanelPreview();
       updateMemoUI();
@@ -37067,6 +37142,8 @@
       document.getElementById('memoSelectionInvertBtn').addEventListener('click', invertMemoSelection);
       document.getElementById('memoSelectionClearBtn').addEventListener('click', clearMemoSelection);
       document.getElementById('memoStampInPlaceBtn').addEventListener('click', stampMemoInPlace);
+      const memoStampClearBtn = document.getElementById('memoStampClearBtn');
+      if (memoStampClearBtn) memoStampClearBtn.addEventListener('click', exitMemoStampMode);
       document.getElementById('memoTransformApplyBtn').addEventListener('click', function() {
         if (!commitMemoTransformPreview()) applyMemoTransformSelection();
       });
