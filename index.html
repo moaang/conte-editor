@@ -3216,19 +3216,6 @@
       z-index: 90 !important;
     }
 
-    .video-preview-layered .video-onion-skin-layer.previous:not(.original-color) {
-      filter: none;
-    }
-
-    .video-preview-layered .video-onion-skin-layer.next:not(.original-color) {
-      filter: none;
-    }
-
-    .video-preview-layered .video-onion-skin-layer.original-color {
-      filter: none;
-      mix-blend-mode: multiply;
-    }
-
     .video-parapara-overlay {
       position: absolute;
       inset: 0;
@@ -4384,6 +4371,37 @@
       pointer-events: none;
     }
 
+    .ruler-target-marker {
+      position: absolute;
+      left: var(--target-left, 0%);
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      transform: translateX(-1px);
+      background: #1688ff;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.66);
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .ruler-target-marker::after {
+      content: "目標総尺";
+      position: absolute;
+      top: 2px;
+      left: 5px;
+      color: #0b65c9;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .ruler-target-marker.beyond::after {
+      left: auto;
+      right: 5px;
+      transform: translateX(0);
+    }
+
     .timeline-fixed-label-row.drop-audio {
       height: 38px;
     }
@@ -4991,6 +5009,12 @@
       background: color-mix(in srgb, var(--layer-color, #30d370) 18%, transparent);
     }
 
+    .conte-layer-cell-hit.selected-layer-cell {
+      background: color-mix(in srgb, var(--layer-color, #30d370) 28%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--layer-color, #30d370) 56%, rgba(255,255,255,0.46));
+      z-index: 4;
+    }
+
     .conte-layer-bar {
       position: absolute;
       top: var(--layer-top, 0px);
@@ -5068,25 +5092,6 @@
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52), 0 0 0 1px rgba(26, 125, 74, 0.14);
       pointer-events: none;
       z-index: 6;
-    }
-
-    .conte-layer-selected-row {
-      position: absolute;
-      left: var(--left, 0%);
-      width: var(--width, 0%);
-      top: var(--row-top, 0px);
-      height: 27px;
-      box-sizing: border-box;
-      background: color-mix(in srgb, var(--layer-color, #30d370) 30%, transparent);
-      mix-blend-mode: color-burn;
-      opacity: 0.72;
-      display: none;
-      pointer-events: none;
-      z-index: 6;
-    }
-
-    .conte-layer-selected-row.selected {
-      display: block;
     }
 
     .conte-layer-row-drag-ghost {
@@ -5239,8 +5244,7 @@
       pointer-events: none;
     }
 
-    .conte-layer-row-handle:hover::before,
-    .conte-layer-row-handle.selected::before {
+    .conte-layer-row-handle:hover::before {
       border-color: color-mix(in srgb, var(--layer-color, #1688ff) 72%, #20384c 28%);
       background: color-mix(in srgb, var(--layer-color, #1688ff) 92%, white 8%);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--layer-color, #1688ff) 70%, transparent);
@@ -5319,11 +5323,6 @@
 
     #timingDashboard.timeline-thumbnails-suspended .conte-layer-bar.selected::before {
       display: none;
-    }
-
-    #timingDashboard.timeline-thumbnails-suspended .conte-layer-selected-row {
-      mix-blend-mode: normal;
-      opacity: 0.38;
     }
 
     @container (max-width: 20px) {
@@ -6571,12 +6570,6 @@
                     <button id="onionSkinModePanelBtn" type="button" data-onion-mode="panel">Panel</button>
                   </div>
                 </div>
-                <div class="onion-skin-row">
-                  <label class="onion-skin-check">
-                    <input id="onionSkinOriginalColorToggle" type="checkbox" />
-                    <span>Original color</span>
-                  </label>
-                </div>
               </div>
             </div>
           </div>
@@ -7090,8 +7083,7 @@
         previous: current.previous !== false,
         next: current.next === true,
         opacity: clampNumber(current.opacity, 0, 100, 45),
-        mode: mode,
-        originalColor: Boolean(current.originalColor)
+        mode: mode
       };
     }
 
@@ -7350,7 +7342,10 @@
       if (state.selectedVideoClipId && !videoMediaClipExists(state.project, state.selectedVideoClipId)) state.selectedVideoClipId = '';
       state.selectedVideoTrackId = String(selection.selectedVideoTrackId || '');
       if (state.selectedVideoTrackId && !timelineTrackById(state.project, state.selectedVideoTrackId)) state.selectedVideoTrackId = '';
-      if (state.activeConteSelectionType === 'layer') ensureConteLayerSelection(state.project, state.selectedCutId);
+      selectedConteLayerSet();
+      if (state.activeConteSelectionType === 'layer' && !state.selectedConteLayerId && !state.selectedConteLayerIds.size) {
+        state.activeConteSelectionType = state.selectedPicturePanelIds.size ? 'panel' : (state.selectedCutId ? 'cut' : '');
+      }
     }
 
     function captureAudioTimelineHistoryState(project) {
@@ -8233,7 +8228,7 @@
         if (options.deferThumbnails) deferTimelineLayerThumbnails(options.deferThumbnailMs || 420);
         clampCurrentPage();
         const partialDone = canPartialTimeline && renderVideoEditorTimelinePartial(document.getElementById('timingDashboard'), options);
-        if (!partialDone) guardedRender('timing', renderTimingDashboard);
+        if (!partialDone) guardedRender('timing', function() { renderTimingDashboard(options); });
         guardedRender('stage', function() { renderVideoPreviewIfChanged(videoTimelineDisplayTotalFrames(state.project)); });
         guardedRender('inspector', renderInspector);
         guardedRender('chrome', refreshChromeControls);
@@ -12018,11 +12013,7 @@
         syncConteLayerOrderCodes(cut.conteLayers);
         index = lastIndex;
       }
-      const lineOnlySelection = state.activeConteSelectionType === 'layer'
-        && state.selectedConteLayerLineKey
-        && state.selectedConteLayerIds instanceof Set
-        && !state.selectedConteLayerIds.size;
-      if (!lineOnlySelection) ensureConteLayerSelection(project, state.selectedCutId);
+      selectedConteLayerSet();
     }
 
     function markConteLayerOwnerHasLayers(ownerCut) {
@@ -12049,12 +12040,9 @@
       Array.from(state.selectedPicturePanelIds).forEach(function(id) {
         if (!cutIds.has(id)) state.selectedPicturePanelIds.delete(id);
       });
-      const lineOnlySelection = state.activeConteSelectionType === 'layer'
-        && state.selectedConteLayerLineKey
-        && state.selectedConteLayerIds instanceof Set
-        && !state.selectedConteLayerIds.size;
-      const selectedLayer = lineOnlySelection ? null : ensureConteLayerSelection(project, state.selectedCutId);
-      if (state.activeConteSelectionType === 'layer' && !selectedLayer && !lineOnlySelection) {
+      selectedConteLayerSet();
+      const selectedLayer = state.selectedConteLayerId ? findConteLayerById(project, state.selectedConteLayerId) : null;
+      if (state.activeConteSelectionType === 'layer' && !selectedLayer) {
         state.activeConteSelectionType = state.selectedPicturePanelIds.size ? 'panel' : (state.selectedCutId ? 'cut' : '');
       }
       if (state.activeConteSelectionType === 'panel' && !state.selectedPicturePanelIds.size) {
@@ -12216,10 +12204,15 @@
     }
 
     function selectedConteLayerSet() {
-      if (state.activeConteSelectionType === 'layer' && state.selectedConteLayerLineKey && state.selectedConteLayerIds instanceof Set && !state.selectedConteLayerIds.size) {
-        return state.selectedConteLayerIds;
+      if (!(state.selectedConteLayerIds instanceof Set)) {
+        state.selectedConteLayerIds = new Set(Array.isArray(state.selectedConteLayerIds) ? state.selectedConteLayerIds : []);
       }
-      ensureConteLayerSelection(state.project, state.selectedCutId);
+      Array.from(state.selectedConteLayerIds).forEach(function(id) {
+        if (!findConteLayerById(state.project, id)) state.selectedConteLayerIds.delete(id);
+      });
+      if (state.selectedConteLayerId && !findConteLayerById(state.project, state.selectedConteLayerId)) {
+        state.selectedConteLayerId = Array.from(state.selectedConteLayerIds).pop() || '';
+      }
       return state.selectedConteLayerIds;
     }
 
@@ -12233,7 +12226,12 @@
         return id && findConteLayerById(state.project, id);
       });
       if (!ids.length) {
-        ensureConteLayerSelection(state.project, state.selectedCutId);
+        state.selectedConteLayerId = '';
+        state.selectedConteLayerIds = new Set();
+        if (options.keepLineKey !== true) state.selectedConteLayerLineKey = '';
+        if (state.activeConteSelectionType === 'layer') {
+          state.activeConteSelectionType = selectedPicturePanelSet().size ? 'panel' : (state.selectedCutId ? 'cut' : '');
+        }
         return;
       }
       state.selectedConteLayerIds = new Set(ids);
@@ -12275,14 +12273,11 @@
     function clearConteLayerSelection(options) {
       options = options || {};
       if (state.activeConteSelectionType === 'layer') state.activeConteSelectionType = '';
-      const selected = ensureConteLayerSelection(state.project, options.cutId || state.selectedCutId);
-      if (selected && selected.layer && selected.layer.id) {
-        state.selectedConteLayerId = selected.layer.id;
-        state.selectedConteLayerIds = new Set([selected.layer.id]);
-        state.selectedConteLayerLineKey = conteLayerLineKey(selected.layer);
-        if (options.activateFallback !== false && !state.activeConteSelectionType) {
-          state.activeConteSelectionType = 'layer';
-        }
+      state.selectedConteLayerId = '';
+      state.selectedConteLayerIds = new Set();
+      if (options.clearLineKey === true) state.selectedConteLayerLineKey = '';
+      if (!state.activeConteSelectionType && options.activateFallback !== false) {
+        state.activeConteSelectionType = selectedPicturePanelSet().size ? 'panel' : (state.selectedCutId ? 'cut' : '');
       }
     }
 
@@ -12462,7 +12457,6 @@
 
     function selectedConteLayerLineKeySet(project) {
       const keys = new Set();
-      if (state.selectedConteLayerLineKey) keys.add(String(state.selectedConteLayerLineKey));
       selectedConteLayerIdArray().forEach(function(layerId) {
         const found = findConteLayerById(project, layerId);
         const key = found && found.layer ? conteLayerLineKey(found.layer) : '';
@@ -12476,28 +12470,6 @@
       return ids;
     }
 
-    function selectedConteLayerVisualLaneMap(project, layout) {
-      const result = new Map();
-      const selectedIds = new Set(selectedConteLayerIdArray());
-      const selectedLineKeys = selectedConteLayerLineKeySet(project);
-      if ((!selectedIds.size && !selectedLineKeys.size) || !project || !Array.isArray(project.cuts)) return result;
-      project.cuts.forEach(function(cut) {
-        const layers = Array.isArray(cut && cut.conteLayers) ? cut.conteLayers : [];
-        if (!layers.length) return;
-        const laneMap = layout
-          ? conteLayerLaneMapForOwnerWithLayout(project, cut, layout)
-          : conteLayerLaneMapForOwner(project, cut);
-        layers.forEach(function(layer, index) {
-          if (!layer || !layer.id) return;
-          const lineSelected = selectedLineKeys.has(conteLayerLineKey(layer));
-          if (!selectedIds.has(layer.id) && !lineSelected) return;
-          const lane = laneMap.has(layer.id) ? laneMap.get(layer.id) : conteLayerLaneIndex(layer, index);
-          if (!result.has(lane)) result.set(lane, layer);
-        });
-      });
-      return result;
-    }
-
     function selectedConteLayerPrimaryLineKey(project) {
       if (state.selectedConteLayerLineKey) return String(state.selectedConteLayerLineKey);
       const found = state.selectedConteLayerId ? findConteLayerById(project, state.selectedConteLayerId) : null;
@@ -12505,46 +12477,76 @@
       return Array.from(selectedConteLayerLineKeySet(project))[0] || '';
     }
 
+    function selectedConteLayerRememberedLineKey() {
+      if (state.selectedConteLayerLineKey) return String(state.selectedConteLayerLineKey);
+      return '';
+    }
+
+    function playheadConteLayerLineKey(project, cutId) {
+      const remembered = selectedConteLayerRememberedLineKey();
+      if (remembered) return remembered;
+      const top = topConteLayerForCut(project, cutId);
+      if (top && top.layer) return conteLayerLineKey(top.layer);
+      const ownerCut = conteLayerOwnerCut(project, cutId);
+      const rows = conteLayerRowsTopToBottom(ownerCut);
+      return rows[0] && rows[0].key ? String(rows[0].key) : '';
+    }
+
+    function conteLayerCoordinatePanelId() {
+      const panelIds = selectedPicturePanelIdArray(false);
+      return String(panelIds[0] || state.selectedCutId || '');
+    }
+
+    function conteLayerCoordinateIsSelected(cutId, lineKey) {
+      const targetCutId = String(cutId || '');
+      const key = String(lineKey || '');
+      if (!targetCutId || !key || key !== String(state.selectedConteLayerLineKey || '')) return false;
+      const selectedPanels = selectedPicturePanelSet();
+      return selectedPanels.has(targetCutId) || (!selectedPanels.size && state.selectedCutId === targetCutId);
+    }
+
+    function setConteLayerCoordinateSelection(project, cutId, lineKey, options) {
+      options = options || {};
+      const targetCutId = String(cutId || '');
+      const key = String(lineKey || '');
+      if (!project || !targetCutId || !key) return null;
+      const previousActiveType = state.activeConteSelectionType;
+      const selectedPanels = selectedPicturePanelSet();
+      if (options.updatePanels !== false) {
+        if (!options.additive) selectedPanels.clear();
+        selectedPanels.add(targetCutId);
+      }
+      state.selectedCutId = targetCutId;
+      state.selectedAudioClipId = '';
+      state.selectedAudioTrackId = '';
+      state.selectedVideoClipId = '';
+      state.selectedVideoTrackId = '';
+      state.selectedConteLayerLineKey = key;
+      const entry = conteLayerLineActiveAtPanel(project, targetCutId, key);
+      if (entry && entry.layer && entry.layer.id) {
+        state.selectedConteLayerId = entry.layer.id;
+        state.selectedConteLayerIds = new Set([entry.layer.id]);
+        state.activeConteSelectionType = options.activate === false ? previousActiveType : 'layer';
+        return entry;
+      }
+      state.selectedConteLayerId = '';
+      state.selectedConteLayerIds = new Set();
+      state.activeConteSelectionType = options.activate === false ? previousActiveType : 'panel';
+      return null;
+    }
+
     function syncConteLayerSelectionToPanel(project, cutId) {
       const targetCutId = String(cutId || '');
-      if (!project || !targetCutId) return ensureConteLayerSelection(project, targetCutId);
-      const lineKey = selectedConteLayerPrimaryLineKey(project);
-      if (lineKey) {
-        const entry = conteLayerLineAnchorForCut(project, targetCutId, lineKey);
-        if (entry && entry.layer && entry.layer.id) {
-          const rowIds = conteLayerLineIdsForOwner(project, entry.ownerCut, lineKey);
-          state.selectedConteLayerId = entry.layer.id;
-          state.selectedConteLayerIds = new Set(rowIds.length ? rowIds : [entry.layer.id]);
-          state.selectedConteLayerLineKey = lineKey;
-          if (!state.activeConteSelectionType) state.activeConteSelectionType = 'layer';
-          return entry;
-        }
-        const existingIds = selectedConteLayerIdArray().filter(function(id) {
-          const found = findConteLayerById(project, id);
-          return found && found.layer && conteLayerLineKey(found.layer) === lineKey;
-        });
-        if (existingIds.length) {
-          state.selectedConteLayerIds = new Set(existingIds);
-          if (!state.selectedConteLayerId || existingIds.indexOf(state.selectedConteLayerId) < 0) {
-            state.selectedConteLayerId = existingIds[existingIds.length - 1];
-          }
-          if (!state.activeConteSelectionType) state.activeConteSelectionType = 'layer';
-          state.selectedConteLayerLineKey = lineKey;
-          return findConteLayerById(project, state.selectedConteLayerId);
-        }
+      if (!project || !targetCutId) return null;
+      const lineKey = playheadConteLayerLineKey(project, targetCutId);
+      if (!lineKey) {
+        state.selectedConteLayerId = '';
+        state.selectedConteLayerIds = new Set();
+        return null;
       }
-      let entry = selectedConteLayerIsActiveOnCut(project, state.selectedConteLayerId, targetCutId);
-      if (!entry) entry = topConteLayerForCut(project, targetCutId) || topDrawableConteLayerForOwner(project, targetCutId);
-      if (!entry) entry = ensureConteLayerSelection(project, targetCutId);
-      if (entry && entry.layer && entry.layer.id) {
-        const key = conteLayerLineKey(entry.layer);
-        const rowIds = conteLayerLineIdsForOwner(project, entry.ownerCut, key);
-        state.selectedConteLayerId = entry.layer.id;
-        state.selectedConteLayerIds = new Set(rowIds.length ? rowIds : [entry.layer.id]);
-        state.selectedConteLayerLineKey = key;
-        if (!state.activeConteSelectionType) state.activeConteSelectionType = 'layer';
-      }
-      return entry;
+      return setConteLayerCoordinateSelection(project, targetCutId, lineKey, {
+        activate: state.activeConteSelectionType !== 'panel'
+      });
     }
 
     function conteLayerLineIdsInProject(project, lineKey) {
@@ -12582,37 +12584,21 @@
       };
     }
 
-    function setConteLayerLineOnlySelection(project, lineKey, cutId, panelIds) {
+    function setConteLayerCoordinateSelectionForPanels(project, lineKey, cutId, panelIds) {
       const key = String(lineKey || '');
       if (!key) return null;
       const targetCutId = String(cutId || state.selectedCutId || '');
-      const entry = targetCutId ? conteLayerLineAnchorForCut(project, targetCutId, key) : null;
-      state.selectedCutId = targetCutId || state.selectedCutId;
       const selectedPanels = selectedPicturePanelSet();
       selectedPanels.clear();
-      (panelIds && panelIds.length ? panelIds : (state.selectedCutId ? [state.selectedCutId] : [])).forEach(function(id) {
+      (panelIds && panelIds.length ? panelIds : (targetCutId ? [targetCutId] : [])).forEach(function(id) {
         if (project && project.cuts && project.cuts.some(function(cut) { return cut.id === id; })) selectedPanels.add(id);
       });
-      state.selectedAudioClipId = '';
-      state.selectedAudioTrackId = '';
-      state.selectedVideoClipId = '';
-      state.selectedVideoTrackId = '';
-      state.activeConteSelectionType = 'layer';
-      state.selectedConteLayerLineKey = key;
-      if (entry && entry.layer && entry.layer.id) {
-        const rowIds = conteLayerLineIdsForOwner(project, entry.ownerCut, key);
-        state.selectedConteLayerId = entry.layer.id;
-        state.selectedConteLayerIds = new Set(rowIds.length ? rowIds : [entry.layer.id]);
-        return entry;
-      }
-      state.selectedConteLayerId = '';
-      state.selectedConteLayerIds = new Set();
-      return null;
+      return setConteLayerCoordinateSelection(project, targetCutId, key, { updatePanels: false });
     }
 
     function playheadConteLayerCellIsSynced(project, cutId) {
       const targetCutId = String(cutId || '');
-      const lineKey = selectedConteLayerPrimaryLineKey(project);
+      const lineKey = playheadConteLayerLineKey(project, targetCutId);
       if (!project || !targetCutId || !lineKey) return false;
       const entry = playheadConteLayerEntryForCut(project, targetCutId, lineKey);
       if (entry && entry.layer && entry.layer.id) {
@@ -12628,33 +12614,26 @@
       options = options || {};
       const targetCutId = String(cutId || '');
       if (!project || !targetCutId) return null;
-      const previousActiveType = state.activeConteSelectionType;
-      let lineKey = selectedConteLayerPrimaryLineKey(project);
-      let entry = null;
+      const lineKey = playheadConteLayerLineKey(project, targetCutId);
       if (!lineKey) {
-        entry = syncConteLayerSelectionToPanel(project, targetCutId);
-        lineKey = selectedConteLayerPrimaryLineKey(project) || (entry && entry.layer ? conteLayerLineKey(entry.layer) : '');
-      }
-      const selectedPanels = selectedPicturePanelSet();
-      selectedPanels.clear();
-      selectedPanels.add(targetCutId);
-      state.selectedCutId = targetCutId;
-      state.selectedAudioClipId = '';
-      state.selectedAudioTrackId = '';
-      state.selectedVideoClipId = '';
-      state.selectedVideoTrackId = '';
-      state.selectedConteLayerLineKey = String(lineKey || '');
-      entry = playheadConteLayerEntryForCut(project, targetCutId, lineKey);
-      if (entry && entry.layer && entry.layer.id) {
-        state.selectedConteLayerLineKey = conteLayerLineKey(entry.layer) || state.selectedConteLayerLineKey;
-        state.selectedConteLayerId = entry.layer.id;
-        state.selectedConteLayerIds = new Set([entry.layer.id]);
-      } else {
+        const previousActiveType = state.activeConteSelectionType;
+        const selectedPanels = selectedPicturePanelSet();
+        selectedPanels.clear();
+        selectedPanels.add(targetCutId);
+        state.selectedCutId = targetCutId;
+        state.selectedAudioClipId = '';
+        state.selectedAudioTrackId = '';
+        state.selectedVideoClipId = '';
+        state.selectedVideoTrackId = '';
         state.selectedConteLayerId = '';
         state.selectedConteLayerIds = new Set();
+        state.selectedConteLayerLineKey = '';
+        state.activeConteSelectionType = options.activate === false ? previousActiveType : 'panel';
+        return null;
       }
-      state.activeConteSelectionType = options.activate === false ? previousActiveType : 'layer';
-      return entry;
+      return setConteLayerCoordinateSelection(project, targetCutId, lineKey, {
+        activate: options.activate !== false
+      });
     }
 
     function restoreConteLayerSelectionAfterRemoval(project, context) {
@@ -12663,7 +12642,7 @@
         ? context.selectedCutId
         : (project && project.cuts && project.cuts[0] ? project.cuts[0].id : '');
       if (context.lineKey && conteLayerLineIdsInProject(project, context.lineKey).length) {
-        setConteLayerLineOnlySelection(project, context.lineKey, selectedCutId, context.selectedPanelIds);
+        setConteLayerCoordinateSelectionForPanels(project, context.lineKey, selectedCutId, context.selectedPanelIds);
         return;
       }
       const ownerCut = context.ownerCutId && project && project.cuts
@@ -12681,11 +12660,17 @@
         if (rows.length) fallbackRow = rows[0];
       }
       if (fallbackRow && fallbackRow.key) {
-        setConteLayerLineOnlySelection(project, fallbackRow.key, selectedCutId, context.selectedPanelIds);
+        setConteLayerCoordinateSelectionForPanels(project, fallbackRow.key, selectedCutId, context.selectedPanelIds);
         return;
       }
-      const selected = ensureConteLayerSelection(project, selectedCutId);
-      state.activeConteSelectionType = selected && selected.layer ? 'layer' : (state.selectedCutId ? 'cut' : '');
+      state.selectedConteLayerId = '';
+      state.selectedConteLayerIds = new Set();
+      state.selectedConteLayerLineKey = '';
+      state.selectedCutId = selectedCutId;
+      const selectedPanels = selectedPicturePanelSet();
+      selectedPanels.clear();
+      if (selectedCutId) selectedPanels.add(selectedCutId);
+      state.activeConteSelectionType = selectedCutId ? 'panel' : '';
     }
 
     function conteLayerLineAnchorForCut(project, cutId, lineKey) {
@@ -12717,38 +12702,16 @@
       }) || null;
     }
 
-    function selectedConteLayerPreferredLane(project, lineKey) {
-      const key = String(lineKey || '');
-      let found = state.selectedConteLayerId ? findConteLayerById(project, state.selectedConteLayerId) : null;
-      if (found && found.layer && key && conteLayerLineKey(found.layer) !== key) found = null;
-      if (!found && key && project && Array.isArray(project.cuts)) {
-        for (let cutIndex = 0; cutIndex < project.cuts.length; cutIndex += 1) {
-          const cut = project.cuts[cutIndex];
-          const layers = Array.isArray(cut && cut.conteLayers) ? cut.conteLayers : [];
-          const layer = layers.find(function(item) { return item && conteLayerLineKey(item) === key; });
-          if (layer) {
-            found = { ownerCut: cut, layer: layer, layerIndex: layers.indexOf(layer) };
-            break;
-          }
-        }
-      }
-      if (!found || !found.ownerCut || !found.layer) return -1;
-      const laneMap = conteLayerLaneMapForOwner(project, found.ownerCut);
-      return laneMap.has(found.layer.id) ? laneMap.get(found.layer.id) : conteLayerLaneIndex(found.layer, found.layerIndex);
-    }
-
     function playheadConteLayerEntryForCut(project, cutId, lineKey) {
       const key = String(lineKey || '');
       const activeLayers = activeConteLayersForCut(project, cutId);
       if (!activeLayers.length) return null;
-      const lane = selectedConteLayerPreferredLane(project, key);
-      const laneMatch = lane >= 0 ? activeLayers.find(function(entry) {
-        return Math.max(0, Math.round(Number(entry && entry.lane) || 0)) === lane;
-      }) : null;
-      if (laneMatch) return laneMatch;
-      return key ? activeLayers.find(function(entry) {
-        return entry && entry.layer && conteLayerLineKey(entry.layer) === key;
-      }) || null : null;
+      if (key) {
+        return activeLayers.find(function(entry) {
+          return entry && entry.layer && conteLayerLineKey(entry.layer) === key;
+        }) || null;
+      }
+      return activeLayers[0] || null;
     }
 
     function conteLayerOriginCounts(project) {
@@ -15682,7 +15645,7 @@
     }
 
     function videoTimelineDisplayTotalFrames(project) {
-      return Math.max(1, oneSecondFrames(project || state.project), audioTimelineTotalFrames(project), projectTargetFrames(project));
+      return Math.max(1, oneSecondFrames(project || state.project), audioTimelineTotalFrames(project));
     }
 
     function invalidateVideoTimelineCache() {
@@ -15757,7 +15720,7 @@
         else if (target >= slot.endFrame) low = mid + 1;
         else return slot;
       }
-      return slots[slots.length - 1] || null;
+      return null;
     }
 
     function videoSlotForCut(project, cutId) {
@@ -16520,8 +16483,19 @@
         '<span class="timeline-track-label">TIME</span>' +
         '<div class="timeline-lane">' +
           timelineRulerTicksHtml(totalFrames, innerWidth) +
+          timelineTargetMarkerHtml(totalFrames) +
         '</div>' +
       '</div>';
+    }
+
+    function timelineTargetMarkerHtml(totalFrames) {
+      const targetFrames = projectTargetFrames(state.project);
+      if (!targetFrames) return '';
+      const displayTotal = Math.max(1, Math.round(Number(totalFrames) || 1));
+      const beyond = targetFrames > displayTotal;
+      const markerFrame = beyond ? displayTotal : targetFrames;
+      const left = framePercent(markerFrame, displayTotal);
+      return '<span class="ruler-target-marker' + (beyond ? ' beyond' : '') + '" style="--target-left:' + left.toFixed(4) + '%" title="' + escapeAttr('目標総尺 ' + framesToTimeInput(targetFrames)) + '"></span>';
     }
 
     function replaceTimelineElementHtml(parent, selector, html) {
@@ -16542,7 +16516,6 @@
       if (el.classList.contains('conte-panel-hit')) return 'panel-hit:' + (d.contePanelCutId || '') + ':' + (d.conteOwnerCutId || '') + ':' + (d.contePanelOverlay ? 'overlay' : 'slot');
       if (el.classList.contains('conte-layer-cell-hit')) return ['cell', d.conteOwnerCutId || '', d.contePanelCutId || '', d.conteLayerLineKey || '', d.conteLayerId || '', d.conteLayerRowLane || ''].join(':');
       if (el.classList.contains('conte-layer-bundle-box')) return 'bundle:' + (d.conteOwnerCutId || '') + ':' + (d.conteBgBundleId || '');
-      if (el.classList.contains('conte-layer-selected-row')) return 'selected-row:' + (d.conteLayerRowLane || '');
       if (el.classList.contains('conte-layer-row-handle')) return ['row-handle', d.conteOwnerCutId || '', d.conteLayerLineKey || '', d.conteLayerId || ''].join(':');
       if (el.classList.contains('conte-layer-bar')) return ['layer-bar', d.conteOwnerCutId || '', d.conteLayerId || ''].join(':');
       if (el.classList.contains('video-boundary')) return 'boundary:' + (d.videoBoundaryFrame || el.style.getPropertyValue('--boundary-left') || '');
@@ -16608,7 +16581,6 @@
       if (!ownerSet.size) return null;
       return function(el) {
         if (!el || !el.classList || !el.dataset) return false;
-        if (el.classList.contains('conte-layer-selected-row')) return true;
         const ownerId = String(el.dataset.conteOwnerCutId || '');
         return Boolean(ownerId && ownerSet.has(ownerId));
       };
@@ -17020,12 +16992,15 @@
 
     function cacheTimelineRuntimeDom(root, totalFrames, innerWidth) {
       state.timelineRuntimeRoot = root;
+      if (root && root.dataset) root.dataset.timelineTotalFrames = String(Math.max(1, Math.round(Number(totalFrames) || 1)));
       state.timelinePlayheadEls = Array.from(root.querySelectorAll('.timeline-playhead, .timeline-playhead-grip'));
       state.timelineInnerWidth = Math.max(1, Math.round(Number(innerWidth) || 1));
       state.timelineTimecodeEl = root.querySelector('#timelineTimecode');
       state.timelineTimecodeTotalText = framesToTimeInput(totalFrames);
       state.timelineTimecodeLastText = '';
       state.timelineTimecodeLastFrame = -1;
+      const seekTrack = root.querySelector('[data-timeline-seek="true"]');
+      if (seekTrack && seekTrack.dataset) seekTrack.dataset.timelineTotalFrames = String(Math.max(1, Math.round(Number(totalFrames) || 1)));
       updateTimelinePlayheadDom(root, totalFrames);
       updateTimelineTimecodeDom(root, totalFrames, true);
       updateTimelineScrollbarDom(root);
@@ -17178,7 +17153,7 @@
         else if (target >= slot.endFrame) low = mid + 1;
         else return slot;
       }
-      return slots[slots.length - 1] || null;
+      return null;
     }
 
     function cameraLocalFrameForSlot(slot, frame) {
@@ -17473,7 +17448,6 @@
           contePanelSlotsHtml(video.slots, totalFrames, { interactive: false }) +
           conteLayerCellHitsHtml(video, totalFrames, layout) +
           conteLayerBundleBoxesHtml(video, totalFrames, layout) +
-          conteLayerSelectedRowsHtml(video, totalFrames, layout) +
           conteLayerRowHandlesHtml(video, totalFrames, layout) +
           conteLayerBarsHtml(video, totalFrames, layout) +
           videoTimelineBoundaryHtml(video.slots, totalFrames) +
@@ -17580,7 +17554,8 @@
             const left = framePercent(slot.startFrame, totalFrames);
             const width = Math.max(0.001, framePercent(Math.max(1, slot.endFrame - slot.startFrame), totalFrames));
             const title = displayName + ' / CUT ' + (slot.cutNo || '') + ' panel';
-            return '<span class="conte-layer-cell-hit" data-conte-layer-cell-hit="true" data-conte-panel-cut-id="' + escapeAttr(cutId) + '" data-conte-owner-cut-id="' + escapeAttr(ownerId) + '" data-conte-layer-line-key="' + escapeAttr(lineKey) + '" data-conte-layer-id="' + escapeAttr(anchorLayer.id) + '" data-conte-layer-row-lane="' + lane + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--row-top:' + top + 'px;--layer-color:' + conteLayerColor(anchorLayer) + '" title="' + escapeAttr(title) + '"></span>';
+            const selectedCell = conteLayerCoordinateIsSelected(cutId, lineKey) ? ' selected-layer-cell' : '';
+            return '<span class="conte-layer-cell-hit' + selectedCell + '" data-conte-layer-cell-hit="true" data-conte-panel-cut-id="' + escapeAttr(cutId) + '" data-conte-owner-cut-id="' + escapeAttr(ownerId) + '" data-conte-layer-line-key="' + escapeAttr(lineKey) + '" data-conte-layer-id="' + escapeAttr(anchorLayer.id) + '" data-conte-layer-row-lane="' + lane + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--row-top:' + top + 'px;--layer-color:' + conteLayerColor(anchorLayer) + '" title="' + escapeAttr(title) + '"></span>';
           }).join('');
         }).join('');
       }).join('');
@@ -17640,24 +17615,8 @@
       }).join('');
     }
 
-    function conteLayerSelectedRowsHtml(video, totalFrames, layout) {
-      const selectedLaneMap = selectedConteLayerVisualLaneMap(state.project, layout);
-      const trackHeight = conteTimelineTrackHeight(video, layout);
-      const rowCount = Math.max(1, Math.ceil(Math.max(1, trackHeight - 10) / CONTE_LAYER_DEFAULT_HEIGHT));
-      const fallbackLayer = selectedLaneMap.size ? Array.from(selectedLaneMap.values())[0] : null;
-      const parts = [];
-      for (let lane = 0; lane < rowCount; lane += 1) {
-        const layer = selectedLaneMap.get(lane) || fallbackLayer;
-        const top = lane * CONTE_LAYER_DEFAULT_HEIGHT;
-        const selected = selectedLaneMap.has(lane) ? ' selected' : '';
-        parts.push('<span class="conte-layer-selected-row' + selected + '" data-conte-layer-row-lane="' + lane + '" style="--left:0%;--width:100%;--row-top:' + top + 'px;--layer-color:' + conteLayerColor(layer) + '"></span>');
-      }
-      return parts.join('');
-    }
-
     function conteLayerRowHandlesHtml(video, totalFrames, layout) {
       const originCounts = conteLayerOriginCounts(state.project);
-      const selectedLineKeys = selectedConteLayerLineKeySet(state.project);
       return (video.groups || []).map(function(item) {
         const owner = item.group && item.group.cuts && item.group.cuts[0];
         if (!owner || !Array.isArray(owner.conteLayers) || !owner.conteLayers.length) return '';
@@ -17674,11 +17633,10 @@
         const parts = [];
         byLane.forEach(function(layer, lane) {
           const top = lane * CONTE_LAYER_DEFAULT_HEIGHT + Math.max(0, Math.floor((CONTE_LAYER_DEFAULT_HEIGHT - CONTE_LAYER_ROW_HANDLE_SIZE) / 2));
-          const selected = selectedLineKeys.has(conteLayerLineKey(layer)) ? ' selected' : '';
           const linked = (originCounts.get(layer.originLayerId || layer.id) || 0) > 1 ? ' linked' : '';
           const hidden = layer.visible === false ? ' hidden' : '';
           const displayName = displayNames.get(layer.id) || layerOrderCode(layer.order);
-          parts.push('<span class="conte-layer-row-handle' + selected + linked + hidden + '" data-conte-layer-row-handle="true" data-conte-layer-id="' + escapeAttr(layer.id) + '" data-conte-layer-line-key="' + escapeAttr(conteLayerLineKey(layer)) + '" data-conte-owner-cut-id="' + escapeAttr(owner.id) + '" style="--left:' + left.toFixed(4) + '%;--row-top:' + top + 'px;--layer-color:' + conteLayerColor(layer) + '" title="' + escapeAttr(displayName + ' row') + '"></span>');
+          parts.push('<span class="conte-layer-row-handle' + linked + hidden + '" data-conte-layer-row-handle="true" data-conte-layer-id="' + escapeAttr(layer.id) + '" data-conte-layer-line-key="' + escapeAttr(conteLayerLineKey(layer)) + '" data-conte-owner-cut-id="' + escapeAttr(owner.id) + '" style="--left:' + left.toFixed(4) + '%;--row-top:' + top + 'px;--layer-color:' + conteLayerColor(layer) + '" title="' + escapeAttr(displayName + ' row') + '"></span>');
         });
         return parts.join('');
       }).join('');
@@ -18553,8 +18511,6 @@
       options = options || {};
       const selectedPanels = selectedPicturePanelSet();
       const selectedLayers = selectedConteLayerVisualIdSet(state.project);
-      const selectedLineKeys = selectedConteLayerLineKeySet(state.project);
-      const selectedLaneMap = selectedConteLayerVisualLaneMap(state.project);
       scope.querySelectorAll('.conte-panel-hit, .conte-panel-segment, .conte-cut-panel-selection').forEach(function(el) {
         const cutId = el.dataset.videoSlotCutId || el.dataset.contePanelCutId || '';
         const selected = Boolean(cutId && selectedPanels.has(cutId));
@@ -18565,16 +18521,14 @@
         const layerId = el.dataset.conteLayerId || '';
         el.classList.toggle('selected', Boolean(layerId && selectedLayers.has(layerId)));
       });
-      scope.querySelectorAll('.conte-layer-row-handle').forEach(function(el) {
-        const layerId = el.dataset.conteLayerId || el.dataset.conteLayerSelectedRow || '';
-        const lineKey = el.dataset.conteLayerLineKey || '';
-        el.classList.toggle('selected', Boolean((lineKey && selectedLineKeys.has(lineKey)) || (layerId && selectedLayers.has(layerId))));
+      scope.querySelectorAll('[data-conte-layer-cell-hit]').forEach(function(el) {
+        el.classList.toggle('selected-layer-cell', conteLayerCoordinateIsSelected(
+          el.dataset.contePanelCutId || '',
+          el.dataset.conteLayerLineKey || ''
+        ));
       });
-      scope.querySelectorAll('.conte-layer-selected-row').forEach(function(el) {
-        const lane = Math.max(0, Math.round(Number(el.dataset.conteLayerRowLane) || 0));
-        const layer = selectedLaneMap.get(lane) || null;
-        el.classList.toggle('selected', selectedLaneMap.has(lane));
-        if (layer) el.style.setProperty('--layer-color', conteLayerColor(layer));
+      scope.querySelectorAll('.conte-layer-row-handle').forEach(function(el) {
+        el.classList.remove('selected');
       });
       scope.querySelectorAll('.video-media-clip').forEach(function(el) {
         const clipId = el.dataset.videoMediaClipId || '';
@@ -18614,18 +18568,10 @@
       const anchorFound = anchorLayerId ? findConteLayerById(state.project, anchorLayerId) : null;
       const key = String(lineKey || (anchorFound && anchorFound.layer ? conteLayerLineKey(anchorFound.layer) : '') || '');
       if (!targetCutId || !key) return;
-      state.selectedConteLayerId = '';
-      state.selectedConteLayerIds = new Set();
-      state.selectedConteLayerLineKey = key;
-      state.activeConteSelectionType = 'layer';
-      const selectedPanels = selectedPicturePanelSet();
-      if (!additive) selectedPanels.clear();
-      selectedPanels.add(targetCutId);
-      state.selectedCutId = targetCutId;
-      state.selectedAudioClipId = '';
-      state.selectedAudioTrackId = '';
-      state.selectedVideoClipId = '';
-      state.selectedVideoTrackId = '';
+      setConteLayerCoordinateSelection(state.project, targetCutId, key, {
+        additive: Boolean(additive),
+        activate: true
+      });
       setCurrentPageToCut(state.project, targetCutId);
       syncTimelinePreviewToSelectedLayerPanel(root);
       refreshTimelineSelectionDom(root, { thumbnails: false });
@@ -20418,17 +20364,23 @@
     }
 
     function bindTimelineSeekAndZoom(root, totalFrames) {
+      const runtimeTotalFrames = function(anchor) {
+        const rootFrames = root && root.dataset ? Number(root.dataset.timelineTotalFrames) : 0;
+        const anchorFrames = anchor && anchor.dataset ? Number(anchor.dataset.timelineTotalFrames) : 0;
+        return Math.max(1, Math.round(anchorFrames || rootFrames || totalFrames || videoTimelineDisplayTotalFrames(state.project) || 1));
+      };
       const zoom = root.querySelector('#timelineZoomRange');
       if (zoom) {
+        zoom.dataset.timelineTotalFrames = String(Math.max(1, Math.round(Number(totalFrames) || 1)));
         zoom.addEventListener('input', function(event) {
           state.timelineFramePx = clampNumber(event.target.value, 1, 6, 5);
           const label = root.querySelector('[data-timeline-zoom-value]');
           if (label) label.textContent = String(state.timelineFramePx);
-          applyTimelineZoomLive(root, totalFrames);
+          applyTimelineZoomLive(root, runtimeTotalFrames(zoom));
         });
         zoom.addEventListener('change', function(event) {
           state.timelineFramePx = clampNumber(event.target.value, 1, 6, 5);
-          applyTimelineZoomLive(root, totalFrames);
+          applyTimelineZoomLive(root, runtimeTotalFrames(zoom));
           saveEditorUiState();
           renderTimingDashboard();
         });
@@ -20455,8 +20407,12 @@
       });
       bindTimelineCustomScrollbar(root);
       root.querySelectorAll('[data-timeline-seek="true"]').forEach(function(track) {
+        track.dataset.timelineTotalFrames = String(Math.max(1, Math.round(Number(totalFrames) || 1)));
         track.addEventListener('pointerdown', function(event) {
           if (event.button !== 0) return;
+          const currentTotalFrames = function() {
+            return runtimeTotalFrames(track);
+          };
           const playheadDrag = event.target && event.target.dataset && event.target.dataset.playheadDrag === 'true';
           const timeRulerSeek = Boolean(event.target && event.target.closest && event.target.closest('.timeline-ruler'));
           if (!playheadDrag && !timeRulerSeek) return;
@@ -20469,7 +20425,7 @@
           if (event.target.closest('[data-timeline-lower-resize="true"]')) return;
           event.preventDefault();
           setTimelinePlayheadDragging(root, true);
-          seekTimelineFromPointer(root, track, event, totalFrames, false, { playheadDrag: playheadDrag });
+          seekTimelineFromPointer(root, track, event, currentTotalFrames(), false, { playheadDrag: playheadDrag });
           let latestPointerEvent = event;
           let edgeRaf = 0;
           let dragging = true;
@@ -20488,7 +20444,7 @@
             edgeRaf = 0;
             if (!dragging || !playheadDrag || !latestPointerEvent) return;
             if (!timelinePointerInSeekEdgeHotZone(root, latestPointerEvent)) return;
-            seekTimelineFromPointer(root, track, latestPointerEvent, totalFrames, false, { playheadDrag: true, stopPlayback: false });
+            seekTimelineFromPointer(root, track, latestPointerEvent, currentTotalFrames(), false, { playheadDrag: true, stopPlayback: false });
             edgeRaf = requestAnimationFrame(tickPlayheadEdgeDrag);
           };
           schedulePlayheadEdgeDrag();
@@ -20501,7 +20457,7 @@
               schedulePlayheadEdgeDrag();
               return;
             }
-            seekTimelineFromPointer(root, track, moveEvent, totalFrames, false, { playheadDrag: playheadDrag, stopPlayback: false });
+            seekTimelineFromPointer(root, track, moveEvent, currentTotalFrames(), false, { playheadDrag: playheadDrag, stopPlayback: false });
             schedulePlayheadEdgeDrag();
           };
           const up = function(upEvent) {
@@ -20511,7 +20467,7 @@
             edgeRaf = 0;
             latestPointerEvent = upEvent;
             setTimelinePlayheadDragging(root, false);
-            seekTimelineFromPointer(root, track, upEvent, totalFrames, true, { playheadDrag: playheadDrag, stopPlayback: false });
+            seekTimelineFromPointer(root, track, upEvent, currentTotalFrames(), true, { playheadDrag: playheadDrag, stopPlayback: false });
             scheduleTimelineScrollbarDomUpdate(root);
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', up);
@@ -24459,7 +24415,6 @@
       if (!drawing || !drawing.bitmapDataUrl) return;
       const rect = layerDrawingBitmapRect(drawing);
       const direction = String(canvas.dataset.onionDirection || 'previous');
-      const originalColor = canvas.dataset.onionOriginalColor === 'true';
       const key = [
         ref,
         Math.max(0, Math.round(Number(drawing.version) || 0)),
@@ -24468,8 +24423,7 @@
         rect.y,
         rect.w,
         rect.h,
-        direction,
-        originalColor ? 1 : 0
+        direction
       ].join(':');
       canvas.dataset.onionDrawKey = key;
       applyLayerCanvasBitmapRectGeometry(canvas, rect);
@@ -24500,12 +24454,10 @@
             data[i + 3] = 0;
             continue;
           }
-          if (!originalColor) {
-            data[i] = tint.r;
-            data[i + 1] = tint.g;
-            data[i + 2] = tint.b;
-            data[i + 3] = Math.max(0, Math.min(255, Math.round(a * Math.max(0.35, ink))));
-          }
+          data[i] = tint.r;
+          data[i + 1] = tint.g;
+          data[i + 2] = tint.b;
+          data[i + 3] = Math.max(0, Math.min(255, Math.round(a * Math.max(0.35, ink))));
         }
         ctx.putImageData(imageData, 0, 0);
       };
@@ -24772,7 +24724,6 @@
         settings.next ? 1 : 0,
         settings.opacity,
         settings.mode,
-        settings.originalColor ? 1 : 0,
         selectedConteLayerPrimaryLineKey(project)
       ].join(':');
     }
@@ -24797,15 +24748,14 @@
       return layerDrawingHasInk(getLayerDrawingData(project, entry.layer.drawingRef)) ? [entry] : [];
     }
 
-    function onionSkinLayerHtml(entry, direction, opacity, originalColor) {
+    function onionSkinLayerHtml(entry, direction, opacity) {
       const layer = entry && entry.layer || null;
       const ref = layer && layer.drawingRef || '';
       const drawing = ref ? getLayerDrawingData(state.project, ref) : null;
       const src = drawing && drawing.bitmapDataUrl || '';
       if (!ref || !src) return '';
       const classes = ['video-onion-skin-layer', direction];
-      if (originalColor) classes.push('original-color');
-      return '<canvas class="' + classes.join(' ') + '" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layer.id || '') + '" data-onion-direction="' + escapeAttr(direction) + '" data-onion-original-color="' + (originalColor ? 'true' : 'false') + '" style="--onion-opacity:' + clampNumber(opacity, 0, 100, 45) / 100 + ';' + layerDrawingBitmapGeometryStyle(drawing) + '"></canvas>';
+      return '<canvas class="' + classes.join(' ') + '" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layer.id || '') + '" data-onion-direction="' + escapeAttr(direction) + '" style="--onion-opacity:' + clampNumber(opacity, 0, 100, 45) / 100 + ';' + layerDrawingBitmapGeometryStyle(drawing) + '"></canvas>';
     }
 
     function onionSkinPreviewHtml(project, slot) {
@@ -24815,13 +24765,13 @@
       if (settings.previous) {
         const previousSlot = onionSkinAdjacentSlot(project, slot, -1);
         onionSkinEntriesForSlot(project, previousSlot, settings).forEach(function(entry) {
-          parts.push(onionSkinLayerHtml(entry, 'previous', settings.opacity, settings.originalColor));
+          parts.push(onionSkinLayerHtml(entry, 'previous', settings.opacity));
         });
       }
       if (settings.next) {
         const nextSlot = onionSkinAdjacentSlot(project, slot, 1);
         onionSkinEntriesForSlot(project, nextSlot, settings).forEach(function(entry) {
-          parts.push(onionSkinLayerHtml(entry, 'next', settings.opacity, settings.originalColor));
+          parts.push(onionSkinLayerHtml(entry, 'next', settings.opacity));
         });
       }
       return parts.join('');
@@ -25081,7 +25031,7 @@
           setPictureFrameTimeByCutId(project, cutId, frames);
         }
         state.selectedCutId = cutId;
-      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
+      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true, skipPlayheadSelectionSync: true });
     }
 
     function createCell(className, text) {
@@ -25273,7 +25223,7 @@
         target.meta.userOverride = true;
         state.selectedCutId = target.id;
         state.activeConteSelectionType = 'cut';
-      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
+      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true, skipPlayheadSelectionSync: true });
     }
 
     function nextCutNumberForSlot(project, index) {
@@ -25381,7 +25331,7 @@
       }
       runTimelineStructureCommand('Edit cut number', function(project) {
         applyCutNoEdit(project, cutId, text);
-      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
+      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true, skipPlayheadSelectionSync: true });
     }
 
     function applyCutNoEdit(project, cutId, text) {
@@ -32756,16 +32706,12 @@
 
     function selectedConteLayerDrawingEntryForCut(project, cutId, options) {
       options = options || {};
-      ensureConteLayerSelection(project, cutId);
       const selectedPanels = selectedPicturePanelSet();
       if (options.ignoreSelectedPanel !== true && selectedPanels.size && !selectedPanels.has(cutId)) return null;
       const direct = selectedConteLayerIsActiveOnCut(project, state.selectedConteLayerId, cutId);
       if (direct) return direct;
-      const found = findConteLayerById(project, state.selectedConteLayerId);
-      const lineKey = found && found.layer ? conteLayerLineKey(found.layer) : '';
-      return lineKey ? (activeConteLayersForCut(project, cutId).find(function(entry) {
-        return entry && entry.layer && conteLayerLineKey(entry.layer) === lineKey;
-      }) || null) : null;
+      const lineKey = selectedConteLayerRememberedLineKey();
+      return playheadConteLayerEntryForCut(project, cutId, lineKey);
     }
 
     function topConteLayerAnchorForAutoKoma(project, cutId) {
@@ -37642,7 +37588,6 @@
       const previousToggle = document.getElementById('onionSkinPreviousToggle');
       const nextToggle = document.getElementById('onionSkinNextToggle');
       const opacityRange = document.getElementById('onionSkinOpacityRange');
-      const originalToggle = document.getElementById('onionSkinOriginalColorToggle');
       const layerMode = document.getElementById('onionSkinModeLayerBtn');
       const panelMode = document.getElementById('onionSkinModePanelBtn');
       if (button) {
@@ -37657,7 +37602,6 @@
       if (previousToggle) previousToggle.classList.toggle('active', Boolean(settings.previous));
       if (nextToggle) nextToggle.classList.toggle('active', Boolean(settings.next));
       if (opacityRange && document.activeElement !== opacityRange) opacityRange.value = String(settings.opacity);
-      if (originalToggle && document.activeElement !== originalToggle) originalToggle.checked = Boolean(settings.originalColor);
       if (layerMode) layerMode.classList.toggle('active', settings.mode !== 'panel');
       if (panelMode) panelMode.classList.toggle('active', settings.mode === 'panel');
     }
@@ -37914,11 +37858,6 @@
       document.getElementById('onionSkinOpacityRange').addEventListener('input', function(event) {
         mutateOnionSkinSettings(function(settings) {
           settings.opacity = clampNumber(event.currentTarget.value, 0, 100, 45);
-        });
-      });
-      document.getElementById('onionSkinOriginalColorToggle').addEventListener('change', function(event) {
-        mutateOnionSkinSettings(function(settings) {
-          settings.originalColor = Boolean(event.currentTarget.checked);
         });
       });
       document.querySelectorAll('[data-onion-mode]').forEach(function(button) {
