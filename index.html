@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver023</title>
+  <title>Conte Editor Prototype ver024</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver023</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver024</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '023';
+    const APP_DISPLAY_VERSION = '024';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -12260,6 +12260,7 @@
         layerRole: String(options.layerRole || options.role || ''),
         bgBundleId: String(options.bgBundleId || ''),
         bgIndex: Math.max(0, Math.round(Number(options.bgIndex) || 0)),
+        expandable: Boolean(options.expandable),
         visible: options.visible !== false,
         locked: Boolean(options.locked)
       };
@@ -12297,6 +12298,7 @@
         layerRole: String(layer.layerRole || layer.role || ''),
         bgBundleId: String(layer.bgBundleId || ''),
         bgIndex: Math.max(0, Math.round(Number(layer.bgIndex) || 0)),
+        expandable: Boolean(layer.expandable),
         visible: layer.visible !== false,
         locked: Boolean(layer.locked)
       };
@@ -19035,10 +19037,16 @@
         });
       });
       const bgActive = conteLayersAreAllBg(state.project, targetIds);
+      const expandableActive = targetIds.length > 0 && targetIds.every(function(tid) {
+        const f = findConteLayerById(state.project, tid);
+        return f && f.layer && f.layer.expandable;
+      });
       const menu = conteLayerContextMenuEl();
       const bgLabel = bgActive ? 'BG\u30ec\u30a4\u30e4\u30fc\u89e3\u9664' : 'BG\u30ec\u30a4\u30e4\u30fc\u306b\u3059\u308b';
+      const expandableLabel = expandableActive ? '\u30ad\u30e3\u30f3\u30d0\u30b9\u5916\u63cf\u753b\u3092\u89e3\u9664' : '\u30ad\u30e3\u30f3\u30d0\u30b9\u5916\u63cf\u753b\uff08\u30b9\u30b1\u30c3\u30c1\u7528\uff09';
       menu.innerHTML = [
         '<button type="button" class="' + (bgActive ? 'active' : '') + '" aria-pressed="' + (bgActive ? 'true' : 'false') + '" data-conte-layer-menu-action="bg">' + bgLabel + '</button>',
+        '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>',
         '<button type="button" data-conte-layer-menu-action="unlink">\u30ea\u30f3\u30af\u89e3\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="rename">\u30ec\u30a4\u30e4\u30fc\u540d\u5909\u66f4</button>',
         '<button type="button" data-conte-layer-menu-action="delete">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u524a\u9664</button>'
@@ -19054,6 +19062,15 @@
             runConteLayerCutPatchCommand(bgActive ? 'Unset BG conte layers' : 'Make BG conte layers', conteLayerOwnerCutIdsForLayerIds(state.project, targetIds), function(project) {
               if (bgActive) unmakeConteLayersBg(project, targetIds);
               else makeConteLayersBg(project, targetIds);
+            });
+            return;
+          }
+          if (action === 'expandable') {
+            runConteLayerCutPatchCommand(expandableActive ? 'Unset expandable koma' : 'Make expandable koma', conteLayerOwnerCutIdsForLayerIds(state.project, targetIds), function(project) {
+              targetIds.forEach(function(targetId) {
+                const f = findConteLayerById(project, targetId);
+                if (f && f.layer) f.layer.expandable = !expandableActive;
+              });
             });
             return;
           }
@@ -34583,9 +34600,23 @@
       return Boolean(layerTarget && layerTarget.layerRole === 'bg');
     }
 
+    function memoLayerTargetIsExpandable(layerTarget) {
+      if (!layerTarget) return false;
+      if (layerTarget.expandable) return true;
+      if (layerTarget.layerId) {
+        const found = findConteLayerById(state.project, layerTarget.layerId);
+        if (found && found.layer && found.layer.expandable) return true;
+      }
+      return false;
+    }
+
     function beginMemoRasterDraw(event, canvas, layerTarget, point, localPoint) {
-      const fixedDrawBounds = memoFixedDrawLayerBoundsForTarget(layerTarget, canvas);
-      const fixedVisibleCanvas = !memoLayerTargetIsBg(layerTarget);
+      // Expandable komas draw on an UNpinned canvas that grows past 480x270 via
+      // ensureMemoRasterOpBounds, so ink can extend outside the white canvas. Normal komas stay
+      // pinned to 480x270 for stable coordinates. BG keeps its existing (pinned) behavior.
+      const isExpandable = memoLayerTargetIsExpandable(layerTarget);
+      const fixedVisibleCanvas = !memoLayerTargetIsBg(layerTarget) && !isExpandable;
+      const fixedDrawBounds = isExpandable ? null : memoFixedDrawLayerBoundsForTarget(layerTarget, canvas);
       const opTarget = memoRasterOpTargetFromLayerTarget(layerTarget, {
         bitmapEdit: true,
         editRect: fixedVisibleCanvas ? fixedDrawBounds : null
