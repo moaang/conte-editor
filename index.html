@@ -20764,8 +20764,14 @@
           if (event.target.closest('.timeline-track-label')) return;
           if (event.target.closest('[data-timeline-lower-resize="true"]')) return;
           event.preventDefault();
-          setTimelinePlayheadDragging(root, true);
-          seekTimelineFromPointer(root, track, event, currentTotalFrames(), false, { playheadDrag: playheadDrag });
+          const timeRulerClickSeek = timeRulerSeek && !playheadDrag;
+          let seekDragStarted = !timeRulerClickSeek;
+          const startX = Number(event.clientX) || 0;
+          const startY = Number(event.clientY) || 0;
+          setTimelinePlayheadDragging(root, seekDragStarted);
+          if (seekDragStarted) {
+            seekTimelineFromPointer(root, track, event, currentTotalFrames(), false, { playheadDrag: playheadDrag });
+          }
           let latestPointerEvent = event;
           let edgeRaf = 0;
           let dragging = true;
@@ -20792,6 +20798,12 @@
             if (!isSeekPointerEvent(moveEvent)) return;
             latestPointerEvent = moveEvent;
             moveEvent.preventDefault();
+            if (!seekDragStarted) {
+              const moved = Math.abs((Number(moveEvent.clientX) || 0) - startX) + Math.abs((Number(moveEvent.clientY) || 0) - startY);
+              if (moved < 3) return;
+              seekDragStarted = true;
+              setTimelinePlayheadDragging(root, true);
+            }
             deferTimelineLayerThumbnails(600);
             if (playheadDrag && timelinePointerInSeekEdgeHotZone(root, moveEvent)) {
               schedulePlayheadEdgeDrag();
@@ -21041,7 +21053,10 @@
       if (!shouldRender && state.videoEditMode) {
         renderVideoPreviewDuringSeekIfChanged(totalFrames);
       }
-      if (shouldRender && state.videoEditMode) renderVideoPreview(totalFrames);
+      if (shouldRender && state.videoEditMode) {
+        renderVideoPreview(totalFrames);
+        prewarmCurrentVideoMemoEditCanvas();
+      }
     }
 
     function updateTimelinePlayheadDom(root, totalFrames) {
@@ -23473,45 +23488,15 @@
       return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
     }
 
-    function cssPercentValue(style, name, fallback) {
-      const raw = String(style && style.getPropertyValue ? style.getPropertyValue(name) : '').trim();
-      const match = raw.match(/^(-?\d+(?:\.\d+)?)%$/);
-      return match ? Number(match[1]) / 100 : fallback;
-    }
-
-    function clientRectFromPercentBox(baseRect, left, top, width, height) {
-      if (!baseRect || !baseRect.width || !baseRect.height) return null;
-      return {
-        left: baseRect.left + baseRect.width * left,
-        top: baseRect.top + baseRect.height * top,
-        right: baseRect.left + baseRect.width * (left + width),
-        bottom: baseRect.top + baseRect.height * (top + height),
-        width: baseRect.width * width,
-        height: baseRect.height * height
-      };
-    }
-
     function videoPreviewDrawableTouchRect(stage) {
       const screen = stage && stage.querySelector ? stage.querySelector('.video-preview-screen') : null;
-      if (!screen || !screen.getBoundingClientRect) return null;
-      const screenRect = screen.getBoundingClientRect();
-      if (screen.classList.contains('memo-active') && !screen.classList.contains('paper-frame-active')) {
-        const style = window.getComputedStyle ? window.getComputedStyle(screen) : null;
-        const drawableRect = clientRectFromPercentBox(
-          screenRect,
-          cssPercentValue(style, '--paper-drawing-left', 0),
-          cssPercentValue(style, '--paper-drawing-top', 0),
-          cssPercentValue(style, '--paper-drawing-width', 1),
-          cssPercentValue(style, '--paper-drawing-height', 1)
-        );
-        if (drawableRect) return drawableRect;
-      }
+      if (!screen) return null;
       const canvas = screen.querySelector('#videoMemoCanvas');
       const canvasHitRect = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
-      if (canvasHitRect && canvasHitRect.width && canvasHitRect.height) return canvasHitRect;
+      if (canvasHitRect) return canvasHitRect;
       const layered = screen.querySelector('.video-preview-layered');
       if (layered && layered.getBoundingClientRect) return layered.getBoundingClientRect();
-      return screenRect;
+      return screen.getBoundingClientRect ? screen.getBoundingClientRect() : null;
     }
 
     function touchEventHitsVideoPreviewDrawable(stage, event) {
@@ -23547,10 +23532,6 @@
       }, { passive: false });
       surface.addEventListener('touchmove', function(event) {
         if (!pinchStart || state.memoRasterOp || !event.touches || event.touches.length < 2) return;
-        if (touchEventHitsVideoPreviewDrawable(stage, event)) {
-          pinchStart = null;
-          return;
-        }
         const distance = touchPairDistance(event.touches);
         if (distance) {
           setVideoPreviewZoom(Math.round(clampVideoPreviewZoom(pinchStart.zoom * distance / Math.max(1, pinchStart.distance), pinchStart.zoom) * 100) / 100);
@@ -23906,7 +23887,8 @@
           if (ref) {
             const drawing = getLayerDrawingData(state.project, ref);
             if (fastLayerMode || layerDrawingUsesDirectPreviewImage(ref, layerId, drawing)) {
-              parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '" decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + '">');
+              const layerSrc = drawing && drawing.bitmapDataUrl ? ' src="' + escapeAttr(drawing.bitmapDataUrl) + '"' : '';
+              parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '"' + layerSrc + ' decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + '">');
             } else {
               parts.push('<canvas class="video-preview-layer-canvas" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '" style="z-index:' + (z * 2 + 1) + '"></canvas>');
             }
@@ -32721,6 +32703,17 @@
       return [canvas];
     }
 
+    function copyVideoLayerPeerImageToCanvas(canvas, peerImage, drawingRef) {
+      if (!canvas || !peerImage) return false;
+      const ref = String(drawingRef || canvas.dataset && canvas.dataset.layerDrawingRef || '');
+      const drawing = getLayerDrawingData(state.project, ref);
+      applyLayerCanvasBitmapGeometry(canvas, drawing);
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(peerImage, 0, 0, canvas.width, canvas.height);
+      return true;
+    }
+
     function ensureVideoLayerCanvasForTarget(target) {
       if (!target || !target.drawingRef) return [];
       const stage = document.getElementById('videoPreviewStage');
@@ -32751,11 +32744,14 @@
         ? layered.querySelector('.video-preview-layer-image[data-conte-layer-id="' + cssEscapeValue(target.layerId) + '"]')
         : layered.querySelector('.video-preview-layer-image[data-layer-drawing-ref="' + cssEscapeValue(target.drawingRef) + '"]');
       if (peerImage && peerImage.complete && (peerImage.naturalWidth || peerImage.width)) {
-        const drawing = getLayerDrawingData(state.project, target.drawingRef);
-        applyLayerCanvasBitmapGeometry(canvas, drawing);
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(peerImage, 0, 0, canvas.width, canvas.height);
+        copyVideoLayerPeerImageToCanvas(canvas, peerImage, target.drawingRef);
+      } else if (peerImage && peerImage.dataset.canvasPrewarmBound !== 'true') {
+        peerImage.dataset.canvasPrewarmBound = 'true';
+        peerImage.addEventListener('load', function() {
+          if (!peerImage.isConnected || !canvas.isConnected) return;
+          if (String(canvas.dataset.layerDrawingRef || '') !== String(target.drawingRef || '')) return;
+          copyVideoLayerPeerImageToCanvas(canvas, peerImage, target.drawingRef);
+        }, { once: true });
       }
       sortLayerCanvasStackForCut(layered, target.cutId);
       return [canvas];
@@ -32765,6 +32761,25 @@
       state.memoActiveLayerCanvasEls = state.videoEditMode
         ? ensureVideoLayerCanvasForTarget(target)
         : ensurePaperLayerCanvasForTarget(target);
+    }
+
+    function prewarmCurrentVideoMemoEditCanvas() {
+      if (!state.videoEditMode || state.memoRasterOp) return false;
+      const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
+      const cutId = slot && slot.cut && slot.cut.id || '';
+      if (!cutId) return false;
+      const entry = selectedConteLayerDrawingEntryForCut(state.project, cutId, { ignoreSelectedPanel: true });
+      if (!entry || !entry.layer || !entry.layer.drawingRef) return false;
+      const target = {
+        type: 'video-conte-layer',
+        cutId: cutId,
+        rect: { cutId: cutId, x: 0, y: 0, w: 1, h: 1 },
+        layerId: entry.layer.id,
+        drawingRef: entry.layer.drawingRef,
+        drawing: getLayerDrawingData(state.project, entry.layer.drawingRef)
+      };
+      state.memoActiveLayerCanvasEls = ensureVideoLayerCanvasForTarget(target);
+      return Boolean(state.memoActiveLayerCanvasEls.length);
     }
 
     function clearActiveLayerCanvasTargets() {
@@ -33243,80 +33258,39 @@
       return conteLayerRowActiveAtPanel(project, cutId, playheadConteLayerRowIndex(project, cutId));
     }
 
-    function topConteLayerAnchorForAutoKoma(project, cutId) {
-      const ownerCut = conteLayerOwnerCut(project, cutId);
-      const layers = conteLayersTopToBottom(Array.isArray(ownerCut && ownerCut.conteLayers) ? ownerCut.conteLayers : []);
-      const normal = layers.find(function(layer) { return layer && layer.layerRole !== 'bg'; }) || layers[0] || null;
-      if (!ownerCut || !normal) return null;
-      return {
-        ownerCut: ownerCut,
-        layer: normal,
-        layerIndex: ownerCut.conteLayers.indexOf(normal),
-        range: layerSlotIndexRange(project, normal, ownerCut)
-      };
-    }
-
-    function createTopLayerKomaForEmptyPanel(project, cutId) {
+    function createConteLayerKomaForSelectedRow(project, cutId) {
       const targetCutId = String(cutId || '');
       if (!project || !targetCutId) return null;
-      const active = topDrawableConteLayerForCut(project, targetCutId);
-      if (active && active.layer) return active;
-      const anchor = topConteLayerAnchorForAutoKoma(project, targetCutId);
-      if (anchor && anchor.layer) {
-        const lineKey = conteLayerLineKey(anchor.layer);
-        const lineOrder = conteLayerLineOrderValue(anchor.layer, 1);
-        const created = duplicateConteLayerToPanel(project, anchor.layer.id, targetCutId, 0, {
-          shareDrawing: false,
-          skipExistingPanelLink: true,
-          targetLinePlacement: {
-            lineKey: lineKey,
-            lineOrder: lineOrder,
-            insertAboveLineKey: ''
-          }
-        });
-        if (created && created.id) {
-          getLayerDrawingData(project, created.drawingRef);
-          const createdOwner = conteLayerOwnerCut(project, targetCutId);
-          return selectedConteLayerIsActiveOnCut(project, created.id, targetCutId) || {
-            ownerCut: createdOwner,
-            layer: created,
-            layerIndex: (createdOwner && createdOwner.conteLayers || []).indexOf(created),
-            range: layerSlotIndexRange(project, created, createdOwner)
-          };
-        }
-      }
+      const rowIndex = playheadConteLayerRowIndex(project, targetCutId);
+      const existing = rowIndex >= 0 ? conteLayerRowActiveAtPanel(project, targetCutId, rowIndex) : null;
+      if (existing && existing.layer) return existing;
       const targetOwner = conteLayerOwnerCut(project, targetCutId);
-      const targetIndex = cutIndexById(project, targetCutId);
-      const ownerIndex = cutIndexById(project, targetOwner && targetOwner.id);
-      if (!targetOwner || targetIndex < 0 || ownerIndex < 0) return null;
-      targetOwner.conteLayers = Array.isArray(targetOwner.conteLayers) ? targetOwner.conteLayers : [];
-      if (!conteLayerCanCreate(targetOwner.conteLayers)) {
-        state.timelineStatus = 'Conte layer limit is A-Z.';
-        return null;
-      }
-      const newId = newConteLayerId('conte-layer');
-      const layer = createConteLayer({
-        id: newId,
-        originLayerId: newId,
-        layerLineId: newId,
-        layerLineOrder: nextConteLayerOrder(targetOwner.conteLayers),
-        drawingRef: newLayerDrawingRef('drawing'),
-        order: nextConteLayerOrder(targetOwner.conteLayers),
-        startPanelCutId: targetCutId,
-        panelStart: Math.max(0, targetIndex - ownerIndex),
-        panelSpan: 1
+      const row = rowIndex >= 0 ? conteLayerRowsTopToBottom(targetOwner)[rowIndex] : null;
+      if (!row) return null;
+      const sourceEntry = row && Array.isArray(row.items)
+        ? (row.items.find(function(entry) { return entry && entry.layer && entry.layer.layerRole !== 'bg'; }) || row.items[0])
+        : null;
+      const sourceLayer = sourceEntry && sourceEntry.layer || null;
+      if (!sourceLayer) return null;
+      const lineKey = row.key || conteLayerLineKey(sourceLayer);
+      const lineOrder = conteLayerLineOrderValue(sourceLayer, row.order || 1);
+      const created = duplicateConteLayerToPanel(project, sourceLayer.id, targetCutId, 0, {
+        shareDrawing: false,
+        skipExistingPanelLink: true,
+        targetLinePlacement: {
+          lineKey: lineKey,
+          lineOrder: lineOrder,
+          insertAboveLineKey: ''
+        }
       });
-      targetOwner.conteLayers.push(layer);
-      markConteLayerOwnerHasLayers(targetOwner);
-      syncConteLayerOrderCodes(targetOwner.conteLayers);
-      setSelectedConteLayers([layer.id], layer.id);
-      setCurrentPicturePanelId(targetCutId);
-      getLayerDrawingData(project, layer.drawingRef);
-      return selectedConteLayerIsActiveOnCut(project, layer.id, targetCutId) || {
-        ownerCut: targetOwner,
-        layer: layer,
-        layerIndex: targetOwner.conteLayers.indexOf(layer),
-        range: layerSlotIndexRange(project, layer, targetOwner)
+      if (!created || !created.id) return null;
+      getLayerDrawingData(project, created.drawingRef);
+      const createdOwner = conteLayerOwnerCut(project, targetCutId);
+      return selectedConteLayerIsActiveOnCut(project, created.id, targetCutId) || {
+        ownerCut: createdOwner,
+        layer: created,
+        layerIndex: (createdOwner && createdOwner.conteLayers || []).indexOf(created),
+        range: layerSlotIndexRange(project, created, createdOwner)
       };
     }
 
@@ -33324,8 +33298,8 @@
       const rect = memoPictureHitboxAtPoint(point);
       if (!rect) return null;
       const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, rect.cutId, { ignoreSelectedPanel: true });
-      const createdEntry = selectedEntry ? null : createTopLayerKomaForEmptyPanel(state.project, rect.cutId);
-      const entry = selectedEntry || createdEntry || ensureTopDrawableConteLayerForCut(state.project, rect.cutId, { createForMedia: true });
+      const createdEntry = selectedEntry ? null : createConteLayerKomaForSelectedRow(state.project, rect.cutId);
+      const entry = selectedEntry || createdEntry;
       if (!entry || !entry.layer) return null;
       setSelectedConteLayers([entry.layer.id], entry.layer.id);
       setCurrentPicturePanelId(rect.cutId);
@@ -33348,8 +33322,8 @@
       const cutId = slot && slot.cut && slot.cut.id || '';
       if (!cutId) return null;
       const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, cutId, { ignoreSelectedPanel: true });
-      const createdEntry = selectedEntry ? null : (videoEditAutoCreateLayerKomaOnDrawEnabled(state.project) ? createTopLayerKomaForEmptyPanel(state.project, cutId) : null);
-      const entry = selectedEntry || createdEntry || ensureTopDrawableConteLayerForCut(state.project, cutId, { createForMedia: true });
+      const createdEntry = selectedEntry ? null : (videoEditAutoCreateLayerKomaOnDrawEnabled(state.project) ? createConteLayerKomaForSelectedRow(state.project, cutId) : null);
+      const entry = selectedEntry || createdEntry;
       if (!entry || !entry.layer) return null;
       setSelectedConteLayers([entry.layer.id], entry.layer.id);
       setCurrentPicturePanelId(cutId);
@@ -34403,7 +34377,7 @@
       };
     }
 
-    function videoMemoDrawableLayerBounds(canvas) {
+    function videoMemoCanvasLayerPixelBounds(canvas) {
       const source = canvas || document.getElementById('videoMemoCanvas');
       const base = videoMemoBaseRect(source);
       const drawable = source && source.getBoundingClientRect ? source.getBoundingClientRect() : base;
@@ -34420,7 +34394,7 @@
 
     function memoFixedDrawLayerBoundsForTarget(layerTarget, canvas) {
       if (layerTarget && layerTarget.type === 'video-conte-layer') {
-        return videoMemoDrawableLayerBounds(canvas);
+        return videoMemoCanvasLayerPixelBounds(canvas);
       }
       return { x: 0, y: 0, w: LAYER_DRAWING_WIDTH, h: LAYER_DRAWING_HEIGHT };
     }
@@ -35574,6 +35548,7 @@
     }
 
     function beginMemoSpacePan(event, canvas) {
+      if (state.memoRasterOp) return false;
       if (!memoInteractionActive() || !state.memoSpacePanActive || event.button !== 0) return false;
       state.memoSpacePanDrag = {
         pointerId: event.pointerId,
@@ -35623,6 +35598,7 @@
     }
 
     function beginMemoTransformFromViewport(event) {
+      if (state.memoRasterOp) return false;
       if (!memoInteractionActive() || state.memoSpacePanActive || event.button !== 0) return false;
       if (state.memoEditTool !== 'transform' && state.memoEditTool !== 'perspective') return false;
       const stage = event.target && event.target.closest ? event.target.closest('.paper-stage') : null;
@@ -35689,6 +35665,11 @@
 
     function beginMemoStroke(event) {
       if (!state.memoMode || event.button !== 0) return;
+      if (state.memoRasterOp) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       event.preventDefault();
       const canvas = document.getElementById('memoCanvas');
       if (beginMemoSpacePan(event, canvas)) return;
@@ -35909,6 +35890,11 @@
 
     function beginVideoMemoStroke(event) {
       if (event.button !== 0) return;
+      if (state.memoRasterOp) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (state.memoEditTool === 'camera') {
         event.preventDefault();
         event.stopPropagation();
