@@ -35727,8 +35727,15 @@
       return true;
     }
 
+    function memoPrimaryPointerDownAllowed(event) {
+      const pointerType = String(event && event.pointerType || '').toLowerCase();
+      if (pointerType === 'pen' || pointerType === 'touch') return true;
+      const button = typeof (event && event.button) === 'number' ? event.button : 0;
+      return button === 0;
+    }
+
     function beginMemoStroke(event) {
-      if (!state.memoMode || event.button !== 0) return;
+      if (!state.memoMode || !memoPrimaryPointerDownAllowed(event)) return;
       if (state.memoRasterOp) {
         event.preventDefault();
         event.stopPropagation();
@@ -35816,13 +35823,14 @@
       continueMemoStroke(event);
       cancelScheduledMemoCanvasRedraw();
       const op = state.memoRasterOp;
-      if (canvas.releasePointerCapture) {
-        try { canvas.releasePointerCapture(event.pointerId); } catch (error) {}
-      }
+      const pointerId = event.pointerId;
       state.memoPointerId = null;
       state.memoCurrentStroke = null;
       state.memoRasterOp = null;
       state.memoPointerCanvasRect = null;
+      if (canvas.releasePointerCapture) {
+        try { canvas.releasePointerCapture(pointerId); } catch (error) {}
+      }
       if (op.type === 'draw') {
         const merged = mergedMemoFixedDrawCanvas(op);
         const saveCanvas = merged && merged.canvas || op.canvas;
@@ -35832,7 +35840,6 @@
           bitmapY: saveRect.y,
           bitmapWidth: saveCanvas.width,
           bitmapHeight: saveCanvas.height,
-          trimAlpha: true,
           preserveActiveCanvas: true,
           preserveActiveCanvasRect: op.fixedVisibleCanvas ? memoRasterOpRect(op) : null,
           skipMemoRedraw: true,
@@ -35957,7 +35964,7 @@
     }
 
     function beginVideoMemoStroke(event) {
-      if (event.button !== 0) return;
+      if (!memoPrimaryPointerDownAllowed(event)) return;
       if (state.memoRasterOp) {
         event.preventDefault();
         event.stopPropagation();
@@ -36048,13 +36055,14 @@
       continueVideoMemoStroke(event);
       cancelScheduledVideoMemoCanvasRedraw();
       const op = state.memoRasterOp;
-      if (canvas && canvas.releasePointerCapture) {
-        try { canvas.releasePointerCapture(event.pointerId); } catch (error) {}
-      }
+      const pointerId = event.pointerId;
       state.memoPointerId = null;
       state.memoCurrentStroke = null;
       state.memoRasterOp = null;
       state.videoMemoPointerCanvasRect = null;
+      if (canvas && canvas.releasePointerCapture) {
+        try { canvas.releasePointerCapture(pointerId); } catch (error) {}
+      }
       if (op.type === 'draw') {
         const merged = mergedMemoFixedDrawCanvas(op);
         const saveCanvas = merged && merged.canvas || op.canvas;
@@ -36064,7 +36072,6 @@
           bitmapY: saveRect.y,
           bitmapWidth: saveCanvas.width,
           bitmapHeight: saveCanvas.height,
-          trimAlpha: true,
           preserveActiveCanvas: true,
           preserveActiveCanvasRect: op.fixedVisibleCanvas ? memoRasterOpRect(op) : null,
           skipMemoRedraw: true,
@@ -36103,6 +36110,34 @@
       updateMemoUndoRedoButtonsOnly();
     }
 
+    function cancelActiveMemoRasterStroke(event) {
+      const op = state.memoRasterOp;
+      if (!op || state.memoPointerId !== event.pointerId) return false;
+      if (op.type !== 'draw') return endActiveMemoRasterStrokeFromDocument(event);
+      if (event.cancelable) event.preventDefault();
+      event.stopPropagation();
+      const target = op.target || {};
+      const canvas = target.type === 'video-conte-layer'
+        ? document.getElementById('videoMemoCanvas')
+        : document.getElementById('memoCanvas');
+      if (canvas && canvas.releasePointerCapture && event.type !== 'lostpointercapture') {
+        try { canvas.releasePointerCapture(event.pointerId); } catch (error) {}
+      }
+      const drawingRef = op.drawingRef;
+      state.memoPointerId = null;
+      state.memoCurrentStroke = null;
+      state.memoRasterOp = null;
+      state.memoPointerCanvasRect = null;
+      state.videoMemoPointerCanvasRect = null;
+      state.memoCurrentLayerRect = null;
+      cancelScheduledMemoCanvasRedraw();
+      cancelScheduledVideoMemoCanvasRedraw();
+      redrawActiveLayerCanvasTargets(drawingRef);
+      clearActiveLayerCanvasTargets();
+      updateMemoUndoRedoButtonsOnly();
+      return true;
+    }
+
     function endActiveMemoRasterStrokeFromDocument(event) {
       const op = state.memoRasterOp;
       if (!op || state.memoPointerId !== event.pointerId) return;
@@ -36122,7 +36157,7 @@
         canvas.addEventListener('pointerdown', beginVideoMemoStroke);
         canvas.addEventListener('pointermove', continueVideoMemoStroke);
         canvas.addEventListener('pointerup', endVideoMemoStroke);
-        canvas.addEventListener('pointercancel', endVideoMemoStroke);
+        canvas.addEventListener('pointercancel', cancelActiveMemoRasterStroke);
         canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
       }
     }
@@ -37348,8 +37383,8 @@
       document.addEventListener('pointerup', function(event) { endMemoSpacePan(event, null); });
       document.addEventListener('pointerup', endMemoTransformDocument);
       document.addEventListener('pointerup', endCameraFrameDrag);
-      document.addEventListener('pointercancel', endActiveMemoRasterStrokeFromDocument, true);
-      document.addEventListener('lostpointercapture', endActiveMemoRasterStrokeFromDocument, true);
+      document.addEventListener('pointercancel', cancelActiveMemoRasterStroke, true);
+      document.addEventListener('lostpointercapture', cancelActiveMemoRasterStroke, true);
       document.addEventListener('pointercancel', endMemoWindowDrag);
       document.addEventListener('pointercancel', endMemoQuickWindowDrag);
       document.addEventListener('pointercancel', endMemoNudgeWindowDrag);
@@ -37485,7 +37520,7 @@
       canvas.addEventListener('pointerdown', beginMemoStroke);
       canvas.addEventListener('pointermove', continueMemoStroke);
       canvas.addEventListener('pointerup', endMemoStroke);
-      canvas.addEventListener('pointercancel', endMemoStroke);
+      canvas.addEventListener('pointercancel', cancelActiveMemoRasterStroke);
       canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
