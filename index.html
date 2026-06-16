@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver010</title>
+  <title>Conte Editor Prototype ver011</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver010</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver011</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '010';
+    const APP_DISPLAY_VERSION = '011';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -35932,10 +35932,12 @@
     function continueMemoStroke(event) {
       if (continueMemoSpacePan(event)) return;
       if (!state.memoRasterOp || state.memoPointerId !== event.pointerId) {
+        state.memoMoveTrace = !state.memoRasterOp ? 'no-op' : ('pid ' + state.memoPointerId + '!=' + event.pointerId);
         if (!state.memoRasterOp) updateMemoStampPreviewFromMemoEvent(event);
         return;
       }
       event.preventDefault();
+      state.memoMoveTrace = 'ok';
       const point = getMemoPointFromEvent(event);
       const rawPoint = getMemoPointFromEventRaw(event);
       const op = state.memoRasterOp;
@@ -36179,9 +36181,11 @@
     function continueVideoMemoStroke(event) {
       if (continueMemoSpacePan(event)) return;
       if (!state.memoRasterOp || state.memoPointerId !== event.pointerId) {
+        state.memoMoveTrace = !state.memoRasterOp ? 'no-op' : ('pid ' + state.memoPointerId + '!=' + event.pointerId);
         if (!state.memoRasterOp) updateMemoStampPreviewFromVideoEvent(event);
         return;
       }
+      state.memoMoveTrace = 'ok';
       event.preventDefault();
       event.stopPropagation();
       const rawPoint = getVideoMemoPointFromEventRaw(event);
@@ -39203,25 +39207,27 @@
         ev.down++;
         if (!isMemoCanvas(e.target)) return;
         if (cur) finish('preempt');
-        cur = { t0: performance.now(), moves: 0, maxGap: 0, lastT: performance.now(), opStarted: false, type: e.pointerType || '?' };
+        cur = { t0: performance.now(), moves: 0, maxGap: 0, lastT: performance.now(), opStarted: false, type: e.pointerType || '?', downId: e.pointerId, moveId: '-' };
         // op is set synchronously by beginMemoStroke (bubble phase, runs after this capture listener)
         Promise.resolve().then(function() { try { if (cur) cur.opStarted = !!state.memoRasterOp; } catch (e) {} });
       }, true);
       document.addEventListener('pointermove', function(e) {
         ev.move++;
         if (e.getCoalescedEvents) { try { ev.coalesced += e.getCoalescedEvents().length; } catch (err) {} }
-        if (cur) { const t = performance.now(), g = t - cur.lastT; if (g > cur.maxGap) cur.maxGap = g; cur.lastT = t; cur.moves++; }
+        if (cur) { const t = performance.now(), g = t - cur.lastT; if (g > cur.maxGap) cur.maxGap = g; cur.lastT = t; cur.moves++; cur.moveId = e.pointerId; }
       }, true);
       document.addEventListener('pointerup', function() { ev.up++; finish('up'); }, true);
       document.addEventListener('pointercancel', function() { ev.cancel++; finish('cancel'); }, true);
       document.addEventListener('lostpointercapture', function() { ev.lost++; finish('lost'); }, true);
-      function line(s) { return s.end + ' ' + s.ms + 'ms mv' + s.moves + ' pt' + s.pts + ' op' + (s.opStarted ? '1' : '0') + ' gap' + Math.round(s.maxGap) + ' ' + s.type; }
+      function line(s) { return s.end + ' mv' + s.moves + ' pt' + s.pts + ' op' + (s.opStarted ? '1' : '0') + ' id' + s.downId + '/' + s.moveId + ' ' + s.type; }
       (function tick() {
-        let opNow = '-', beginTrace = '-';
+        let opNow = '-', beginTrace = '-', moveTrace = '-';
         try { opNow = state.memoRasterOp ? (state.memoRasterOp.type || 'op') : '-'; } catch (e) {}
         try { beginTrace = state.memoBeginTrace || '-'; } catch (e) {}
+        try { moveTrace = state.memoMoveTrace || '-'; } catch (e) {}
         hud.textContent =
-          'PERF ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  op:' + opNow + '  lastBegin:' + beginTrace + '\n' +
+          'PERF ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  op:' + opNow + '\n' +
+          'lastBegin:' + beginTrace + '  lastMove:' + moveTrace + '\n' +
           'down ' + ev.down + ' up ' + ev.up + ' cancel ' + ev.cancel + ' lost ' + ev.lost + '\n' +
           'move ' + ev.move + ' coalesced ' + ev.coalesced + '\n' +
           'longtasks ' + lt + ' maxBlock ' + Math.round(ltMax) + 'ms\n' +
