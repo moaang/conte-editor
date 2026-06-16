@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver032</title>
+  <title>Conte Editor Prototype ver033</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver032</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver033</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '032';
+    const APP_DISPLAY_VERSION = '033';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37632,6 +37632,15 @@
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
       document.addEventListener('pointerdown', beginMemoDrawFromViewport);
+      // Same iPad Apple Pencil scroll-hijack guard as the draw canvas, but for strokes that run in the
+      // gray stage area (outside the canvas): while a stroke is active, cancel the pencil's touchmove
+      // so WebKit does not start its scroll decision and eat the input.
+      const memoDrawStage = document.querySelector('.paper-stage');
+      if (memoDrawStage) {
+        memoDrawStage.addEventListener('touchmove', function(event) {
+          if (state.memoRasterOp && event.cancelable) event.preventDefault();
+        }, { passive: false });
+      }
       document.addEventListener('pointermove', continueCameraFrameDrag);
       document.addEventListener('pointerdown', handleVideoMemoAutoOffPointerDown, true);
       document.addEventListener('pointerdown', function(event) {
