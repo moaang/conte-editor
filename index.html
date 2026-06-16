@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver017</title>
+  <title>Conte Editor Prototype ver018</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver017</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver018</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '017';
+    const APP_DISPLAY_VERSION = '018';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39191,7 +39191,7 @@
       const hud = document.createElement('div');
       hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,Menlo,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:60vw;letter-spacing:0.2px';
       (document.body || document.documentElement).appendChild(hud);
-      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-', realMiss: 0, lastRealMiss: '-', lastRealMissStack: '-' };
+      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-', realMiss: 0, lastRealMiss: '-', lastRealMissStack: '-', penD: 0, touchD: 0, mouseD: 0, penM: 0, penDraw: 0, touchDraw: 0 };
       let lt = 0, ltMax = 0;
       try {
         new PerformanceObserver(function(list) {
@@ -39208,12 +39208,15 @@
         cur.end = kind;
         cur.ms = Math.round(performance.now() - cur.t0);
         cur.pts = pts;
+        if (cur.livePts > 0 || cur.opSeen) { if (cur.type === 'pen') ev.penDraw++; else if (cur.type === 'touch') ev.touchDraw++; }
         recent.unshift(cur);
         if (recent.length > 6) recent.pop();
         cur = null;
       }
       document.addEventListener('pointerdown', function(e) {
         ev.down++;
+        const pt = String(e.pointerType || '').toLowerCase();
+        if (pt === 'pen') ev.penD++; else if (pt === 'touch') ev.touchD++; else ev.mouseD++;
         // Record EVERY pointerdown's target — even ones that miss the drawing canvas. The failing
         // strokes the user reports may never hit memoCanvas/videoMemoCanvas at all (canvas removed
         // or covered between strokes by a preview rebuild), so they'd otherwise be invisible here.
@@ -39248,12 +39251,13 @@
         } catch (err) {}
         if (!isMemoCanvas(e.target)) return;
         if (cur) finish('preempt');
-        cur = { t0: performance.now(), moves: 0, maxGap: 0, lastT: performance.now(), opStarted: false, type: e.pointerType || '?', downId: e.pointerId, moveId: '-', livePts: 0, opSeen: 0, bt: '-', mt: '-', canvasRef: null, canvasTag: '-', det: 0, swp: 0 };
+        cur = { t0: performance.now(), moves: 0, maxGap: 0, lastT: performance.now(), opStarted: false, type: e.pointerType || '?', downId: e.pointerId, moveId: '-', livePts: 0, opSeen: 0, bt: '-', mt: '-', canvasRef: null, canvasTag: '-', det: 0, swp: 0, cover: '-', cz: '-', cvis: '-' };
         // op is set synchronously by beginMemoStroke (bubble phase, runs after this capture listener)
         Promise.resolve().then(function() { try { if (cur) cur.opStarted = !!state.memoRasterOp; } catch (e) {} });
       }, true);
       document.addEventListener('pointermove', function(e) {
         ev.move++;
+        if (String(e.pointerType || '').toLowerCase() === 'pen') ev.penM++;
         if (e.getCoalescedEvents) { try { ev.coalesced += e.getCoalescedEvents().length; } catch (err) {} }
         if (cur) { const t = performance.now(), g = t - cur.lastT; if (g > cur.maxGap) cur.maxGap = g; cur.lastT = t; cur.moves++; cur.moveId = e.pointerId; }
       }, true);
@@ -39283,6 +39287,27 @@
             if (cur.canvasRef) {
               if (!cur.canvasRef.isConnected) cur.det = 1;
               if (c && c !== cur.canvasRef) cur.swp = 1;
+              // Is a layer IMAGE painted above this drawing canvas (pointer-events:none, so it lets
+              // the pen through but visually hides the live stroke until commit)? Check siblings.
+              try {
+                const cc = cur.canvasRef;
+                const cs = getComputedStyle(cc);
+                cur.cz = cs.zIndex; cur.cvis = cs.visibility[0] + cs.display.slice(0, 4) + cs.opacity;
+                const par = cc.parentElement;
+                if (par) {
+                  const kids = Array.prototype.slice.call(par.children);
+                  const ci = kids.indexOf(cc);
+                  for (let i = 0; i < kids.length; i++) {
+                    const k = kids[i];
+                    const isImg = k.tagName === 'IMG' || (typeof k.className === 'string' && k.className.indexOf('layer-image') >= 0);
+                    if (!isImg) continue;
+                    const ks = getComputedStyle(k);
+                    if (ks.display === 'none' || ks.visibility === 'hidden' || ks.opacity === '0') continue;
+                    const above = (parseInt(ks.zIndex, 10) || 0) > (parseInt(cs.zIndex, 10) || 0) || ((ks.zIndex === cs.zIndex || (!ks.zIndex && !cs.zIndex)) && i > ci);
+                    if (above) { cur.cover = String(k.className || k.tagName).slice(0, 18) + ' z' + ks.zIndex; break; }
+                  }
+                }
+              } catch (e2) {}
             }
           } catch (e) {}
         }
@@ -39290,6 +39315,8 @@
           'PERF ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  op:' + opNow + '\n' +
           'lastBegin:' + beginTrace + '  lastMove:' + moveTrace + '\n' +
           'down ' + ev.down + ' up ' + ev.up + ' cancel ' + ev.cancel + ' lost ' + ev.lost + '\n' +
+          'PEN down ' + ev.penD + ' move ' + ev.penM + ' drew ' + ev.penDraw + '\n' +
+          'TOUCH down ' + ev.touchD + ' drew ' + ev.touchDraw + '  mouse ' + ev.mouseD + '\n' +
           'missDown ' + ev.missDown + ' (in-canvas REAL ' + ev.realMiss + ') canvasInDom ' + ev.memoCanvasInDom + '\n' +
           'realMiss: ' + ev.lastRealMiss + '\n' +
           'realStack: ' + ev.lastRealMissStack + '\n' +
