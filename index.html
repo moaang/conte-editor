@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver025</title>
+  <title>Conte Editor Prototype ver026</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6760,7 +6760,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver025</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver026</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6797,7 +6797,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '025';
+    const APP_DISPLAY_VERSION = '026';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18404,8 +18404,15 @@
         timer = window.setTimeout(function() {
           timer = 0;
           pointerId = null;
-          const hit = document.elementFromPoint(startX, startY);
-          if (hit && hit !== el && !el.contains(hit)) return;
+          // elementFromPoint can miss the element if it became pointer-events:none on touch-down
+          // (e.g. a timeline layer bar gets a 'dragging' style immediately), which previously made
+          // long-press work only on the row handle. Fall back to geometric containment.
+          const r = el.getBoundingClientRect();
+          const withinRect = startX >= r.left && startX <= r.right && startY >= r.top && startY <= r.bottom;
+          if (!withinRect) {
+            const hit = document.elementFromPoint(startX, startY);
+            if (hit && hit !== el && !el.contains(hit)) return;
+          }
           suppressClick = true;
           handler(syntheticContextMenuEventFromPointer(sourceEvent, el));
         }, options.delay || 520);
