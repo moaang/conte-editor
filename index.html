@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype</title>
+  <title>Conte Editor Prototype ver005</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -134,6 +134,20 @@
       font-size: 14px;
       font-weight: 900;
       white-space: nowrap;
+    }
+
+    .brand-title.version-info-trigger {
+      cursor: pointer;
+    }
+
+    .brand-title.version-info-trigger:hover {
+      text-decoration: underline;
+    }
+
+    .brand-title.version-info-trigger:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 3px;
+      border-radius: 4px;
     }
 
     .brand-subtitle {
@@ -1071,6 +1085,33 @@
     .choice-dialog-actions button {
       width: 100%;
       text-align: left;
+    }
+
+    .version-info-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .version-info-row {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+
+    .version-info-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.4;
+    }
+
+    .version-info-value {
+      min-width: 0;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.45;
+      word-break: break-word;
     }
 
     .status {
@@ -6265,7 +6306,7 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-title">Conte Editor</div>
+        <div id="appBrandTitle" class="brand-title version-info-trigger" role="button" tabindex="0" aria-haspopup="dialog" title="Version Info">Conte Editor</div>
         <div class="brand-json-actions" aria-label="JSON file actions">
           <button id="newProjectBtn" class="json-icon-btn" type="button" aria-label="New Project" title="New Project">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -6696,6 +6737,33 @@
     </div>
   </dialog>
 
+  <dialog id="versionInfoDialog" class="choice-dialog">
+    <form method="dialog">
+      <h2>Version Info</h2>
+      <div class="version-info-list">
+        <div class="version-info-row">
+          <span class="version-info-label">App</span>
+          <span id="versionInfoAppValue" class="version-info-value">Conte Editor</span>
+        </div>
+        <div class="version-info-row">
+          <span class="version-info-label">Version</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver005</span>
+        </div>
+        <div class="version-info-row">
+          <span class="version-info-label">Schema</span>
+          <span id="versionInfoSchemaValue" class="version-info-value">v2</span>
+        </div>
+        <div class="version-info-row">
+          <span class="version-info-label">File</span>
+          <span id="versionInfoFileValue" class="version-info-value"></span>
+        </div>
+      </div>
+      <div class="choice-dialog-actions">
+        <button id="versionInfoCloseBtn" type="submit" value="close">閉じる</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="paperFrameImportDialog" class="paper-frame-dialog">
     <div class="paper-frame-dialog-body">
       <strong>Paper frame import</strong>
@@ -6715,6 +6783,8 @@
 
   <script>
     // APP: CONSTANTS
+    const APP_NAME = 'Conte Editor';
+    const APP_DISPLAY_VERSION = '005';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -6769,6 +6839,9 @@
     const WORKSPACE_HANDLE_KEY = 'workingDirectory';
     const INDEXED_DB_AUTOSAVE_KEY = 'indexedDbAutosaveProject';
     const INDEXED_DB_AUTOSAVE_DELAY_MS = 1600;
+    // Pen strokes save on a long idle debounce so rapid drawing does not autosave per-stroke.
+    // A flush on tab hide / pagehide guarantees the last strokes are still persisted.
+    const INDEXED_DB_AUTOSAVE_DRAW_DELAY_MS = 12000;
     const INDEXED_DB_AUDIO_KEY_PREFIX = 'indexedDbAudio:';
     const MOBILE_RECORDING_AUDIO_BITS_PER_SECOND = 24000;
     const MOBILE_RECORDING_MAX_BYTES = 64 * 1024 * 1024;
@@ -29735,6 +29808,18 @@
       }, Math.max(300, Math.round(Number(delay) || INDEXED_DB_AUTOSAVE_DELAY_MS)));
     }
 
+    function flushIndexedDbAutosave() {
+      // Run any pending debounced autosave immediately (e.g. tab hidden / closing),
+      // so the long pen-stroke debounce never loses the most recent strokes.
+      if (!state.indexedDbAutosaveTimer) return;
+      clearTimeout(state.indexedDbAutosaveTimer);
+      state.indexedDbAutosaveTimer = 0;
+      saveProjectToIndexedDbAutosave().catch(function(error) {
+        state.indexedDbAutosaveStatus = '保存失敗\n' + (error && error.message ? error.message : error);
+        updateStageSettingsUI();
+      });
+    }
+
     async function restoreIndexedDbAutosave() {
       try {
         const record = await loadIndexedDbAutosaveRecord();
@@ -32544,7 +32629,7 @@
         if (!canvas.isConnected || layerDrawingThumbnailKey(canvas, canvas.dataset.layerDrawingRef || '') !== key) return;
         const iw = Math.max(1, image.naturalWidth || image.width || 1);
         const ih = Math.max(1, image.naturalHeight || image.height || 1);
-        const sourceCanvas = document.createElement('canvas');
+        const sourceCanvas = createReadbackCanvas();
         sourceCanvas.width = iw;
         sourceCanvas.height = ih;
         const sourceCtx = sourceCanvas.getContext('2d');
@@ -33041,12 +33126,36 @@
       return true;
     }
 
+    function memoFixedDrawInkRect(op, editRect) {
+      // Tight layer-pixel box of the stroke, derived from its points (NO getImageData), padded for
+      // pen width and clamped to the op canvas rect. Returns null to fall back to the full editRect.
+      const stroke = op && op.stroke;
+      const points = stroke && Array.isArray(stroke.points) ? stroke.points : null;
+      if (!points || !points.length || !editRect) return null;
+      const bounds = memoLayerPointsBounds(points, memoStrokeLayerPadPx(stroke) + 1);
+      if (!bounds) return null;
+      const minX = Math.max(editRect.x, bounds.x);
+      const minY = Math.max(editRect.y, bounds.y);
+      const maxX = Math.min(editRect.x + editRect.w, bounds.x + bounds.w);
+      const maxY = Math.min(editRect.y + editRect.h, bounds.y + bounds.h);
+      if (maxX <= minX || maxY <= minY) return null;
+      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+
     function mergedMemoFixedDrawCanvas(op) {
       if (!op || !op.canvas || !op.fixedVisibleCanvas) return null;
       const editRect = memoRasterOpRect(op);
       const baseRect = op.baseBitmapRect || null;
       const baseCanvas = op.baseBitmapCanvas || null;
-      const unionRect = memoUnionLayerRect(baseCanvas && baseRect ? baseRect : null, editRect);
+      // Option A: instead of re-encoding the whole layer every stroke, save only the stroke's ink
+      // box (from points, no pixel scan) unioned with the existing bitmap rect. The display canvas
+      // stays full-size via preserveActiveCanvasRect, so this only shrinks the stored/encoded bitmap.
+      const drawing = op.drawingRef ? getLayerDrawingData(state.project, op.drawingRef) : null;
+      const hasInk = layerDrawingHasInk(drawing);
+      // Cropping is safe only when the existing ink can be reproduced (base snapshot present).
+      const canCrop = !hasInk || (baseCanvas && baseRect);
+      const inkRect = canCrop ? (memoFixedDrawInkRect(op, editRect) || editRect) : editRect;
+      const unionRect = memoUnionLayerRect(hasInk && baseRect ? baseRect : null, inkRect);
       if (!unionRect) return null;
       const canvas = document.createElement('canvas');
       canvas.width = unionRect.w;
@@ -33666,6 +33775,16 @@
       drawing.strokes = [];
     }
 
+    function createReadbackCanvas() {
+      // For canvases that exist only to be analyzed with getImageData (alpha bounds, mask
+      // outlines). willReadFrequently pins them to CPU memory so the read skips the GPU->CPU
+      // readback stall that is especially costly on iPad/Safari. Do NOT use for canvases that
+      // are drawn into incrementally during a stroke (that path wants GPU acceleration).
+      const canvas = document.createElement('canvas');
+      try { canvas.getContext('2d', { willReadFrequently: true }); } catch (error) {}
+      return canvas;
+    }
+
     function canvasAlphaBounds(canvas) {
       if (!canvas) return null;
       const width = Math.max(1, Math.round(Number(canvas.width) || 1));
@@ -33749,7 +33868,7 @@
           }
           pushLayerDrawingEditCommand(options.historyName || 'Edit conte layer drawing', beforeHistory, [ref]);
           updateMemoUndoRedoButtonsOnly();
-          scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
+          scheduleIndexedDbAutosave(options.autosaveDelay || INDEXED_DB_AUTOSAVE_DELAY_MS);
           return true;
         }
         sourceCanvas = trimmed.canvas;
@@ -33794,7 +33913,7 @@
       }
       pushLayerDrawingEditCommand(options.historyName || 'Edit conte layer drawing', beforeHistory, [ref]);
       updateMemoUndoRedoButtonsOnly();
-      scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
+      scheduleIndexedDbAutosave(options.autosaveDelay || INDEXED_DB_AUTOSAVE_DELAY_MS);
       return true;
     }
 
@@ -34103,7 +34222,7 @@
       const height = Math.max(1, Math.round(Number(options.height) || LAYER_DRAWING_HEIGHT));
       const bitmapX = Math.round(Number(options.bitmapX) || 0);
       const bitmapY = Math.round(Number(options.bitmapY) || 0);
-      const mask = document.createElement('canvas');
+      const mask = createReadbackCanvas();
       mask.width = width;
       mask.height = height;
       const ctx = mask.getContext('2d');
@@ -34192,7 +34311,7 @@
       const baseBottom = existingSelection
         ? Math.max(existingY + existingSelection.maskCanvas.height, maskY + mask.height)
         : maskY + mask.height;
-      const base = document.createElement('canvas');
+      const base = createReadbackCanvas();
       base.width = Math.max(1, Math.ceil(baseRight - baseX));
       base.height = Math.max(1, Math.ceil(baseBottom - baseY));
       const ctx = base.getContext('2d');
@@ -34228,7 +34347,7 @@
     function invertMemoSelection() {
       const selection = state.memoSelection;
       if (!selection || !selection.maskCanvas) return;
-      const mask = document.createElement('canvas');
+      const mask = createReadbackCanvas();
       mask.width = Math.max(1, selection.maskCanvas.width || LAYER_DRAWING_WIDTH);
       mask.height = Math.max(1, selection.maskCanvas.height || LAYER_DRAWING_HEIGHT);
       const ctx = mask.getContext('2d');
@@ -35219,7 +35338,7 @@
       if (!selection || !selection.maskCanvas) return null;
       const px = Math.round(Number(dx) || 0);
       const py = Math.round(Number(dy) || 0);
-      const mask = document.createElement('canvas');
+      const mask = createReadbackCanvas();
       mask.width = Math.max(1, selection.maskCanvas.width || LAYER_DRAWING_WIDTH);
       mask.height = Math.max(1, selection.maskCanvas.height || LAYER_DRAWING_HEIGHT);
       mask.getContext('2d').drawImage(selection.maskCanvas, px, py);
@@ -35543,6 +35662,19 @@
       scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
 
+    function coalescedDrawEvents(event) {
+      // Apple Pencil samples far faster than pointermove fires; the in-between samples
+      // ride along inside getCoalescedEvents(). Returns them oldest-first, or [event]
+      // when the API is unavailable (mouse, older browsers).
+      if (event && typeof event.getCoalescedEvents === 'function') {
+        try {
+          const list = event.getCoalescedEvents();
+          if (list && list.length) return list;
+        } catch (error) {}
+      }
+      return [event];
+    }
+
     function shouldAppendMemoPoint(stroke, point) {
       const points = stroke.points || [];
       if (!points.length) return true;
@@ -35792,10 +35924,18 @@
       const nextPoint = state.memoCurrentLayerRect ? localLayerMemoPoint(point, state.memoCurrentLayerRect) : point;
       const nextRawPoint = state.memoCurrentLayerRect ? localLayerMemoPointRaw(rawPoint, state.memoCurrentLayerRect) : rawPoint;
       if (op.type === 'draw' && state.memoCurrentStroke) {
-        if (shouldAppendMemoPoint(state.memoCurrentStroke, nextRawPoint)) {
-          const previousPoint = state.memoCurrentStroke.points[state.memoCurrentStroke.points.length - 1] || null;
-          state.memoCurrentStroke.points.push(nextRawPoint);
-          drawCurrentLayerStrokeSegment(state.memoCurrentStroke, previousPoint, nextRawPoint);
+        // iPad/Pencil: a single pointermove can carry several real samples (240Hz pen vs 60Hz events).
+        // Walk every coalesced sample so corners/direction changes are not dropped.
+        const samples = coalescedDrawEvents(event);
+        for (let i = 0; i < samples.length; i++) {
+          const ev = samples[i];
+          const evRaw = getMemoPointFromEventRaw(ev);
+          const evNextRaw = state.memoCurrentLayerRect ? localLayerMemoPointRaw(evRaw, state.memoCurrentLayerRect) : evRaw;
+          if (shouldAppendMemoPoint(state.memoCurrentStroke, evNextRaw)) {
+            const previousPoint = state.memoCurrentStroke.points[state.memoCurrentStroke.points.length - 1] || null;
+            state.memoCurrentStroke.points.push(evNextRaw);
+            drawCurrentLayerStrokeSegment(state.memoCurrentStroke, previousPoint, evNextRaw);
+          }
         }
         return;
       }
@@ -35843,7 +35983,8 @@
           preserveActiveCanvas: true,
           preserveActiveCanvasRect: op.fixedVisibleCanvas ? memoRasterOpRect(op) : null,
           skipMemoRedraw: true,
-          skipThumbnails: true
+          skipThumbnails: true,
+          autosaveDelay: INDEXED_DB_AUTOSAVE_DRAW_DELAY_MS
         });
       } else if (op.type === 'stamp') {
         if (op.stampChanged) setLayerDrawingBitmapFromCanvas(op.drawingRef, op.canvas, op.beforeDataUrl, {
@@ -36023,10 +36164,15 @@
         return;
       }
       if (op.type === 'draw' && state.memoCurrentStroke) {
-        if (shouldAppendMemoPoint(state.memoCurrentStroke, rawPoint)) {
-          const previousPoint = state.memoCurrentStroke.points[state.memoCurrentStroke.points.length - 1] || null;
-          state.memoCurrentStroke.points.push(rawPoint);
-          drawCurrentLayerStrokeSegment(state.memoCurrentStroke, previousPoint, rawPoint);
+        // iPad/Pencil: expand coalesced samples so corners/direction changes are not dropped.
+        const samples = coalescedDrawEvents(event);
+        for (let i = 0; i < samples.length; i++) {
+          const evRaw = getVideoMemoPointFromEventRaw(samples[i]);
+          if (shouldAppendMemoPoint(state.memoCurrentStroke, evRaw)) {
+            const previousPoint = state.memoCurrentStroke.points[state.memoCurrentStroke.points.length - 1] || null;
+            state.memoCurrentStroke.points.push(evRaw);
+            drawCurrentLayerStrokeSegment(state.memoCurrentStroke, previousPoint, evRaw);
+          }
         }
         return;
       }
@@ -36075,7 +36221,8 @@
           preserveActiveCanvas: true,
           preserveActiveCanvasRect: op.fixedVisibleCanvas ? memoRasterOpRect(op) : null,
           skipMemoRedraw: true,
-          skipThumbnails: true
+          skipThumbnails: true,
+          autosaveDelay: INDEXED_DB_AUTOSAVE_DRAW_DELAY_MS
         });
       } else if (op.type === 'stamp') {
         if (op.stampChanged) setLayerDrawingBitmapFromCanvas(op.drawingRef, op.canvas, op.beforeDataUrl, {
@@ -37538,6 +37685,10 @@
       document.addEventListener('keydown', handleMemoKeydown);
       document.addEventListener('keyup', handleMemoSpacePanKeyup);
       window.addEventListener('blur', cancelMemoSpacePan);
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') flushIndexedDbAutosave();
+      });
+      window.addEventListener('pagehide', flushIndexedDbAutosave);
       bindShortcutControls();
       if (window.ResizeObserver) {
         const observer = new ResizeObserver(function() { redrawMemoCanvas(); });
@@ -37570,6 +37721,28 @@
       if (status) status.textContent = fileSystemAccessAvailable()
         ? '出力形式を選んでください。'
         : 'このブラウザはフォルダ出力に対応していません。Chrome / Edgeで開いてください。';
+      if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+    }
+
+    function renderVersionInfoDialog() {
+      const appValue = document.getElementById('versionInfoAppValue');
+      const versionValue = document.getElementById('versionInfoVersionValue');
+      const schemaValue = document.getElementById('versionInfoSchemaValue');
+      const fileValue = document.getElementById('versionInfoFileValue');
+      const brandTitle = document.getElementById('appBrandTitle');
+      if (appValue) appValue.textContent = APP_NAME;
+      if (versionValue) versionValue.textContent = 'ver' + APP_DISPLAY_VERSION;
+      if (schemaValue) schemaValue.textContent = 'v' + PROJECT_FORMAT_VERSION;
+      if (fileValue) fileValue.textContent = document.lastModified || '-';
+      if (brandTitle) {
+        brandTitle.setAttribute('title', 'Version Info');
+        brandTitle.setAttribute('aria-label', APP_NAME + ' version info');
+      }
+    }
+
+    function openVersionInfoDialog() {
+      renderVersionInfoDialog();
+      const dialog = document.getElementById('versionInfoDialog');
       if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
     }
 
@@ -38797,6 +38970,16 @@
       document.getElementById('newProjectBtn').addEventListener('click', startNewProject);
       document.getElementById('saveJsonBtn').addEventListener('click', saveJson);
       document.getElementById('loadJsonBtn').addEventListener('click', chooseJsonForLoad);
+      const appBrandTitle = document.getElementById('appBrandTitle');
+      if (appBrandTitle) {
+        appBrandTitle.addEventListener('click', openVersionInfoDialog);
+        appBrandTitle.addEventListener('keydown', function(event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openVersionInfoDialog();
+          }
+        });
+      }
       document.getElementById('loadJsonInput').addEventListener('change', function(event) {
         loadJsonFile(event.target.files && event.target.files[0], { connectWorkspace: false });
         event.target.value = '';
@@ -38807,6 +38990,12 @@
         if (dialog) dialog.close();
       });
       document.getElementById('exportChooseFolderBtn').addEventListener('click', runExportFromDialog);
+      const versionInfoDialog = document.getElementById('versionInfoDialog');
+      if (versionInfoDialog) {
+        versionInfoDialog.addEventListener('click', function(event) {
+          if (event.target === versionInfoDialog) versionInfoDialog.close();
+        });
+      }
       document.getElementById('paperModeBtn').addEventListener('click', function() { setStageVideoEditMode(false); });
       document.getElementById('videoEditToggleBtn').addEventListener('click', function() { setStageVideoEditMode(true); });
       document.getElementById('videoCameraFrameToggleBtn').addEventListener('click', function(event) {
@@ -38949,6 +39138,7 @@
     } catch (error) {
       console.error('Initial project normalize failed', error);
     }
+    renderVersionInfoDialog();
     refresh();
     restoreWorkspaceHandle();
   </script>
