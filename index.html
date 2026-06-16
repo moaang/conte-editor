@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver027</title>
+  <title>Conte Editor Prototype ver028</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6760,7 +6760,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver027</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver028</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6797,7 +6797,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '027';
+    const APP_DISPLAY_VERSION = '028';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7067,7 +7067,6 @@
       memoBitmapHistory: {},
       memoBitmapHistoryOrder: [],
       pendingLayerDrawingRefs: new Set(),
-      pendingMemoPictureCaptureStrokeIds: new Set(),
       memoCompositeDirty: false,
       memoLayerPreviewCache: {},
       paperFrameImport: null,
@@ -11723,7 +11722,6 @@
       state.memoBitmapHistory = {};
       state.memoBitmapHistoryOrder = [];
       state.pendingLayerDrawingRefs = new Set();
-      state.pendingMemoPictureCaptureStrokeIds = new Set();
       state.memoCompositeDirty = false;
       state.memoLayerPreviewCache = {};
       state.layerDrawingDataUrlCache = {};
@@ -32150,7 +32148,7 @@
         hiddenCutNo: Boolean(cut.inheritedCutNoHidden),
         actionText: compactLlmText(cut.actionText, 260),
         dialogueText: compactLlmText(cut.dialogueText, 260),
-        picture: Boolean(cutHasVideoMedia(state.project, cut.id) || cut.meta && cut.meta.memoPictureCapture),
+        picture: Boolean(cutHasVideoMedia(state.project, cut.id)),
         pictureFrames: Math.max(0, Math.round(Number(cut.pictureFrames) || 0)),
         pictureTime: framesToTimeInput(cut.pictureFrames),
         durationFrames: Math.max(0, Math.round(Number(cut.durationFrames) || 0)),
@@ -32178,20 +32176,13 @@
       return state.pendingLayerDrawingRefs;
     }
 
-    function pendingMemoPictureCaptureSet() {
-      if (!(state.pendingMemoPictureCaptureStrokeIds instanceof Set)) {
-        state.pendingMemoPictureCaptureStrokeIds = new Set(Array.isArray(state.pendingMemoPictureCaptureStrokeIds) ? state.pendingMemoPictureCaptureStrokeIds : []);
-      }
-      return state.pendingMemoPictureCaptureStrokeIds;
-    }
-
     function isLayerDrawingCompositionPending(drawingRef) {
       const ref = String(drawingRef || '');
       return Boolean(ref && pendingLayerDrawingRefSet().has(ref));
     }
 
     function refreshMemoCompositeDirtyFlag() {
-      state.memoCompositeDirty = Boolean(pendingLayerDrawingRefSet().size || pendingMemoPictureCaptureSet().size);
+      state.memoCompositeDirty = Boolean(pendingLayerDrawingRefSet().size);
       return state.memoCompositeDirty;
     }
 
@@ -32206,18 +32197,6 @@
       const ref = String(drawingRef || '');
       if (!ref) return;
       pendingLayerDrawingRefSet().delete(ref);
-      refreshMemoCompositeDirtyFlag();
-    }
-
-    function markMemoPictureCapturePending(stroke) {
-      if (!stroke || !stroke.id) return;
-      pendingMemoPictureCaptureSet().add(stroke.id);
-      state.memoCompositeDirty = true;
-    }
-
-    function clearMemoPictureCapturePending(stroke) {
-      if (!stroke || !stroke.id) return;
-      pendingMemoPictureCaptureSet().delete(stroke.id);
       refreshMemoCompositeDirtyFlag();
     }
 
@@ -32239,9 +32218,7 @@
     function flushDeferredMemoComposition(options) {
       options = options || {};
       const pendingRefs = Array.from(pendingLayerDrawingRefSet());
-      const pendingCaptureIds = pendingMemoPictureCaptureSet();
-      const captureIds = Array.from(pendingCaptureIds);
-      if (!pendingRefs.length && !captureIds.length && !state.memoCompositeDirty) return false;
+      if (!pendingRefs.length && !state.memoCompositeDirty) return false;
       cancelScheduledMemoCanvasRedraw();
       cancelScheduledVideoMemoCanvasRedraw();
       pendingRefs.forEach(function(ref) {
@@ -32250,17 +32227,6 @@
         clearLayerDrawingDataUrlCacheForRef(ref);
       });
       pendingLayerDrawingRefSet().clear();
-      if (captureIds.length) {
-        const captureSet = new Set(captureIds);
-        Object.keys(state.project.memoPages || {}).forEach(function(pageKey) {
-          const page = state.project.memoPages[pageKey];
-          (page && page.strokes || []).forEach(function(stroke) {
-            if (!captureSet.has(stroke.id)) return;
-            refreshMemoPictureCaptureForStroke(stroke, stroke.capturedPicturePage || Number(pageKey) || state.project.currentPage);
-          });
-        });
-      }
-      pendingCaptureIds.clear();
       state.memoCompositeDirty = false;
       normalizeLayerDrawings(state.project);
       if (options.render !== false) {
@@ -32455,7 +32421,6 @@
     function renderMemoPageToContext(ctx, pageNo, width, height) {
       const page = getMemoPageData(pageNo);
       page.strokes.forEach(function(stroke) {
-        if (stroke.capturedPictureCutId) return;
         drawMemoStroke(ctx, stroke, width, height);
       });
     }
@@ -33303,21 +33268,6 @@
       };
     }
 
-    function memoStrokeIntersectsRect(stroke, rect) {
-      if (!stroke || !rect || !Array.isArray(stroke.points) || !stroke.points.length) return false;
-      const pad = Math.max(0.0025, Math.min(0.06, (Number(stroke.size) || 1) / 2600));
-      return stroke.points.some(function(point) {
-        return point.x >= rect.x - pad && point.x <= rect.x + rect.w + pad &&
-          point.y >= rect.y - pad && point.y <= rect.y + rect.h + pad;
-      });
-    }
-
-    function memoPictureCaptureTargetForStroke(stroke) {
-      return memoPictureHitboxes().find(function(rect) {
-        return memoStrokeIntersectsRect(stroke, rect);
-      }) || null;
-    }
-
     function memoPointInsideRect(point, rect) {
       return Boolean(point && rect &&
         point.x >= rect.x && point.x <= rect.x + rect.w &&
@@ -33556,120 +33506,6 @@
         guardedRender('inspector', renderInspector);
         guardedRender('chrome', refreshChromeControls);
       }
-    }
-
-    function drawMemoStrokeIntoPictureContext(ctx, stroke, rect, width, height) {
-      const points = Array.isArray(stroke && stroke.points) ? stroke.points : [];
-      if (!points.length || !rect || !rect.w || !rect.h) return;
-      ctx.save();
-      ctx.rect(0, 0, width, height);
-      ctx.clip();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = Math.max(1, Number(stroke.size) || 1) * memoStrokeScale(width, height);
-      ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
-      ctx.strokeStyle = stroke.color || '#111111';
-      function localX(point) { return (point.x - rect.x) / rect.w * width; }
-      function localY(point) { return (point.y - rect.y) / rect.h * height; }
-      ctx.beginPath();
-      ctx.moveTo(localX(points[0]), localY(points[0]));
-      if (points.length === 1) {
-        const radius = Math.max(0.5, ctx.lineWidth / 2);
-        ctx.arc(localX(points[0]), localY(points[0]), radius, 0, Math.PI * 2);
-        if (stroke.tool === 'eraser') ctx.fill();
-        else {
-          ctx.fillStyle = stroke.color || '#111111';
-          ctx.fill();
-        }
-      } else {
-        for (let i = 1; i < points.length; i += 1) {
-          ctx.lineTo(localX(points[i]), localY(points[i]));
-        }
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    function refreshMemoPictureCaptureForCut(cutId, pageNo) {
-      const cut = state.project.cuts.find(function(item) { return item.id === cutId; });
-      if (!cut) return false;
-      const page = getMemoPageData(pageNo || state.project.currentPage);
-      const strokes = page.strokes.filter(function(stroke) {
-        return stroke.capturedPictureCutId === cutId;
-      });
-      cut.meta = cut.meta || {};
-      if (!strokes.length) {
-        if (cut.meta.memoPictureCapture) {
-          cut.pictureDataUrl = '';
-          cut.pictureFileName = '';
-          cut.pictureMime = '';
-          delete cut.meta.memoPictureCapture;
-          delete cut.meta.memoPicturePage;
-          return true;
-        }
-        return false;
-      }
-      const rect = memoPictureHitboxes().find(function(item) { return item.cutId === cutId; }) || fallbackMemoPictureRectForCut(cutId);
-      if (!rect) return false;
-      const canvas = document.createElement('canvas');
-      canvas.width = LAYER_DRAWING_WIDTH;
-      canvas.height = LAYER_DRAWING_HEIGHT;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      strokes.forEach(function(stroke) {
-        drawMemoStrokeIntoPictureContext(ctx, stroke, rect, canvas.width, canvas.height);
-      });
-      const dataUrl = canvas.toDataURL('image/png');
-      cut.pictureDataUrl = dataUrl;
-      cut.pictureFileName = '';
-      cut.pictureMime = 'image/png';
-      cut.meta.memoPictureCapture = true;
-      cut.meta.memoPicturePage = pageNo || state.project.currentPage;
-      normalizeConteLayers(state.project);
-      normalizeLayerDrawings(state.project);
-      return true;
-    }
-
-    function refreshMemoPictureCaptureForStroke(stroke, pageNo) {
-      if (!stroke || !stroke.capturedPictureCutId) return false;
-      return refreshMemoPictureCaptureForCut(stroke.capturedPictureCutId, pageNo || stroke.capturedPicturePage || state.project.currentPage);
-    }
-
-    function captureMemoStrokeAsPictureIfNeeded(stroke, pageNo) {
-      const target = memoPictureCaptureTargetForStroke(stroke);
-      if (!target) return false;
-      const cut = state.project.cuts.find(function(item) { return item.id === target.cutId; });
-      if (!cut) return false;
-      cut.meta = cut.meta || {};
-      if ((pictureSrcForCut(cut) || layerDrawingEntriesForCut(state.project, cut.id).length) && !cut.meta.memoPictureCapture) return false;
-      stroke.capturedPictureCutId = cut.id;
-      stroke.capturedPicturePage = pageNo || state.project.currentPage;
-      return refreshMemoPictureCaptureForCut(cut.id, stroke.capturedPicturePage);
-    }
-
-    function markMemoStrokePictureCapturePendingIfNeeded(stroke, pageNo) {
-      const target = memoPictureCaptureTargetForStroke(stroke);
-      if (!target) return false;
-      const cut = state.project.cuts.find(function(item) { return item.id === target.cutId; });
-      if (!cut) return false;
-      cut.meta = cut.meta || {};
-      if ((pictureSrcForCut(cut) || layerDrawingEntriesForCut(state.project, cut.id).length) && !cut.meta.memoPictureCapture) return false;
-      stroke.capturedPictureCutId = cut.id;
-      stroke.capturedPicturePage = pageNo || state.project.currentPage;
-      markMemoPictureCapturePending(stroke);
-      return true;
-    }
-
-    function refreshAfterMemoPictureCapture() {
-      if (state.videoEditMode) {
-        guardedRender('timing', renderTimingDashboard);
-        guardedRender('stage', renderStageView);
-      } else {
-        guardedRender('stage', renderStageView);
-        guardedRender('memo', redrawMemoCanvas);
-      }
-      guardedRender('inspector', renderInspector);
     }
 
     function redrawMemoCanvas() {
@@ -36460,10 +36296,7 @@
       const stroke = page.strokes.pop();
       if (!stroke) return;
       page.redo.push(stroke);
-      clearMemoPictureCapturePending(stroke);
-      const captured = refreshMemoPictureCaptureForStroke(stroke, state.project.currentPage);
       redrawMemoCanvas();
-      if (captured) refreshAfterMemoPictureCapture();
       updateMemoUndoRedoButtonsOnly();
       scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
@@ -36490,9 +36323,7 @@
       const stroke = page.redo.pop();
       if (!stroke) return;
       page.strokes.push(stroke);
-      const captured = stroke.capturedPictureCutId ? (markMemoPictureCapturePending(stroke), false) : refreshMemoPictureCaptureForStroke(stroke, state.project.currentPage);
       redrawMemoCanvas();
-      if (captured) refreshAfterMemoPictureCapture();
       updateMemoUndoRedoButtonsOnly();
       scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
     }
@@ -36517,11 +36348,8 @@
         clearActiveLayerCanvasTargets();
         if (transformRef) refreshMemoEditOverlays(transformRef);
         updateMemoSpacePanCursorClass();
-        if (pendingMemoPictureCaptureSet().size) flushDeferredMemoComposition({ render: true });
-        else {
-          pendingLayerDrawingRefSet().clear();
-          refreshMemoCompositeDirtyFlag();
-        }
+        if (pendingLayerDrawingRefSet().size) flushDeferredMemoComposition({ render: true });
+        else refreshMemoCompositeDirtyFlag();
       }
       updateMemoUI();
     }
@@ -37402,13 +37230,6 @@
       }
     }
 
-    function handleDeferredMemoCompositionTrigger(event) {
-      if (!pendingMemoPictureCaptureSet().size) return;
-      const target = event && event.target;
-      if (target && (target.closest && target.closest('#memoCanvas, #videoMemoCanvas'))) return;
-      flushDeferredMemoComposition({ render: true });
-    }
-
     function handleVideoMemoAutoOffPointerDown(event) {
       return;
     }
@@ -37766,7 +37587,6 @@
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
       document.addEventListener('pointermove', continueCameraFrameDrag);
       document.addEventListener('pointerdown', handleVideoMemoAutoOffPointerDown, true);
-      document.addEventListener('pointerdown', handleDeferredMemoCompositionTrigger, true);
       document.addEventListener('pointerdown', function(event) {
         const menu = document.getElementById('conteLayerContextMenu');
         if (menu && !menu.hidden && !event.target.closest('#conteLayerContextMenu')) hideConteLayerContextMenu();
