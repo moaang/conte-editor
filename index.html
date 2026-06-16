@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver030</title>
+  <title>Conte Editor Prototype ver031</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -3160,6 +3160,10 @@
       background: #fff;
       box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
       color: #111;
+    }
+
+    .video-preview-screen.memo-active {
+      overflow: visible;
     }
 
     .video-preview-screen.paper-frame-active {
@@ -6760,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver030</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver031</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6797,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '030';
+    const APP_DISPLAY_VERSION = '031';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -34478,6 +34482,15 @@
       return false;
     }
 
+    function memoTargetAllowsOutsideCanvas(layerTarget) {
+      // Only expandable komas and BG layers may draw / select in the "outside" (gray stage) area.
+      if (!layerTarget) return false;
+      if (memoLayerTargetIsExpandable(layerTarget)) return true;
+      if (layerTarget.layerRole === 'bg') return true;
+      const found = layerTarget.layerId ? findConteLayerById(state.project, layerTarget.layerId) : null;
+      return Boolean(found && found.layer && found.layer.layerRole === 'bg');
+    }
+
     function beginMemoRasterDraw(event, canvas, layerTarget, point, localPoint) {
       // Two independent properties (previously conflated into one "fixedDrawBounds" flag):
       //  - initialDrawBounds: the STARTING canvas region. Paper = full 480x270 white canvas; video =
@@ -35732,6 +35745,27 @@
         event.stopPropagation();
       }
       return started;
+    }
+
+    function beginMemoDrawFromViewport(event) {
+      // Let pen/eraser/lasso strokes START in the gray "outside" area (the stage around the white
+      // canvas), but only for expandable komas and BG layers. Mirrors beginMemoTransformFromViewport:
+      // catch stage-level presses that are NOT on the draw canvas, then re-dispatch to the normal
+      // begin handler (which finds the target and sets pointer capture so moves keep flowing).
+      if (state.memoRasterOp) return false;
+      if (!memoInteractionActive() || state.memoSpacePanActive || event.button !== 0) return false;
+      if (!memoPrimaryPointerDownAllowed(event)) return false;
+      if (state.memoEyedropper) return false;
+      const tool = state.memoEditTool;
+      if (tool === 'transform' || tool === 'perspective' || tool === 'camera') return false;
+      const stage = event.target && event.target.closest ? event.target.closest('.paper-stage') : null;
+      if (!stage) return false;
+      if (event.target.closest && event.target.closest('#memoCanvas, #videoMemoCanvas')) return false;
+      const layerTarget = currentMemoTransformLayerTarget();
+      if (!layerTarget || !memoTargetAllowsOutsideCanvas(layerTarget)) return false;
+      if (state.videoEditMode) beginVideoMemoStroke(event);
+      else beginMemoStroke(event);
+      return Boolean(state.memoRasterOp);
     }
 
     function continueMemoTransformDocument(event) {
@@ -37588,6 +37622,7 @@
       addMemoCanvasTouchGuards(canvas);
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
+      document.addEventListener('pointerdown', beginMemoDrawFromViewport);
       document.addEventListener('pointermove', continueCameraFrameDrag);
       document.addEventListener('pointerdown', handleVideoMemoAutoOffPointerDown, true);
       document.addEventListener('pointerdown', function(event) {
