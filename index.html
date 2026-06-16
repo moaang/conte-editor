@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver022</title>
+  <title>Conte Editor Prototype ver023</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver022</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver023</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '022';
+    const APP_DISPLAY_VERSION = '023';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -33151,36 +33151,16 @@
       return true;
     }
 
-    function memoFixedDrawInkRect(op, editRect) {
-      // Tight layer-pixel box of the stroke, derived from its points (NO getImageData), padded for
-      // pen width and clamped to the op canvas rect. Returns null to fall back to the full editRect.
-      const stroke = op && op.stroke;
-      const points = stroke && Array.isArray(stroke.points) ? stroke.points : null;
-      if (!points || !points.length || !editRect) return null;
-      const bounds = memoLayerPointsBounds(points, memoStrokeLayerPadPx(stroke) + 1);
-      if (!bounds) return null;
-      const minX = Math.max(editRect.x, bounds.x);
-      const minY = Math.max(editRect.y, bounds.y);
-      const maxX = Math.min(editRect.x + editRect.w, bounds.x + bounds.w);
-      const maxY = Math.min(editRect.y + editRect.h, bounds.y + bounds.h);
-      if (maxX <= minX || maxY <= minY) return null;
-      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-    }
-
     function mergedMemoFixedDrawCanvas(op) {
       if (!op || !op.canvas || !op.fixedVisibleCanvas) return null;
+      // Fixed (normal) komas save the whole pinned canvas region (480x270) so the stored bitmap rect
+      // stays stable per stroke — no per-stroke canvas resize/jitter. PNG encode of this size is ~1-2ms,
+      // so cropping to the ink box is not worth the geometry churn. Expandable/BG komas use the dynamic
+      // ensureMemoRasterOpBounds path instead.
       const editRect = memoRasterOpRect(op);
       const baseRect = op.baseBitmapRect || null;
       const baseCanvas = op.baseBitmapCanvas || null;
-      // Option A: instead of re-encoding the whole layer every stroke, save only the stroke's ink
-      // box (from points, no pixel scan) unioned with the existing bitmap rect. The display canvas
-      // stays full-size via preserveActiveCanvasRect, so this only shrinks the stored/encoded bitmap.
-      const drawing = op.drawingRef ? getLayerDrawingData(state.project, op.drawingRef) : null;
-      const hasInk = layerDrawingHasInk(drawing);
-      // Cropping is safe only when the existing ink can be reproduced (base snapshot present).
-      const canCrop = !hasInk || (baseCanvas && baseRect);
-      const inkRect = canCrop ? (memoFixedDrawInkRect(op, editRect) || editRect) : editRect;
-      const unionRect = memoUnionLayerRect(hasInk && baseRect ? baseRect : null, inkRect);
+      const unionRect = memoUnionLayerRect(baseCanvas && baseRect ? baseRect : null, editRect);
       if (!unionRect) return null;
       const canvas = document.createElement('canvas');
       canvas.width = unionRect.w;
