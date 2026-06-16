@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver005</title>
+  <title>Conte Editor Prototype ver006</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -1508,6 +1508,14 @@
     .workspace.video-edit-active .paper-stage {
       place-items: center center;
       overflow: hidden;
+      touch-action: none;
+    }
+
+    /* While drawing memos on paper, stop iPad Safari from treating a pen direction change as a
+       scroll gesture on the scrollable .paper-stage (which would fire pointercancel and drop the
+       stroke). Pan instead uses space-drag / viewport pan. Progressive enhancement: ignored where
+       :has() is unsupported, and the canvas itself is already touch-action:none. */
+    .paper-stage:has(.conte-page.memo-active) {
       touch-action: none;
     }
 
@@ -6747,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver005</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver006</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6784,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '005';
+    const APP_DISPLAY_VERSION = '006';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -36260,29 +36268,11 @@
     function cancelActiveMemoRasterStroke(event) {
       const op = state.memoRasterOp;
       if (!op || state.memoPointerId !== event.pointerId) return false;
-      if (op.type !== 'draw') return endActiveMemoRasterStrokeFromDocument(event);
-      if (event.cancelable) event.preventDefault();
-      event.stopPropagation();
-      const target = op.target || {};
-      const canvas = target.type === 'video-conte-layer'
-        ? document.getElementById('videoMemoCanvas')
-        : document.getElementById('memoCanvas');
-      if (canvas && canvas.releasePointerCapture && event.type !== 'lostpointercapture') {
-        try { canvas.releasePointerCapture(event.pointerId); } catch (error) {}
-      }
-      const drawingRef = op.drawingRef;
-      state.memoPointerId = null;
-      state.memoCurrentStroke = null;
-      state.memoRasterOp = null;
-      state.memoPointerCanvasRect = null;
-      state.videoMemoPointerCanvasRect = null;
-      state.memoCurrentLayerRect = null;
-      cancelScheduledMemoCanvasRedraw();
-      cancelScheduledVideoMemoCanvasRedraw();
-      redrawActiveLayerCanvasTargets(drawingRef);
-      clearActiveLayerCanvasTargets();
-      updateMemoUndoRedoButtonsOnly();
-      return true;
+      // pointercancel / lostpointercapture: on iPad a system gesture (or capture loss) can interrupt
+      // a stroke mid-draw. Discarding it makes the pen look "unrecognized" and, if state were left
+      // set, would also block the next stroke. So COMMIT whatever was drawn and always reset state,
+      // exactly like a normal pointerup. (lasso/stamp/transform already commit via this path.)
+      return endActiveMemoRasterStrokeFromDocument(event);
     }
 
     function endActiveMemoRasterStrokeFromDocument(event) {
@@ -36305,6 +36295,7 @@
         canvas.addEventListener('pointermove', continueVideoMemoStroke);
         canvas.addEventListener('pointerup', endVideoMemoStroke);
         canvas.addEventListener('pointercancel', cancelActiveMemoRasterStroke);
+        canvas.addEventListener('lostpointercapture', cancelActiveMemoRasterStroke);
         canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
       }
     }
@@ -37668,6 +37659,7 @@
       canvas.addEventListener('pointermove', continueMemoStroke);
       canvas.addEventListener('pointerup', endMemoStroke);
       canvas.addEventListener('pointercancel', cancelActiveMemoRasterStroke);
+      canvas.addEventListener('lostpointercapture', cancelActiveMemoRasterStroke);
       canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
