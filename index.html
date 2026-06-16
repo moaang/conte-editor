@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver026</title>
+  <title>Conte Editor Prototype ver027</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6760,7 +6760,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver026</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver027</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6797,7 +6797,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '026';
+    const APP_DISPLAY_VERSION = '027';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -33250,7 +33250,7 @@
     function drawCurrentLayerStrokeSegment(stroke, fromPoint, toPoint) {
       const op = state.memoRasterOp;
       if (op && op.type === 'draw' && String(op.drawingRef || '') === String(stroke && stroke.layerDrawingRef || '')) {
-        if (!op.fixedDrawBounds) ensureMemoRasterOpBounds(op, memoLayerPointsBounds([fromPoint, toPoint], memoStrokeLayerPadPx(stroke)));
+        if (op.allowExpand) ensureMemoRasterOpBounds(op, memoLayerPointsBounds([fromPoint, toPoint], memoStrokeLayerPadPx(stroke)));
       }
       const targets = Array.isArray(state.memoActiveLayerCanvasEls) ? state.memoActiveLayerCanvasEls : [];
       targets.forEach(function(canvas) {
@@ -34640,15 +34640,20 @@
     }
 
     function beginMemoRasterDraw(event, canvas, layerTarget, point, localPoint) {
-      // Expandable komas draw on an UNpinned canvas that grows past 480x270 via
-      // ensureMemoRasterOpBounds, so ink can extend outside the white canvas. Normal komas stay
-      // pinned to 480x270 for stable coordinates. BG keeps its existing (pinned) behavior.
+      // Two independent properties (previously conflated into one "fixedDrawBounds" flag):
+      //  - initialDrawBounds: the STARTING canvas region. Paper = full 480x270 white canvas; video =
+      //    the preview-covering bounds, which already include the gray margin around the white frame.
+      //  - allowExpand: whether the canvas may grow PAST that region as the stroke goes outside it.
+      // Normal komas: pinned region, no expand (stable coordinates). Expandable komas: same starting
+      // region but allowed to grow, so ink can extend into / start in the gray area.
       const isExpandable = memoLayerTargetIsExpandable(layerTarget);
+      const isVideoTarget = layerTarget.type === 'video-conte-layer';
       const fixedVisibleCanvas = !memoLayerTargetIsBg(layerTarget) && !isExpandable;
-      const fixedDrawBounds = isExpandable ? null : memoFixedDrawLayerBoundsForTarget(layerTarget, canvas);
+      const initialDrawBounds = memoFixedDrawLayerBoundsForTarget(layerTarget, canvas);
+      const allowExpand = isExpandable;
       const opTarget = memoRasterOpTargetFromLayerTarget(layerTarget, {
         bitmapEdit: true,
-        editRect: fixedVisibleCanvas ? fixedDrawBounds : null
+        editRect: (fixedVisibleCanvas || (isVideoTarget && isExpandable)) ? initialDrawBounds : null
       });
       if (!opTarget) return false;
       const stroke = {
@@ -34664,12 +34669,12 @@
         layerId: layerTarget.layerId,
         cutId: layerTarget.cutId
       };
-      state.memoRasterOp = Object.assign(opTarget, { type: 'draw', stroke: stroke, fixedDrawBounds: fixedDrawBounds, fixedVisibleCanvas: fixedVisibleCanvas });
+      state.memoRasterOp = Object.assign(opTarget, { type: 'draw', stroke: stroke, fixedVisibleCanvas: fixedVisibleCanvas, allowExpand: allowExpand });
       state.memoCurrentStroke = stroke;
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
       safeMemoSetPointerCapture(canvas, event.pointerId);
-      ensureMemoRasterOpBounds(state.memoRasterOp, fixedDrawBounds);
+      ensureMemoRasterOpBounds(state.memoRasterOp, initialDrawBounds);
       drawCurrentLayerStrokeSegment(stroke, null, stroke.points[0]);
       updateMemoUndoRedoButtonsOnly();
       return true;
