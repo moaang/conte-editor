@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver031</title>
+  <title>Conte Editor Prototype ver032</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver031</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver032</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '031';
+    const APP_DISPLAY_VERSION = '032';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -34498,14 +34498,23 @@
       //  - allowExpand: whether the canvas may grow PAST that region as the stroke goes outside it.
       // Normal komas: pinned region, no expand (stable coordinates). Expandable komas: same starting
       // region but allowed to grow, so ink can extend into / start in the gray area.
+      const isBg = memoLayerTargetIsBg(layerTarget);
       const isExpandable = memoLayerTargetIsExpandable(layerTarget);
-      const isVideoTarget = layerTarget.type === 'video-conte-layer';
-      const fixedVisibleCanvas = !memoLayerTargetIsBg(layerTarget) && !isExpandable;
+      const fixedVisibleCanvas = !isBg && !isExpandable;
       const initialDrawBounds = memoFixedDrawLayerBoundsForTarget(layerTarget, canvas);
-      const allowExpand = isExpandable;
+      // Expandable komas AND BG layers may grow past the white canvas into the gray stage area.
+      const allowExpand = isExpandable || isBg;
+      // The active canvas must cover BOTH the drawable region AND any EXISTING ink. For expandable/BG
+      // komas a previous stroke may extend into the gray, so without unioning the existing bitmap rect
+      // here the previous out-of-canvas stroke gets cropped off and vanishes when the next stroke starts.
+      const opDrawing = layerTarget.drawing || (layerTarget.drawingRef ? getLayerDrawingData(state.project, layerTarget.drawingRef) : null);
+      let editRect = initialDrawBounds;
+      if (allowExpand && layerDrawingHasInk(opDrawing)) {
+        editRect = memoUnionLayerRect(initialDrawBounds, layerDrawingBitmapRect(opDrawing));
+      }
       const opTarget = memoRasterOpTargetFromLayerTarget(layerTarget, {
         bitmapEdit: true,
-        editRect: (fixedVisibleCanvas || (isVideoTarget && isExpandable)) ? initialDrawBounds : null
+        editRect: editRect
       });
       if (!opTarget) return false;
       const stroke = {
