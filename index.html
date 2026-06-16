@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver012</title>
+  <title>Conte Editor Prototype ver013</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver012</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver013</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '012';
+    const APP_DISPLAY_VERSION = '013';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23354,6 +23354,7 @@
     }
 
     function patchVideoPreviewConteLayersIfCurrent(totalFramesOverride) {
+      if (state.memoRasterOp) { state.videoPreviewRebuildDeferred = true; return false; }
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl || stageEl.hidden) return false;
       const totalFrames = Math.max(1, Math.round(Number(totalFramesOverride) || videoTimelineDisplayTotalFrames(state.project)));
@@ -23932,6 +23933,10 @@
     }
 
     function renderVideoPreviewForSlot(stageEl, slot, activeClips, previewKey, updateTimecodeOnly) {
+      // Never rebuild the preview DOM (which recreates the layer canvas) while a memo stroke is
+      // being drawn on it — the rebuild detaches/clears the canvas and the in-progress stroke
+      // vanishes. Defer; endVideoMemoStroke reconciles after the stroke commits.
+      if (state.memoRasterOp) { state.videoPreviewRebuildDeferred = true; return; }
       const slotPictureSrc = slot && slot.cut ? pictureSrcForCut(slot.cut) : '';
       const videoClip = !videoMediaTrackIsHidden(state.project)
         ? videoMediaClipAtFrame(state.project, state.videoPlayheadFrames, slot && slot.cut && slot.cut.id)
@@ -36286,6 +36291,10 @@
       clearActiveLayerCanvasTargets();
       refreshAfterAutoCreatedLayerKomaDraw(op);
       updateMemoUndoRedoButtonsOnly();
+      if (state.videoPreviewRebuildDeferred) {
+        state.videoPreviewRebuildDeferred = false;
+        scheduleVideoPreviewRefresh(0);
+      }
     }
 
     function cancelActiveMemoRasterStroke(event) {
