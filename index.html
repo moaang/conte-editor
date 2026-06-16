@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver016</title>
+  <title>Conte Editor Prototype ver017</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver016</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver017</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '016';
+    const APP_DISPLAY_VERSION = '017';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39191,7 +39191,7 @@
       const hud = document.createElement('div');
       hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,Menlo,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:60vw;letter-spacing:0.2px';
       (document.body || document.documentElement).appendChild(hud);
-      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-' };
+      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-', realMiss: 0, lastRealMiss: '-', lastRealMissStack: '-' };
       let lt = 0, ltMax = 0;
       try {
         new PerformanceObserver(function(list) {
@@ -39227,15 +39227,23 @@
           if (!isMemoCanvas(t)) {
             ev.missDown = (ev.missDown || 0) + 1;
             ev.lastMiss = d;
-            // What is actually stacked under the pen at this spot? Reveals whether the drawing
-            // canvas is present-but-covered, and by which element.
-            const stack = (document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : []).slice(0, 4).map(function(el) {
+            // Only misses that land OVER the drawing canvas's rect are real "not recognized" bugs;
+            // taps on toolbar buttons etc. are expected. Flag the in-canvas-area ones separately.
+            const mc = document.getElementById('videoMemoCanvas') || document.getElementById('memoCanvas');
+            let inArea = false;
+            if (mc) { const r = mc.getBoundingClientRect(); inArea = r.width > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
+            const stack = (document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : []).slice(0, 5).map(function(el) {
               let s = String(el.tagName || '?').toLowerCase();
               if (el.id) s += '#' + el.id;
               else if (typeof el.className === 'string' && el.className) s += '.' + el.className.split(' ')[0];
               return s;
             });
             ev.lastMissStack = stack.join(' > ');
+            if (inArea) {
+              ev.realMiss = (ev.realMiss || 0) + 1;
+              ev.lastRealMiss = d;
+              ev.lastRealMissStack = stack.join(' > ');
+            }
           }
         } catch (err) {}
         if (!isMemoCanvas(e.target)) return;
@@ -39282,10 +39290,9 @@
           'PERF ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  op:' + opNow + '\n' +
           'lastBegin:' + beginTrace + '  lastMove:' + moveTrace + '\n' +
           'down ' + ev.down + ' up ' + ev.up + ' cancel ' + ev.cancel + ' lost ' + ev.lost + '\n' +
-          'missDown ' + ev.missDown + ' canvasInDom ' + ev.memoCanvasInDom + '\n' +
-          'lastDown: ' + ev.lastDown + '\n' +
-          'lastMiss: ' + ev.lastMiss + '\n' +
-          'missStack: ' + ev.lastMissStack + '\n' +
+          'missDown ' + ev.missDown + ' (in-canvas REAL ' + ev.realMiss + ') canvasInDom ' + ev.memoCanvasInDom + '\n' +
+          'realMiss: ' + ev.lastRealMiss + '\n' +
+          'realStack: ' + ev.lastRealMissStack + '\n' +
           'move ' + ev.move + ' coalesced ' + ev.coalesced + '\n' +
           'longtasks ' + lt + ' maxBlock ' + Math.round(ltMax) + 'ms\n' +
           'recent strokes (newest first):\n' +
