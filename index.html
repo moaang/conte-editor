@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver024</title>
+  <title>Conte Editor Prototype ver025</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6409,6 +6409,11 @@
                 <input class="shortcut-input" data-shortcut-action="paraparaPreview" readonly />
                 <button class="shortcut-clear" type="button" data-shortcut-clear="paraparaPreview">x</button>
               </div>
+              <div class="shortcut-row">
+                <span>Selection clear</span>
+                <input class="shortcut-input" data-shortcut-action="lassoSelectClear" readonly />
+                <button class="shortcut-clear" type="button" data-shortcut-clear="lassoSelectClear">x</button>
+              </div>
               <div class="shortcut-actions">
                 <button id="shortcutDefaultsBtn" type="button">Defaults</button>
                 <button id="shortcutClearAllBtn" type="button">Clear all</button>
@@ -6755,7 +6760,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver024</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver025</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6797,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '024';
+    const APP_DISPLAY_VERSION = '025';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -6824,7 +6829,7 @@
     const SHORTCUT_STORAGE_KEY = 'conteEditorShortcutSettings.v1';
     const EDITOR_UI_STORAGE_KEY = 'conteEditorUiState.v1';
     const ONION_SKIN_STORAGE_KEY = 'conteEditorOnionSkinSettings.v1';
-    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'clearDrawing', 'onionSkinToggle', 'paraparaPreview'];
+    const SHORTCUT_ACTIONS = ['brushCycle', 'eraserToggle', 'sizeDown', 'sizeUp', 'clearDrawing', 'onionSkinToggle', 'paraparaPreview', 'lassoSelectClear'];
     const SHORTCUT_DEFAULTS = {
       brushCycle: 'b',
       eraserToggle: 'e',
@@ -6832,7 +6837,8 @@
       sizeUp: ']',
       clearDrawing: 'backspace',
       onionSkinToggle: 'w',
-      paraparaPreview: 's'
+      paraparaPreview: 's',
+      lassoSelectClear: 'd'
     };
     const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialogue', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
     const DIALOGUE_AREA_TYPES = ['dialogue', 'narration', 'telop', 'monologue'];
@@ -33460,8 +33466,24 @@
       };
     }
 
+    function expandableMemoFallbackHitbox() {
+      // When the pointer starts OUTSIDE every panel frame (in the page margin) and the currently
+      // selected koma is expandable, route the stroke to that koma using its panel frame as the
+      // coordinate origin — so out-of-canvas sketch strokes can start in the margin too.
+      const selId = (selectedConteLayerIdArray()[0]) || '';
+      if (!selId) return null;
+      const found = findConteLayerById(state.project, selId);
+      if (!found || !found.layer || !found.layer.expandable) return null;
+      const hitboxes = memoPictureHitboxes();
+      if (!hitboxes.length) return null;
+      const curCut = currentPicturePanelId();
+      let box = curCut ? hitboxes.find(function(b) { return b.cutId === curCut; }) : null;
+      if (!box) box = hitboxes.find(function(b) { return b.cutId === found.layer.startPanelCutId; });
+      return box || null;
+    }
+
     function conteLayerMemoTargetForPoint(point) {
-      const rect = memoPictureHitboxAtPoint(point);
+      const rect = memoPictureHitboxAtPoint(point) || expandableMemoFallbackHitbox();
       if (!rect) return null;
       const selectedEntry = selectedConteLayerDrawingEntryForCut(state.project, rect.cutId, { ignoreSelectedPanel: true });
       const createdEntry = selectedEntry ? null : createConteLayerKomaForSelectedRow(state.project, rect.cutId);
@@ -37333,6 +37355,7 @@
       }
       if (action === 'onionSkinToggle') toggleOnionSkinEnabled();
       if (action === 'paraparaPreview') showParaparaPreviousPanelPreview();
+      if (action === 'lassoSelectClear') clearMemoSelection();
       updateMemoUI();
       return true;
     }
