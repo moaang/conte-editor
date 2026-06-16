@@ -16103,6 +16103,16 @@
       return true;
     }
 
+    function syncVideoDrawingSelectionToPlayhead() {
+      if (!state.videoEditMode) return false;
+      const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
+      const panelId = slot && slot.cut && slot.cut.id || '';
+      if (!panelId) return false;
+      return Boolean(syncPlayheadConteLayerCellSelection(state.project, panelId, {
+        activate: true
+      }));
+    }
+
     function syncVideoPlayheadToSelectedCut(project) {
       const currentPanelId = currentPicturePanelId();
       if (!project || !currentPanelId) return false;
@@ -23463,15 +23473,45 @@
       return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
     }
 
+    function cssPercentValue(style, name, fallback) {
+      const raw = String(style && style.getPropertyValue ? style.getPropertyValue(name) : '').trim();
+      const match = raw.match(/^(-?\d+(?:\.\d+)?)%$/);
+      return match ? Number(match[1]) / 100 : fallback;
+    }
+
+    function clientRectFromPercentBox(baseRect, left, top, width, height) {
+      if (!baseRect || !baseRect.width || !baseRect.height) return null;
+      return {
+        left: baseRect.left + baseRect.width * left,
+        top: baseRect.top + baseRect.height * top,
+        right: baseRect.left + baseRect.width * (left + width),
+        bottom: baseRect.top + baseRect.height * (top + height),
+        width: baseRect.width * width,
+        height: baseRect.height * height
+      };
+    }
+
     function videoPreviewDrawableTouchRect(stage) {
       const screen = stage && stage.querySelector ? stage.querySelector('.video-preview-screen') : null;
-      if (!screen) return null;
+      if (!screen || !screen.getBoundingClientRect) return null;
+      const screenRect = screen.getBoundingClientRect();
+      if (screen.classList.contains('memo-active') && !screen.classList.contains('paper-frame-active')) {
+        const style = window.getComputedStyle ? window.getComputedStyle(screen) : null;
+        const drawableRect = clientRectFromPercentBox(
+          screenRect,
+          cssPercentValue(style, '--paper-drawing-left', 0),
+          cssPercentValue(style, '--paper-drawing-top', 0),
+          cssPercentValue(style, '--paper-drawing-width', 1),
+          cssPercentValue(style, '--paper-drawing-height', 1)
+        );
+        if (drawableRect) return drawableRect;
+      }
       const canvas = screen.querySelector('#videoMemoCanvas');
       const canvasHitRect = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
-      if (canvasHitRect) return canvasHitRect;
+      if (canvasHitRect && canvasHitRect.width && canvasHitRect.height) return canvasHitRect;
       const layered = screen.querySelector('.video-preview-layered');
       if (layered && layered.getBoundingClientRect) return layered.getBoundingClientRect();
-      return screen.getBoundingClientRect ? screen.getBoundingClientRect() : null;
+      return screenRect;
     }
 
     function touchEventHitsVideoPreviewDrawable(stage, event) {
@@ -23507,6 +23547,10 @@
       }, { passive: false });
       surface.addEventListener('touchmove', function(event) {
         if (!pinchStart || state.memoRasterOp || !event.touches || event.touches.length < 2) return;
+        if (touchEventHitsVideoPreviewDrawable(stage, event)) {
+          pinchStart = null;
+          return;
+        }
         const distance = touchPairDistance(event.touches);
         if (distance) {
           setVideoPreviewZoom(Math.round(clampVideoPreviewZoom(pinchStart.zoom * distance / Math.max(1, pinchStart.distance), pinchStart.zoom) * 100) / 100);
@@ -35404,32 +35448,46 @@
           updateMemoUndoRedoButtonsOnly();
           return;
         }
-        const target = selectedConteLayerIsActiveOnCut(state.project, selectedLayer.layer.id, currentPicturePanelId()) || selectedLayer;
-        setActiveLayerCanvasTargets({
-          cutId: target.ownerCut && target.ownerCut.id || currentPicturePanelId(),
-          drawingRef: ref,
-          layerId: selectedLayer.layer.id
-        });
-        const canvas = firstActiveLayerCanvas();
-        if (!canvas) return;
-        prepareLayerCanvasForRasterEdit(canvas, drawing);
+        const target = activeRasterSelectionTarget();
+        if (!target || !target.canvas || !target.selection || String(target.drawingRef || '') !== ref) return;
+        const canvas = target.canvas;
         const before = layerDrawingSnapshot(drawing);
-        const scratch = document.createElement('canvas');
-        scratch.width = canvas.width;
-        scratch.height = canvas.height;
-        scratch.getContext('2d').drawImage(canvas, 0, 0);
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(scratch, dx, dy);
-        if (state.memoSelection && state.memoSelection.drawingRef === ref && state.memoSelection.maskCanvas) {
-          const movedMask = document.createElement('canvas');
-          movedMask.width = LAYER_DRAWING_WIDTH;
-          movedMask.height = LAYER_DRAWING_HEIGHT;
-          movedMask.getContext('2d').drawImage(state.memoSelection.maskCanvas, dx, dy);
-          state.memoSelection.maskCanvas = movedMask;
-          state.memoSelection.bounds = memoSelectionBounds(movedMask);
+        const patch = selectedPatchCanvasFromTarget(target);
+        if (!patch) {
+          clearActiveLayerCanvasTargets();
+          return;
         }
-        setLayerDrawingBitmapFromCanvas(ref, canvas, before);
+        const layerBounds = memoSelectionLayerBounds(target.selection) || target.selection.bounds;
+        const offsetX = Math.round(Number(target.layerCanvasOffsetX) || 0);
+        const offsetY = Math.round(Number(target.layerCanvasOffsetY) || 0);
+        const drawX = Math.round(Number(layerBounds.x) || 0) + offsetX;
+        const drawY = Math.round(Number(layerBounds.y) || 0) + offsetY;
+        clearSelectionPixelsFromCanvas(target);
+        const shifted = document.createElement('canvas');
+        shifted.width = canvas.width;
+        shifted.height = canvas.height;
+        const shiftedCtx = shifted.getContext('2d');
+        shiftedCtx.drawImage(patch, drawX + Math.round(dx), drawY + Math.round(dy));
+        shiftedCtx.globalCompositeOperation = 'destination-in';
+        shiftedCtx.drawImage(
+          target.selection.maskCanvas,
+          memoSelectionBitmapX(target.selection) + offsetX,
+          memoSelectionBitmapY(target.selection) + offsetY
+        );
+        shiftedCtx.globalCompositeOperation = 'source-over';
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(shifted, 0, 0);
+        setLayerDrawingBitmapFromCanvas(ref, canvas, before, {
+          bitmapX: target.bitmapX,
+          bitmapY: target.bitmapY,
+          bitmapWidth: canvas.width,
+          bitmapHeight: canvas.height,
+          trimAlpha: true,
+          preserveActiveCanvas: true
+        });
+        refreshMemoEditOverlays(ref);
+        updateMemoUndoRedoButtonsOnly();
+        clearActiveLayerCanvasTargets();
         return;
       }
       const page = getMemoPageData(state.project.currentPage);
@@ -35868,6 +35926,7 @@
         state.videoMemoPointerCanvasRect = null;
         return;
       }
+      syncVideoDrawingSelectionToPlayhead();
       const point = getVideoMemoPointFromEvent(event);
       const rawPoint = getVideoMemoPointFromEventRaw(event);
       const layerTarget = videoConteLayerMemoTargetForPoint(point);
