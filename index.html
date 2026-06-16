@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver020</title>
+  <title>Conte Editor Prototype ver021</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver020</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver021</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '020';
+    const APP_DISPLAY_VERSION = '021';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -36346,7 +36346,24 @@
         canvas.addEventListener('pointerup', endVideoMemoStroke);
         canvas.addEventListener('pointercancel', cancelActiveMemoRasterStroke);
         canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
+        addMemoCanvasTouchGuards(canvas);
       }
+    }
+
+    function addMemoCanvasTouchGuards(canvas) {
+      // iPad Apple Pencil fires BOTH PointerEvents (pen) AND TouchEvents. touch-action:none does not
+      // reliably suppress the pencil's TouchEvents, so WebKit keeps them cancelable and runs its
+      // scroll/gesture decision — which pauses rendering and eats the stroke (finger is unaffected
+      // because touch-action:none does apply to it). Cancel the touch sequence ourselves so WebKit
+      // never enters that tracking state. Drawing itself uses pointer events, so this is safe.
+      if (!canvas || canvas.dataset.memoTouchGuard === 'true') return;
+      canvas.dataset.memoTouchGuard = 'true';
+      // Guard touchmove only — that is the cancelable event driving WebKit's scroll decision.
+      // Avoid touchstart/touchend so the pointer-event pipeline (which does the drawing) is untouched.
+      canvas.addEventListener('touchmove', function(event) {
+        if (!memoInteractionActive()) return;
+        if (event.cancelable) event.preventDefault();
+      }, { passive: false });
     }
 
     function updateMemoUndoRedoButtonsOnly() {
@@ -37709,6 +37726,7 @@
       canvas.addEventListener('pointerup', endMemoStroke);
       canvas.addEventListener('pointercancel', cancelActiveMemoRasterStroke);
       canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
+      addMemoCanvasTouchGuards(canvas);
       document.addEventListener('pointerdown', handleMemoSpacePanPointerDown);
       document.addEventListener('pointerdown', beginMemoTransformFromViewport);
       document.addEventListener('pointermove', continueCameraFrameDrag);
