@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver029</title>
+  <title>Conte Editor Prototype ver030</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6760,7 +6760,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver029</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver030</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6797,7 +6797,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '029';
+    const APP_DISPLAY_VERSION = '030';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39057,6 +39057,40 @@
     renderVersionInfoDialog();
     refresh();
     restoreWorkspaceHandle();
+
+    // ---- Minimal pointerdown-target probe. Inert unless URL contains "perf" (e.g. .../#perf). ----
+    // Tells what element a pointerdown actually hits, whether it is the drawing canvas, and the
+    // element stack at that point — to diagnose why starting a stroke in the white margin fails.
+    (function setupPointerDownProbe() {
+      if (!/perf/i.test(String(location.hash || '') + String(location.search || ''))) return;
+      const hud = document.createElement('div');
+      hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:62vw';
+      (document.body || document.documentElement).appendChild(hud);
+      let n = 0, last = '-', onCanvas = '-', stack = '-', began = '-';
+      function describe(el) {
+        if (!el) return 'none';
+        let s = String(el.tagName || '?').toLowerCase();
+        if (el.id) s += '#' + el.id;
+        else if (typeof el.className === 'string' && el.className) s += '.' + el.className.split(' ')[0];
+        return s;
+      }
+      document.addEventListener('pointerdown', function(e) {
+        n++;
+        const t = e.target;
+        last = describe(t);
+        onCanvas = (t && (t.id === 'memoCanvas' || t.id === 'videoMemoCanvas')) ? 'YES' : 'no';
+        try {
+          stack = (document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : []).slice(0, 5).map(describe).join(' > ');
+        } catch (err) {}
+        Promise.resolve().then(function() { try { began = state.memoRasterOp ? 'op:' + (state.memoRasterOp.type || 'op') : 'NO-OP'; } catch (err) { began = 'err'; } });
+      }, true);
+      (function tick() {
+        hud.textContent = 'PROBE ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') +
+          '\ndowns ' + n + '   onDrawCanvas ' + onCanvas + '   ' + began +
+          '\nlast: ' + last + '\nstack: ' + stack;
+        requestAnimationFrame(tick);
+      })();
+    })();
   </script>
 </body>
 </html>
