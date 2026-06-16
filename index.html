@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver021</title>
+  <title>Conte Editor Prototype ver022</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver021</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver022</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '021';
+    const APP_DISPLAY_VERSION = '022';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -34632,7 +34632,6 @@
       ensureMemoRasterOpBounds(state.memoRasterOp, fixedDrawBounds);
       drawCurrentLayerStrokeSegment(stroke, null, stroke.points[0]);
       updateMemoUndoRedoButtonsOnly();
-      state.memoBeginTrace = 'draw-ok';
       return true;
     }
 
@@ -35893,9 +35892,8 @@
     }
 
     function beginMemoStroke(event) {
-      if (!state.memoMode || !memoPrimaryPointerDownAllowed(event)) { state.memoBeginTrace = 'p:mode/btn'; return; }
+      if (!state.memoMode || !memoPrimaryPointerDownAllowed(event)) return;
       if (state.memoRasterOp) {
-        state.memoBeginTrace = 'p:op-busy';
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -35914,7 +35912,6 @@
       const rawPoint = getMemoPointFromEventRaw(event);
       const layerTarget = conteLayerMemoTargetForPoint(point);
       if (!layerTarget) {
-        state.memoBeginTrace = 'p:no-target';
         state.memoPointerCanvasRect = null;
         state.timelineStatus = 'Select a picture panel with a drawing layer.';
         return;
@@ -35937,12 +35934,10 @@
     function continueMemoStroke(event) {
       if (continueMemoSpacePan(event)) return;
       if (!state.memoRasterOp || state.memoPointerId !== event.pointerId) {
-        state.memoMoveTrace = !state.memoRasterOp ? 'no-op' : ('pid ' + state.memoPointerId + '!=' + event.pointerId);
         if (!state.memoRasterOp) updateMemoStampPreviewFromMemoEvent(event);
         return;
       }
       event.preventDefault();
-      state.memoMoveTrace = 'ok';
       const point = getMemoPointFromEvent(event);
       const rawPoint = getMemoPointFromEventRaw(event);
       const op = state.memoRasterOp;
@@ -36135,28 +36130,25 @@
     }
 
     function beginVideoMemoStroke(event) {
-      if (!memoPrimaryPointerDownAllowed(event)) { state.memoBeginTrace = 'v:notallowed'; return; }
+      if (!memoPrimaryPointerDownAllowed(event)) return;
       if (state.memoRasterOp) {
-        state.memoBeginTrace = 'v:op-busy';
         event.preventDefault();
         event.stopPropagation();
         return;
       }
       if (state.memoEditTool === 'camera') {
-        state.memoBeginTrace = 'v:camera';
         event.preventDefault();
         event.stopPropagation();
         renderCameraFrameOverlay(document.getElementById('videoPreviewStage'));
         return;
       }
-      if (!memoInteractionActive()) { state.memoBeginTrace = 'v:inactive'; return; }
+      if (!memoInteractionActive()) return;
       event.preventDefault();
       event.stopPropagation();
       const canvas = ensureVideoPreviewReadyForDrawing(event.currentTarget);
-      if (beginMemoSpacePan(event, canvas)) { state.memoBeginTrace = 'v:spacepan'; return; }
+      if (beginMemoSpacePan(event, canvas)) return;
       state.videoMemoPointerCanvasRect = canvas ? videoMemoBaseRect(canvas) : null;
       if (state.memoEyedropper) {
-        state.memoBeginTrace = 'v:eyedropper';
         pickMemoColorFromEvent(event, canvas);
         state.videoMemoPointerCanvasRect = null;
         return;
@@ -36166,7 +36158,6 @@
       const rawPoint = getVideoMemoPointFromEventRaw(event);
       const layerTarget = videoConteLayerMemoTargetForPoint(point);
       if (!layerTarget) {
-        state.memoBeginTrace = 'v:no-target';
         state.videoMemoPointerCanvasRect = null;
         return;
       }
@@ -36186,11 +36177,9 @@
     function continueVideoMemoStroke(event) {
       if (continueMemoSpacePan(event)) return;
       if (!state.memoRasterOp || state.memoPointerId !== event.pointerId) {
-        state.memoMoveTrace = !state.memoRasterOp ? 'no-op' : ('pid ' + state.memoPointerId + '!=' + event.pointerId);
         if (!state.memoRasterOp) updateMemoStampPreviewFromVideoEvent(event);
         return;
       }
-      state.memoMoveTrace = 'ok';
       event.preventDefault();
       event.stopPropagation();
       const rawPoint = getVideoMemoPointFromEventRaw(event);
@@ -39199,176 +39188,6 @@
     renderVersionInfoDialog();
     refresh();
     restoreWorkspaceHandle();
-
-    // ---- Input/perf diagnostic HUD. Inert unless the URL contains "perf" (e.g. .../#perf). ----
-    // Reads what actually happens to a failing stroke on-device (iPad has no console): are pointer
-    // moves arriving, did the op start, were points recorded, did it cancel, was the main thread
-    // blocked. This is measurement scaffolding; it can be deleted once the cause is pinned.
-    (function setupMemoPerfHud() {
-      if (!/perf/i.test(String(location.hash || '') + String(location.search || ''))) return;
-      const hud = document.createElement('div');
-      hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,Menlo,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:60vw;letter-spacing:0.2px';
-      (document.body || document.documentElement).appendChild(hud);
-      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-', realMiss: 0, lastRealMiss: '-', lastRealMissStack: '-', penD: 0, touchD: 0, mouseD: 0, penM: 0, penDraw: 0, touchDraw: 0, scrollCount: 0, lastScroll: '-', gesture: 0, vvResize: 0, selChg: 0, ctxMenu: 0, touchEvt: 0, touchMoveEvt: 0, lastTouchCancelable: 0, rafGap: 0, rafMaxGap: 0 };
-      let lastTickT = 0;
-      let lt = 0, ltMax = 0;
-      try {
-        new PerformanceObserver(function(list) {
-          list.getEntries().forEach(function(e) { lt++; if (e.duration > ltMax) ltMax = e.duration; });
-        }).observe({ entryTypes: ['longtask'] });
-      } catch (e) {}
-      function isMemoCanvas(t) { return !!t && (t.id === 'memoCanvas' || t.id === 'videoMemoCanvas'); }
-      let cur = null;
-      const recent = [];
-      function finish(kind) {
-        if (!cur) return;
-        let pts = 0;
-        try { pts = (state.memoCurrentStroke && state.memoCurrentStroke.points && state.memoCurrentStroke.points.length) || 0; } catch (e) {}
-        cur.end = kind;
-        cur.ms = Math.round(performance.now() - cur.t0);
-        cur.pts = pts;
-        if (cur.livePts > 0 || cur.opSeen) { if (cur.type === 'pen') ev.penDraw++; else if (cur.type === 'touch') ev.touchDraw++; }
-        recent.unshift(cur);
-        if (recent.length > 6) recent.pop();
-        cur = null;
-      }
-      document.addEventListener('pointerdown', function(e) {
-        ev.down++;
-        const pt = String(e.pointerType || '').toLowerCase();
-        if (pt === 'pen') ev.penD++; else if (pt === 'touch') ev.touchD++; else ev.mouseD++;
-        // Record EVERY pointerdown's target — even ones that miss the drawing canvas. The failing
-        // strokes the user reports may never hit memoCanvas/videoMemoCanvas at all (canvas removed
-        // or covered between strokes by a preview rebuild), so they'd otherwise be invisible here.
-        try {
-          const t = e.target;
-          let d = t ? (String(t.tagName || '?').toLowerCase()) : 'none';
-          if (t && t.id) d += '#' + t.id;
-          else if (t && t.className && typeof t.className === 'string' && t.className) d += '.' + t.className.split(' ')[0];
-          ev.lastDown = d;
-          ev.memoCanvasInDom = (document.getElementById('memoCanvas') || document.getElementById('videoMemoCanvas')) ? 1 : 0;
-          if (!isMemoCanvas(t)) {
-            ev.missDown = (ev.missDown || 0) + 1;
-            ev.lastMiss = d;
-            // Only misses that land OVER the drawing canvas's rect are real "not recognized" bugs;
-            // taps on toolbar buttons etc. are expected. Flag the in-canvas-area ones separately.
-            const mc = document.getElementById('videoMemoCanvas') || document.getElementById('memoCanvas');
-            let inArea = false;
-            if (mc) { const r = mc.getBoundingClientRect(); inArea = r.width > 0 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
-            const stack = (document.elementsFromPoint ? document.elementsFromPoint(e.clientX, e.clientY) : []).slice(0, 5).map(function(el) {
-              let s = String(el.tagName || '?').toLowerCase();
-              if (el.id) s += '#' + el.id;
-              else if (typeof el.className === 'string' && el.className) s += '.' + el.className.split(' ')[0];
-              return s;
-            });
-            ev.lastMissStack = stack.join(' > ');
-            if (inArea) {
-              ev.realMiss = (ev.realMiss || 0) + 1;
-              ev.lastRealMiss = d;
-              ev.lastRealMissStack = stack.join(' > ');
-            }
-          }
-        } catch (err) {}
-        if (!isMemoCanvas(e.target)) return;
-        if (cur) finish('preempt');
-        cur = { t0: performance.now(), moves: 0, maxGap: 0, lastT: performance.now(), opStarted: false, type: e.pointerType || '?', downId: e.pointerId, moveId: '-', livePts: 0, opSeen: 0, bt: '-', mt: '-', canvasRef: null, canvasTag: '-', det: 0, swp: 0, cover: '-', cz: '-', cvis: '-' };
-        // op is set synchronously by beginMemoStroke (bubble phase, runs after this capture listener)
-        Promise.resolve().then(function() { try { if (cur) cur.opStarted = !!state.memoRasterOp; } catch (e) {} });
-      }, true);
-      document.addEventListener('pointermove', function(e) {
-        ev.move++;
-        if (String(e.pointerType || '').toLowerCase() === 'pen') ev.penM++;
-        if (e.getCoalescedEvents) { try { ev.coalesced += e.getCoalescedEvents().length; } catch (err) {} }
-        if (cur) { const t = performance.now(), g = t - cur.lastT; if (g > cur.maxGap) cur.maxGap = g; cur.lastT = t; cur.moves++; cur.moveId = e.pointerId; }
-      }, true);
-      document.addEventListener('pointerup', function() { ev.up++; finish('up'); }, true);
-      document.addEventListener('pointercancel', function() { ev.cancel++; finish('cancel'); }, true);
-      document.addEventListener('lostpointercapture', function() { ev.lost++; finish('lost'); }, true);
-      // If the failing pencil strokes are Safari hijacking them as scroll/zoom gestures, these fire.
-      window.addEventListener('scroll', function(e) {
-        ev.scrollCount = (ev.scrollCount || 0) + 1;
-        const t = e.target === document || e.target === window ? (document.scrollingElement || document.documentElement) : e.target;
-        let d = t && t.tagName ? String(t.tagName).toLowerCase() : 'page';
-        if (t && t.id) d += '#' + t.id; else if (t && typeof t.className === 'string' && t.className) d += '.' + t.className.split(' ')[0];
-        ev.lastScroll = d;
-      }, true);
-      document.addEventListener('gesturestart', function() { ev.gesture = (ev.gesture || 0) + 1; }, true);
-      if (window.visualViewport) window.visualViewport.addEventListener('resize', function() { ev.vvResize = (ev.vvResize || 0) + 1; });
-      // The HUD freezing (rAF paused) with no scroll points to selection / callout / a WebKit
-      // tracking state eating pencil input. Catch those.
-      document.addEventListener('selectionchange', function() { ev.selChg = (ev.selChg || 0) + 1; }, true);
-      document.addEventListener('contextmenu', function() { ev.ctxMenu = (ev.ctxMenu || 0) + 1; }, true);
-      let touchN = 0;
-      document.addEventListener('touchstart', function() { ev.touchEvt = (ev.touchEvt || 0) + 1; }, { passive: true, capture: true });
-      document.addEventListener('touchmove', function(e) { ev.touchMoveEvt = (ev.touchMoveEvt || 0) + 1; ev.lastTouchCancelable = e.cancelable ? 1 : 0; }, { passive: true, capture: true });
-      function line(s) { return s.end + ' mv' + s.moves + ' live' + s.livePts + ' det' + s.det + ' swp' + s.swp + ' ' + s.canvasTag; }
-      (function tick() {
-        const nowT = performance.now();
-        if (lastTickT) { const gap = nowT - lastTickT; if (gap > 200) { ev.rafGap++; if (gap > ev.rafMaxGap) ev.rafMaxGap = Math.round(gap); } }
-        lastTickT = nowT;
-        let opNow = '-', beginTrace = '-', moveTrace = '-';
-        try { opNow = state.memoRasterOp ? (state.memoRasterOp.type || 'op') : '-'; } catch (e) {}
-        try { beginTrace = state.memoBeginTrace || '-'; } catch (e) {}
-        try { moveTrace = state.memoMoveTrace || '-'; } catch (e) {}
-        // Live-sample the active stroke so we capture its real point count even if the op is
-        // briefly nulled between frames (microtask/up-time reads can miss it).
-        if (cur) {
-          try {
-            if (state.memoRasterOp) cur.opSeen = 1;
-            const n = (state.memoCurrentStroke && state.memoCurrentStroke.points && state.memoCurrentStroke.points.length) || 0;
-            if (n > cur.livePts) cur.livePts = n;
-            if (state.memoBeginTrace) cur.bt = state.memoBeginTrace;
-            if (state.memoMoveTrace) cur.mt = state.memoMoveTrace;
-            // Detect the render-wipe mechanism: is the canvas we draw on being detached (DOM rebuild)
-            // or swapped for a fresh element mid-stroke?
-            const els = state.memoActiveLayerCanvasEls || [];
-            const c = els[0] || null;
-            if (c && !cur.canvasRef) { cur.canvasRef = c; cur.canvasTag = String(c.className || c.tagName || '?').slice(0, 22); }
-            if (cur.canvasRef) {
-              if (!cur.canvasRef.isConnected) cur.det = 1;
-              if (c && c !== cur.canvasRef) cur.swp = 1;
-              // Is a layer IMAGE painted above this drawing canvas (pointer-events:none, so it lets
-              // the pen through but visually hides the live stroke until commit)? Check siblings.
-              try {
-                const cc = cur.canvasRef;
-                const cs = getComputedStyle(cc);
-                cur.cz = cs.zIndex; cur.cvis = cs.visibility[0] + cs.display.slice(0, 4) + cs.opacity;
-                const par = cc.parentElement;
-                if (par) {
-                  const kids = Array.prototype.slice.call(par.children);
-                  const ci = kids.indexOf(cc);
-                  for (let i = 0; i < kids.length; i++) {
-                    const k = kids[i];
-                    const isImg = k.tagName === 'IMG' || (typeof k.className === 'string' && k.className.indexOf('layer-image') >= 0);
-                    if (!isImg) continue;
-                    const ks = getComputedStyle(k);
-                    if (ks.display === 'none' || ks.visibility === 'hidden' || ks.opacity === '0') continue;
-                    const above = (parseInt(ks.zIndex, 10) || 0) > (parseInt(cs.zIndex, 10) || 0) || ((ks.zIndex === cs.zIndex || (!ks.zIndex && !cs.zIndex)) && i > ci);
-                    if (above) { cur.cover = String(k.className || k.tagName).slice(0, 18) + ' z' + ks.zIndex; break; }
-                  }
-                }
-              } catch (e2) {}
-            }
-          } catch (e) {}
-        }
-        hud.textContent =
-          'PERF ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  op:' + opNow + '\n' +
-          'lastBegin:' + beginTrace + '  lastMove:' + moveTrace + '\n' +
-          'down ' + ev.down + ' up ' + ev.up + ' cancel ' + ev.cancel + ' lost ' + ev.lost + '\n' +
-          'PEN down ' + ev.penD + ' move ' + ev.penM + ' drew ' + ev.penDraw + '\n' +
-          'TOUCH down ' + ev.touchD + ' drew ' + ev.touchDraw + '  mouse ' + ev.mouseD + '\n' +
-          'SCROLL ' + ev.scrollCount + ' gesture ' + ev.gesture + ' vvResize ' + ev.vvResize + '\n' +
-          'rafFreezes ' + ev.rafGap + ' maxFreeze ' + ev.rafMaxGap + 'ms\n' +
-          'selChg ' + ev.selChg + ' ctxMenu ' + ev.ctxMenu + ' touch ' + ev.touchEvt + '/' + ev.touchMoveEvt + ' cncl ' + ev.lastTouchCancelable + '\n' +
-          'missDown ' + ev.missDown + ' (in-canvas REAL ' + ev.realMiss + ') canvasInDom ' + ev.memoCanvasInDom + '\n' +
-          'realMiss: ' + ev.lastRealMiss + '\n' +
-          'realStack: ' + ev.lastRealMissStack + '\n' +
-          'move ' + ev.move + ' coalesced ' + ev.coalesced + '\n' +
-          'longtasks ' + lt + ' maxBlock ' + Math.round(ltMax) + 'ms\n' +
-          'recent strokes (newest first):\n' +
-          (recent.length ? recent.map(line).join('\n') : '-');
-        requestAnimationFrame(tick);
-      })();
-    })();
   </script>
 </body>
 </html>
