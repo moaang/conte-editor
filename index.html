@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver028</title>
+  <title>Conte Editor Prototype ver029</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6760,7 +6760,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver028</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver029</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6797,7 +6797,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '028';
+    const APP_DISPLAY_VERSION = '029';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -13520,6 +13520,7 @@
           return left.layerIndex - right.layerIndex;
         }).forEach(function(found) {
           found.layer.layerRole = 'bg';
+          found.layer.expandable = false;
           found.layer.bgBundleId = bundleId;
           found.layer.bgIndex = bgIndex;
           found.layer.canonicalLayerName = 'BG' + bgIndex;
@@ -19055,9 +19056,11 @@
       const menu = conteLayerContextMenuEl();
       const bgLabel = bgActive ? 'BG\u30ec\u30a4\u30e4\u30fc\u89e3\u9664' : 'BG\u30ec\u30a4\u30e4\u30fc\u306b\u3059\u308b';
       const expandableLabel = expandableActive ? '\u30ad\u30e3\u30f3\u30d0\u30b9\u5916\u63cf\u753b\u3092\u89e3\u9664' : '\u30ad\u30e3\u30f3\u30d0\u30b9\u5916\u63cf\u753b\uff08\u30b9\u30b1\u30c3\u30c1\u7528\uff09';
+      // BG role and "draw outside canvas" are mutually exclusive: only show each toggle when the
+      // other is not active, so a koma can never be both at once.
       menu.innerHTML = [
-        '<button type="button" class="' + (bgActive ? 'active' : '') + '" aria-pressed="' + (bgActive ? 'true' : 'false') + '" data-conte-layer-menu-action="bg">' + bgLabel + '</button>',
-        '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>',
+        (expandableActive ? '' : '<button type="button" class="' + (bgActive ? 'active' : '') + '" aria-pressed="' + (bgActive ? 'true' : 'false') + '" data-conte-layer-menu-action="bg">' + bgLabel + '</button>'),
+        (bgActive ? '' : '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>'),
         '<button type="button" data-conte-layer-menu-action="unlink">\u30ea\u30f3\u30af\u89e3\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="rename">\u30ec\u30a4\u30e4\u30fc\u540d\u5909\u66f4</button>',
         '<button type="button" data-conte-layer-menu-action="delete">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u524a\u9664</button>'
