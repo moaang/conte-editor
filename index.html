@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver018</title>
+  <title>Conte Editor Prototype ver019</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver018</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver019</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '018';
+    const APP_DISPLAY_VERSION = '019';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39191,7 +39191,7 @@
       const hud = document.createElement('div');
       hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,Menlo,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:60vw;letter-spacing:0.2px';
       (document.body || document.documentElement).appendChild(hud);
-      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-', realMiss: 0, lastRealMiss: '-', lastRealMissStack: '-', penD: 0, touchD: 0, mouseD: 0, penM: 0, penDraw: 0, touchDraw: 0 };
+      const ev = { down: 0, move: 0, up: 0, cancel: 0, lost: 0, coalesced: 0, lastDown: '-', missDown: 0, memoCanvasInDom: 1, lastMiss: '-', lastMissStack: '-', realMiss: 0, lastRealMiss: '-', lastRealMissStack: '-', penD: 0, touchD: 0, mouseD: 0, penM: 0, penDraw: 0, touchDraw: 0, scrollCount: 0, lastScroll: '-', gesture: 0, vvResize: 0 };
       let lt = 0, ltMax = 0;
       try {
         new PerformanceObserver(function(list) {
@@ -39264,6 +39264,16 @@
       document.addEventListener('pointerup', function() { ev.up++; finish('up'); }, true);
       document.addEventListener('pointercancel', function() { ev.cancel++; finish('cancel'); }, true);
       document.addEventListener('lostpointercapture', function() { ev.lost++; finish('lost'); }, true);
+      // If the failing pencil strokes are Safari hijacking them as scroll/zoom gestures, these fire.
+      window.addEventListener('scroll', function(e) {
+        ev.scrollCount = (ev.scrollCount || 0) + 1;
+        const t = e.target === document || e.target === window ? (document.scrollingElement || document.documentElement) : e.target;
+        let d = t && t.tagName ? String(t.tagName).toLowerCase() : 'page';
+        if (t && t.id) d += '#' + t.id; else if (t && typeof t.className === 'string' && t.className) d += '.' + t.className.split(' ')[0];
+        ev.lastScroll = d;
+      }, true);
+      document.addEventListener('gesturestart', function() { ev.gesture = (ev.gesture || 0) + 1; }, true);
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', function() { ev.vvResize = (ev.vvResize || 0) + 1; });
       function line(s) { return s.end + ' mv' + s.moves + ' live' + s.livePts + ' det' + s.det + ' swp' + s.swp + ' ' + s.canvasTag; }
       (function tick() {
         let opNow = '-', beginTrace = '-', moveTrace = '-';
@@ -39317,6 +39327,7 @@
           'down ' + ev.down + ' up ' + ev.up + ' cancel ' + ev.cancel + ' lost ' + ev.lost + '\n' +
           'PEN down ' + ev.penD + ' move ' + ev.penM + ' drew ' + ev.penDraw + '\n' +
           'TOUCH down ' + ev.touchD + ' drew ' + ev.touchDraw + '  mouse ' + ev.mouseD + '\n' +
+          'SCROLL ' + ev.scrollCount + ' (' + ev.lastScroll + ') gesture ' + ev.gesture + ' vvResize ' + ev.vvResize + '\n' +
           'missDown ' + ev.missDown + ' (in-canvas REAL ' + ev.realMiss + ') canvasInDom ' + ev.memoCanvasInDom + '\n' +
           'realMiss: ' + ev.lastRealMiss + '\n' +
           'realStack: ' + ev.lastRealMissStack + '\n' +
