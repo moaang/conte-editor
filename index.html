@@ -3252,7 +3252,7 @@
       pointer-events: none;
       user-select: none;
       -webkit-user-drag: none;
-      z-index: 999;
+      z-index: 2147480000 !important;
     }
 
     .picture-layer-stack .memo-selection-overlay-canvas,
@@ -3263,6 +3263,7 @@
       width: var(--memo-overlay-width, 100%);
       height: var(--memo-overlay-height, 100%);
       object-fit: fill;
+      z-index: 2147480000 !important;
     }
 
     .video-memo-canvas {
@@ -11607,10 +11608,61 @@
       state.timelineCenterPlayheadOnNextRender = true;
     }
 
+    function resetProjectTransientRuntime() {
+      try { stopTimelinePlayback(false); } catch (error) {}
+      try { cancelScheduledVideoPreviewRefresh(); } catch (error) {}
+      try { cancelScheduledVideoMemoCanvasRedraw(); } catch (error) {}
+      if (state.layerCanvasRedrawRaf) {
+        try { cancelAnimationFrame(state.layerCanvasRedrawRaf); } catch (error) {}
+        state.layerCanvasRedrawRaf = 0;
+      }
+      if (state.activeLayerCanvasRedrawRaf) {
+        try { cancelAnimationFrame(state.activeLayerCanvasRedrawRaf); } catch (error) {}
+        state.activeLayerCanvasRedrawRaf = 0;
+      }
+      state.memoPointerId = null;
+      state.memoCurrentStroke = null;
+      state.memoRasterOp = null;
+      state.memoStamp = null;
+      state.memoStampPreview = null;
+      state.memoSelection = null;
+      state.memoLassoPreview = null;
+      state.memoTransformBox = null;
+      state.memoTransformPreview = null;
+      state.memoCurrentLayerRect = null;
+      state.cameraFrameDrag = null;
+      state.videoMemoPointerCanvasRect = null;
+      state.memoPointerCanvasRect = null;
+      state.memoBitmapHistory = {};
+      state.memoBitmapHistoryOrder = [];
+      state.pendingLayerDrawingRefs = new Set();
+      state.pendingMemoPictureCaptureStrokeIds = new Set();
+      state.memoCompositeDirty = false;
+      state.memoLayerPreviewCache = {};
+      state.layerDrawingDataUrlCache = {};
+      state.videoPreloadedLayerImages = {};
+      state.videoPreloadedLayerImageOrder = [];
+      state.videoPreloadFrame = -1;
+      state.videoPreviewKey = '';
+      state.timelinePlayheadDragging = false;
+      try { clearActiveLayerCanvasTargets(); } catch (error) { state.memoActiveLayerCanvasEls = []; }
+      try { resetTimelineLayerThumbnailScheduler(); } catch (error) {}
+      try { invalidateVideoTimelineCache(); } catch (error) {
+        state.videoTimelineCacheKey = '';
+        state.videoTimelineCache = null;
+        state.videoTimelineCacheProject = null;
+      }
+    }
+
     function resetProjectForNewProject() {
-      clearTransientMediaObjectUrls({ pictures: true, audio: true, layers: true });
-      state.project = normalizeProjectSnapshot(createInitialProject());
+      resetProjectTransientRuntime();
+      try { clearTransientMediaObjectUrls({ pictures: true, audio: true, layers: true }); } catch (error) {
+        state.workspaceObjectUrls = { pictures: {}, audio: {}, layers: {} };
+      }
       clearWorkspaceConnection({ forgetSavedHandle: true });
+      state.project = normalizeProjectSnapshot(createInitialProject());
+      state.project.settings = state.project.settings || {};
+      state.project.settings.localWorkspace = normalizeWorkspaceSettings({ enabled: false });
       resetProjectRuntimeSelection();
       state.undoStack = [];
       state.redoStack = [];
@@ -11622,6 +11674,8 @@
       if (input) input.value = '';
       if (status) status.textContent = 'TXT / DOCX / PDF';
       markProjectSavedBaseline();
+      updateWorkspaceUI();
+      updateStageSettingsUI();
       refresh();
     }
 
@@ -11631,26 +11685,74 @@
         return Promise.resolve(window.confirm('現在のプロジェクトには未保存の変更があります。保存してから新規プロジェクトを作成しますか？') ? 'save' : 'discard');
       }
       return new Promise(function(resolve) {
-        const handleClose = function() {
+        let done = false;
+        const form = dialog.querySelector('form');
+        const buttons = Array.from(dialog.querySelectorAll('button[value]'));
+        const cleanup = function() {
           dialog.removeEventListener('close', handleClose);
-          resolve(dialog.returnValue || 'cancel');
+          dialog.removeEventListener('cancel', handleCancel);
+          if (form) form.removeEventListener('submit', handleSubmit);
+          buttons.forEach(function(button) { button.removeEventListener('click', handleButtonClick); });
+        };
+        const finish = function(value) {
+          if (done) return;
+          done = true;
+          const next = value || 'cancel';
+          cleanup();
+          if (dialog.open) dialog.close(next);
+          resolve(next);
+        };
+        const handleClose = function() {
+          finish(dialog.returnValue || 'cancel');
+        };
+        const handleCancel = function(event) {
+          event.preventDefault();
+          finish('cancel');
+        };
+        const handleSubmit = function(event) {
+          event.preventDefault();
+          const submitter = event.submitter;
+          finish(submitter && submitter.value || dialog.returnValue || 'cancel');
+        };
+        const handleButtonClick = function(event) {
+          const button = event.currentTarget;
+          event.preventDefault();
+          finish(button && button.value || 'cancel');
         };
         dialog.addEventListener('close', handleClose);
+        dialog.addEventListener('cancel', handleCancel);
+        if (form) form.addEventListener('submit', handleSubmit);
+        buttons.forEach(function(button) { button.addEventListener('click', handleButtonClick); });
         dialog.returnValue = '';
         dialog.showModal();
       });
     }
 
     async function startNewProject() {
-      if (projectHasUnsavedChanges()) {
+      try {
         const choice = await askNewProjectUnsavedChoice();
         if (choice === 'cancel') return;
         if (choice === 'save') {
           const saved = await saveJson();
           if (!saved) return;
         }
+        resetProjectForNewProject();
+      } catch (error) {
+        console.error('[new-project] reset failed', error);
+        alert('New Project failed: ' + (error && error.message ? error.message : error));
       }
-      resetProjectForNewProject();
+    }
+
+    function stopWorkspaceAutosaveTimer() {
+      if (state.workspaceProjectSaveTimer) {
+        clearTimeout(state.workspaceProjectSaveTimer);
+        state.workspaceProjectSaveTimer = 0;
+      }
+      if (state.workspaceAutosaveTimer) {
+        clearTimeout(state.workspaceAutosaveTimer);
+        state.workspaceAutosaveTimer = 0;
+      }
+      state.workspaceAutosaveTimerKey = '';
     }
 
     function clearWorkspaceConnection(options) {
@@ -23139,6 +23241,12 @@
       }, Math.max(0, Math.round(Number(delayMs) || 0)));
     }
 
+    function cancelScheduledVideoPreviewRefresh() {
+      if (!state.videoPreviewRefreshTimer) return;
+      clearTimeout(state.videoPreviewRefreshTimer);
+      state.videoPreviewRefreshTimer = 0;
+    }
+
     function patchVideoPreviewConteLayersIfCurrent(totalFramesOverride) {
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl || stageEl.hidden) return false;
@@ -23359,7 +23467,8 @@
       const screen = stage && stage.querySelector ? stage.querySelector('.video-preview-screen') : null;
       if (!screen) return null;
       const canvas = screen.querySelector('#videoMemoCanvas');
-      if (canvas && canvas.getBoundingClientRect) return canvas.getBoundingClientRect();
+      const canvasHitRect = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+      if (canvasHitRect) return canvasHitRect;
       const layered = screen.querySelector('.video-preview-layered');
       if (layered && layered.getBoundingClientRect) return layered.getBoundingClientRect();
       return screen.getBoundingClientRect ? screen.getBoundingClientRect() : null;
@@ -32903,7 +33012,7 @@
     function drawCurrentLayerStrokeSegment(stroke, fromPoint, toPoint) {
       const op = state.memoRasterOp;
       if (op && op.type === 'draw' && String(op.drawingRef || '') === String(stroke && stroke.layerDrawingRef || '')) {
-        ensureMemoRasterOpBounds(op, memoLayerPointsBounds([fromPoint, toPoint], memoStrokeLayerPadPx(stroke)));
+        if (!op.fixedDrawBounds) ensureMemoRasterOpBounds(op, memoLayerPointsBounds([fromPoint, toPoint], memoStrokeLayerPadPx(stroke)));
       }
       const targets = Array.isArray(state.memoActiveLayerCanvasEls) ? state.memoActiveLayerCanvasEls : [];
       targets.forEach(function(canvas) {
@@ -33724,8 +33833,8 @@
 
     function memoOverlayPoint(point, width, height) {
       return {
-        x: Math.max(0, Math.min(width, (Number(point && point.x) || 0) * width)),
-        y: Math.max(0, Math.min(height, (Number(point && point.y) || 0) * height))
+        x: (Number(point && point.x) || 0) * width,
+        y: (Number(point && point.y) || 0) * height
       };
     }
 
@@ -33873,7 +33982,10 @@
       const transformPreview = state.memoTransformPreview;
       const selection = state.memoSelection;
       if (selection && String(selection.drawingRef || '') === ref && selection.maskCanvas && !(transformPreview && String(transformPreview.drawingRef || '') === ref)) {
+        ctx.save();
+        ctx.translate(Math.round(Number(selection.bitmapX) || 0), Math.round(Number(selection.bitmapY) || 0));
         drawMemoMaskOutline(ctx, selection.maskCanvas, '#1f66d1');
+        ctx.restore();
       }
       const lasso = state.memoLassoPreview;
       if (lasso && String(lasso.drawingRef || '') === ref && Array.isArray(lasso.points) && lasso.points.length) {
@@ -33913,13 +34025,18 @@
       return maxX >= minX && maxY >= minY ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : null;
     }
 
-    function makeMemoMaskFromPoints(points) {
+    function makeMemoMaskFromPoints(points, options) {
+      options = options || {};
+      const width = Math.max(1, Math.round(Number(options.width) || LAYER_DRAWING_WIDTH));
+      const height = Math.max(1, Math.round(Number(options.height) || LAYER_DRAWING_HEIGHT));
+      const bitmapX = Math.round(Number(options.bitmapX) || 0);
+      const bitmapY = Math.round(Number(options.bitmapY) || 0);
       const mask = document.createElement('canvas');
-      mask.width = LAYER_DRAWING_WIDTH;
-      mask.height = LAYER_DRAWING_HEIGHT;
+      mask.width = width;
+      mask.height = height;
       const ctx = mask.getContext('2d');
       ctx.fillStyle = '#000';
-      if (memoRasterPath(ctx, points, mask.width, mask.height)) ctx.fill();
+      if (memoRasterPath(ctx, points, LAYER_DRAWING_WIDTH, LAYER_DRAWING_HEIGHT, bitmapX, bitmapY)) ctx.fill();
       return mask;
     }
 
@@ -33975,23 +34092,47 @@
       ctx.restore();
     }
 
-    function combineMemoSelectionMask(drawingRef, mask, mode, points) {
+    function memoSelectionBitmapX(selection) {
+      return Math.round(Number(selection && selection.bitmapX) || 0);
+    }
+
+    function memoSelectionBitmapY(selection) {
+      return Math.round(Number(selection && selection.bitmapY) || 0);
+    }
+
+    function combineMemoSelectionMask(drawingRef, mask, mode, points, options) {
       if (!mask) return;
+      options = options || {};
       const ref = String(drawingRef || '');
       const nextMode = String(mode || state.memoSelectionMode || 'replace');
+      const maskX = Math.round(Number(options.bitmapX) || 0);
+      const maskY = Math.round(Number(options.bitmapY) || 0);
+      const existingSelection = state.memoSelection && state.memoSelection.drawingRef === ref && state.memoSelection.maskCanvas && nextMode !== 'replace'
+        ? state.memoSelection
+        : null;
+      const existingX = memoSelectionBitmapX(existingSelection);
+      const existingY = memoSelectionBitmapY(existingSelection);
+      const baseX = existingSelection ? Math.min(existingX, maskX) : maskX;
+      const baseY = existingSelection ? Math.min(existingY, maskY) : maskY;
+      const baseRight = existingSelection
+        ? Math.max(existingX + existingSelection.maskCanvas.width, maskX + mask.width)
+        : maskX + mask.width;
+      const baseBottom = existingSelection
+        ? Math.max(existingY + existingSelection.maskCanvas.height, maskY + mask.height)
+        : maskY + mask.height;
       const base = document.createElement('canvas');
-      base.width = LAYER_DRAWING_WIDTH;
-      base.height = LAYER_DRAWING_HEIGHT;
+      base.width = Math.max(1, Math.ceil(baseRight - baseX));
+      base.height = Math.max(1, Math.ceil(baseBottom - baseY));
       const ctx = base.getContext('2d');
-      if (state.memoSelection && state.memoSelection.drawingRef === ref && state.memoSelection.maskCanvas && nextMode !== 'replace') {
-        ctx.drawImage(state.memoSelection.maskCanvas, 0, 0);
+      if (existingSelection) {
+        ctx.drawImage(existingSelection.maskCanvas, existingX - baseX, existingY - baseY);
       }
       if (nextMode === 'sub') {
         ctx.globalCompositeOperation = 'destination-out';
-        ctx.drawImage(mask, 0, 0);
+        ctx.drawImage(mask, maskX - baseX, maskY - baseY);
       } else {
         ctx.globalCompositeOperation = 'source-over';
-        ctx.drawImage(mask, 0, 0);
+        ctx.drawImage(mask, maskX - baseX, maskY - baseY);
       }
       ctx.globalCompositeOperation = 'source-over';
       const bounds = memoSelectionBounds(base);
@@ -33999,6 +34140,8 @@
       state.memoSelection = bounds ? {
         drawingRef: ref,
         maskCanvas: base,
+        bitmapX: baseX,
+        bitmapY: baseY,
         bounds: bounds,
         points: nextMode === 'replace' ? normalizeMemoLassoPoints(points) : null,
         paths: paths
@@ -34014,15 +34157,24 @@
       const selection = state.memoSelection;
       if (!selection || !selection.maskCanvas) return;
       const mask = document.createElement('canvas');
-      mask.width = LAYER_DRAWING_WIDTH;
-      mask.height = LAYER_DRAWING_HEIGHT;
+      mask.width = Math.max(1, selection.maskCanvas.width || LAYER_DRAWING_WIDTH);
+      mask.height = Math.max(1, selection.maskCanvas.height || LAYER_DRAWING_HEIGHT);
       const ctx = mask.getContext('2d');
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, mask.width, mask.height);
       ctx.globalCompositeOperation = 'destination-out';
       ctx.drawImage(selection.maskCanvas, 0, 0);
       const bounds = memoSelectionBounds(mask);
-      state.memoSelection = bounds ? { drawingRef: selection.drawingRef, maskCanvas: mask, bounds: bounds, points: null, paths: null, inverted: true } : null;
+      state.memoSelection = bounds ? {
+        drawingRef: selection.drawingRef,
+        maskCanvas: mask,
+        bitmapX: memoSelectionBitmapX(selection),
+        bitmapY: memoSelectionBitmapY(selection),
+        bounds: bounds,
+        points: null,
+        paths: null,
+        inverted: true
+      } : null;
       state.memoTransformBox = null;
       state.memoTransformPreview = null;
       redrawVisibleLayerCanvasesForRef(selection.drawingRef);
@@ -34207,9 +34359,32 @@
       };
     }
 
+    function videoMemoDrawableLayerBounds(canvas) {
+      const source = canvas || document.getElementById('videoMemoCanvas');
+      const base = videoMemoBaseRect(source);
+      const drawable = source && source.getBoundingClientRect ? source.getBoundingClientRect() : base;
+      if (!base || !drawable || !base.width || !base.height || !drawable.width || !drawable.height) {
+        return { x: 0, y: 0, w: LAYER_DRAWING_WIDTH, h: LAYER_DRAWING_HEIGHT };
+      }
+      return {
+        x: Math.floor((drawable.left - base.left) / base.width * LAYER_DRAWING_WIDTH),
+        y: Math.floor((drawable.top - base.top) / base.height * LAYER_DRAWING_HEIGHT),
+        w: Math.max(1, Math.ceil(drawable.width / base.width * LAYER_DRAWING_WIDTH)),
+        h: Math.max(1, Math.ceil(drawable.height / base.height * LAYER_DRAWING_HEIGHT))
+      };
+    }
+
+    function memoFixedDrawLayerBoundsForTarget(layerTarget, canvas) {
+      if (layerTarget && layerTarget.type === 'video-conte-layer') {
+        return videoMemoDrawableLayerBounds(canvas);
+      }
+      return { x: 0, y: 0, w: LAYER_DRAWING_WIDTH, h: LAYER_DRAWING_HEIGHT };
+    }
+
     function beginMemoRasterDraw(event, canvas, layerTarget, point, localPoint) {
       const opTarget = memoRasterOpTargetFromLayerTarget(layerTarget, { bitmapEdit: true });
       if (!opTarget) return false;
+      const fixedDrawBounds = memoFixedDrawLayerBoundsForTarget(layerTarget, canvas);
       const stroke = {
         id: 'memo-' + Date.now().toString(36),
         tool: state.memoTool,
@@ -34223,12 +34398,12 @@
         layerId: layerTarget.layerId,
         cutId: layerTarget.cutId
       };
-      state.memoRasterOp = Object.assign(opTarget, { type: 'draw', stroke: stroke });
+      state.memoRasterOp = Object.assign(opTarget, { type: 'draw', stroke: stroke, fixedDrawBounds: fixedDrawBounds });
       state.memoCurrentStroke = stroke;
       state.memoPointerId = event.pointerId;
       state.memoCurrentLayerRect = layerTarget.rect;
       safeMemoSetPointerCapture(canvas, event.pointerId);
-      ensureMemoRasterOpBounds(state.memoRasterOp, memoLayerPointsBounds([localPoint], memoStrokeLayerPadPx(stroke)));
+      ensureMemoRasterOpBounds(state.memoRasterOp, fixedDrawBounds);
       drawCurrentLayerStrokeSegment(stroke, null, stroke.points[0]);
       updateMemoUndoRedoButtonsOnly();
       return true;
@@ -34272,22 +34447,22 @@
       if (!list.length) return null;
       const ox = Math.round(Number(offsetX) || 0);
       const oy = Math.round(Number(offsetY) || 0);
-      let minX = width;
-      let minY = height;
-      let maxX = 0;
-      let maxY = 0;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
       list.forEach(function(point) {
-        const x = Math.max(0, Math.min(width, (Number(point.x) || 0) * LAYER_DRAWING_WIDTH - ox));
-        const y = Math.max(0, Math.min(height, (Number(point.y) || 0) * LAYER_DRAWING_HEIGHT - oy));
+        const x = (Number(point.x) || 0) * LAYER_DRAWING_WIDTH - ox;
+        const y = (Number(point.y) || 0) * LAYER_DRAWING_HEIGHT - oy;
         if (x < minX) minX = x;
         if (y < minY) minY = y;
         if (x > maxX) maxX = x;
         if (y > maxY) maxY = y;
       });
-      minX = Math.floor(minX);
-      minY = Math.floor(minY);
-      maxX = Math.ceil(maxX);
-      maxY = Math.ceil(maxY);
+      minX = Math.max(0, Math.floor(minX));
+      minY = Math.max(0, Math.floor(minY));
+      maxX = Math.min(Math.max(0, width), Math.ceil(maxX));
+      maxY = Math.min(Math.max(0, height), Math.ceil(maxY));
       return maxX > minX && maxY > minY ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : null;
     }
 
@@ -34334,9 +34509,17 @@
 
     function finishMemoLassoSelect(op) {
       if (!op || !Array.isArray(op.points) || op.points.length < 3) return false;
-      const mask = makeMemoMaskFromPoints(op.points);
+      const mask = makeMemoMaskFromPoints(op.points, {
+        width: op.canvas && op.canvas.width,
+        height: op.canvas && op.canvas.height,
+        bitmapX: op.bitmapX,
+        bitmapY: op.bitmapY
+      });
       state.memoLassoPreview = null;
-      combineMemoSelectionMask(op.drawingRef, mask, state.memoSelectionMode, op.points);
+      combineMemoSelectionMask(op.drawingRef, mask, state.memoSelectionMode, op.points, {
+        bitmapX: op.bitmapX,
+        bitmapY: op.bitmapY
+      });
       return true;
     }
 
@@ -34353,8 +34536,26 @@
       const canvas = firstActiveLayerCanvas();
       if (!canvas) return null;
       const drawing = getLayerDrawingData(state.project, selection.drawingRef);
-      prepareLayerCanvasForRasterEdit(canvas, drawing);
-      return { selection: selection, canvas: canvas, drawing: drawing, drawingRef: selection.drawingRef };
+      const rect = prepareLayerCanvasForBitmapEdit(canvas, drawing);
+      const op = {
+        canvas: canvas,
+        bitmapX: rect.x,
+        bitmapY: rect.y,
+        bitmapWidth: rect.w,
+        bitmapHeight: rect.h
+      };
+      const layerBounds = memoSelectionLayerBounds(selection);
+      if (layerBounds) ensureMemoRasterOpBounds(op, layerBounds);
+      return {
+        selection: selection,
+        canvas: canvas,
+        drawing: drawing,
+        drawingRef: selection.drawingRef,
+        layerCanvasOffsetX: -Math.round(Number(op.bitmapX) || 0),
+        layerCanvasOffsetY: -Math.round(Number(op.bitmapY) || 0),
+        bitmapX: Math.round(Number(op.bitmapX) || 0),
+        bitmapY: Math.round(Number(op.bitmapY) || 0)
+      };
     }
 
     function selectedConteLayerEntryForTransform(cutId) {
@@ -34401,6 +34602,16 @@
       return selection && String(selection.drawingRef || '') === ref && selection.maskCanvas && selection.bounds ? selection : null;
     }
 
+    function memoSelectionLayerBounds(selection) {
+      if (!selection || !selection.bounds) return null;
+      return {
+        x: memoSelectionBitmapX(selection) + Math.round(Number(selection.bounds.x) || 0),
+        y: memoSelectionBitmapY(selection) + Math.round(Number(selection.bounds.y) || 0),
+        w: Math.max(1, Math.round(Number(selection.bounds.w) || 1)),
+        h: Math.max(1, Math.round(Number(selection.bounds.h) || 1))
+      };
+    }
+
     function copyCanvasToMemoCanvas(source) {
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, source && source.width || LAYER_DRAWING_WIDTH);
@@ -34409,12 +34620,13 @@
       return canvas;
     }
 
-    function layerWorkCanvasFromVisibleLayerCanvas(visibleCanvas, drawing) {
+    function layerWorkCanvasFromVisibleLayerCanvas(visibleCanvas, drawing, extraLayerBounds) {
       const rect = layerDrawingBitmapRect(drawing || {});
-      const minX = Math.min(0, rect.x);
-      const minY = Math.min(0, rect.y);
-      const maxX = Math.max(LAYER_DRAWING_WIDTH, rect.x + rect.w);
-      const maxY = Math.max(LAYER_DRAWING_HEIGHT, rect.y + rect.h);
+      const extra = extraLayerBounds || null;
+      const minX = Math.min(0, rect.x, extra ? Math.floor(Number(extra.x) || 0) : 0);
+      const minY = Math.min(0, rect.y, extra ? Math.floor(Number(extra.y) || 0) : 0);
+      const maxX = Math.max(LAYER_DRAWING_WIDTH, rect.x + rect.w, extra ? Math.ceil((Number(extra.x) || 0) + Math.max(1, Number(extra.w) || 1)) : LAYER_DRAWING_WIDTH);
+      const maxY = Math.max(LAYER_DRAWING_HEIGHT, rect.y + rect.h, extra ? Math.ceil((Number(extra.y) || 0) + Math.max(1, Number(extra.h) || 1)) : LAYER_DRAWING_HEIGHT);
       const offsetX = Math.round(-minX);
       const offsetY = Math.round(-minY);
       const canvas = document.createElement('canvas');
@@ -34437,8 +34649,10 @@
       const visibleCanvas = firstActiveLayerCanvas();
       if (!visibleCanvas) return null;
       const drawing = getLayerDrawingData(state.project, layerTarget.drawingRef);
+      const selection = memoSelectionForDrawingRef(layerTarget.drawingRef);
+      const selectionLayerBounds = selection ? memoSelectionLayerBounds(selection) : null;
       const work = options.previewOnly
-        ? layerWorkCanvasFromVisibleLayerCanvas(visibleCanvas, drawing)
+        ? layerWorkCanvasFromVisibleLayerCanvas(visibleCanvas, drawing, selectionLayerBounds)
         : { canvas: visibleCanvas, offsetX: 0, offsetY: 0 };
       const canvas = work.canvas;
       if (!options.previewOnly) prepareLayerCanvasForRasterEdit(canvas, drawing);
@@ -34450,18 +34664,19 @@
         drawingRef: layerTarget.drawingRef,
         layerCanvasOffsetX: Math.round(Number(work.offsetX) || 0),
         layerCanvasOffsetY: Math.round(Number(work.offsetY) || 0),
-        selection: memoSelectionForDrawingRef(layerTarget.drawingRef)
+        selection: selection
       };
     }
 
     function memoTransformBoundsForTarget(target) {
       if (!target || !target.canvas) return null;
       const selection = memoSelectionForDrawingRef(target.drawingRef);
-      if (selection && selection.bounds) return {
-        x: selection.bounds.x + Math.round(Number(target.layerCanvasOffsetX) || 0),
-        y: selection.bounds.y + Math.round(Number(target.layerCanvasOffsetY) || 0),
-        w: Math.max(1, selection.bounds.w),
-        h: Math.max(1, selection.bounds.h)
+      const selectionBounds = memoSelectionLayerBounds(selection);
+      if (selectionBounds) return {
+        x: selectionBounds.x + Math.round(Number(target.layerCanvasOffsetX) || 0),
+        y: selectionBounds.y + Math.round(Number(target.layerCanvasOffsetY) || 0),
+        w: selectionBounds.w,
+        h: selectionBounds.h
       };
       return memoCanvasInkBounds(target.canvas) || { x: 0, y: 0, w: target.canvas.width, h: target.canvas.height };
     }
@@ -34539,13 +34754,14 @@
     function selectedPatchCanvasFromTarget(target) {
       if (!target || !target.selection || !target.canvas) return null;
       const b = target.selection.bounds;
+      const layerBounds = memoSelectionLayerBounds(target.selection) || b;
       const offsetX = Math.round(Number(target.layerCanvasOffsetX) || 0);
       const offsetY = Math.round(Number(target.layerCanvasOffsetY) || 0);
       const patch = document.createElement('canvas');
       patch.width = b.w;
       patch.height = b.h;
       const patchCtx = patch.getContext('2d');
-      patchCtx.drawImage(target.canvas, b.x + offsetX, b.y + offsetY, b.w, b.h, 0, 0, b.w, b.h);
+      patchCtx.drawImage(target.canvas, layerBounds.x + offsetX, layerBounds.y + offsetY, b.w, b.h, 0, 0, b.w, b.h);
       patchCtx.globalCompositeOperation = 'destination-in';
       patchCtx.drawImage(target.selection.maskCanvas, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
       patchCtx.globalCompositeOperation = 'source-over';
@@ -34563,7 +34779,12 @@
 
     function clearSelectionPixelsFromCanvas(target) {
       if (!target || !target.canvas || !target.selection || !target.selection.maskCanvas) return;
-      clearMaskPixelsFromCanvas(target.canvas, target.selection.maskCanvas, target.layerCanvasOffsetX, target.layerCanvasOffsetY);
+      clearMaskPixelsFromCanvas(
+        target.canvas,
+        target.selection.maskCanvas,
+        memoSelectionBitmapX(target.selection) + Math.round(Number(target.layerCanvasOffsetX) || 0),
+        memoSelectionBitmapY(target.selection) + Math.round(Number(target.layerCanvasOffsetY) || 0)
+      );
     }
 
     function memoCanvasInkBounds(canvas) {
@@ -34701,13 +34922,21 @@
       let patchCanvas = null;
       let sourceBounds = null;
       if (selection) {
+        const offsetX = Math.round(Number(target.layerCanvasOffsetX) || 0);
+        const offsetY = Math.round(Number(target.layerCanvasOffsetY) || 0);
+        const layerBounds = memoSelectionLayerBounds(selection) || selection.bounds;
         patchCanvas = selectedPatchCanvasFromTarget(target);
-        clearMaskPixelsFromCanvas(baseCanvas, selection.maskCanvas, target.layerCanvasOffsetX, target.layerCanvasOffsetY);
+        clearMaskPixelsFromCanvas(
+          baseCanvas,
+          selection.maskCanvas,
+          memoSelectionBitmapX(selection) + offsetX,
+          memoSelectionBitmapY(selection) + offsetY
+        );
         sourceBounds = {
-          x: selection.bounds.x + Math.round(Number(target.layerCanvasOffsetX) || 0),
-          y: selection.bounds.y + Math.round(Number(target.layerCanvasOffsetY) || 0),
-          w: selection.bounds.w,
-          h: selection.bounds.h
+          x: Math.round(Number(layerBounds.x) || 0) + offsetX,
+          y: Math.round(Number(layerBounds.y) || 0) + offsetY,
+          w: Math.max(1, Math.round(Number(layerBounds.w) || 1)),
+          h: Math.max(1, Math.round(Number(layerBounds.h) || 1))
         };
       } else {
         sourceBounds = memoCanvasInkBounds(target.canvas);
@@ -34909,8 +35138,8 @@
       const px = Math.round(Number(dx) || 0);
       const py = Math.round(Number(dy) || 0);
       const mask = document.createElement('canvas');
-      mask.width = LAYER_DRAWING_WIDTH;
-      mask.height = LAYER_DRAWING_HEIGHT;
+      mask.width = Math.max(1, selection.maskCanvas.width || LAYER_DRAWING_WIDTH);
+      mask.height = Math.max(1, selection.maskCanvas.height || LAYER_DRAWING_HEIGHT);
       mask.getContext('2d').drawImage(selection.maskCanvas, px, py);
       const bounds = memoSelectionBounds(mask);
       if (!bounds) return null;
@@ -34922,6 +35151,8 @@
       return {
         drawingRef: selection.drawingRef,
         maskCanvas: mask,
+        bitmapX: memoSelectionBitmapX(selection),
+        bitmapY: memoSelectionBitmapY(selection),
         bounds: bounds,
         points: Array.isArray(selection.points) ? selection.points.map(movePoint) : null,
         paths: Array.isArray(selection.paths) ? selection.paths.map(function(path) {
@@ -35022,11 +35253,16 @@
       const before = layerDrawingSnapshot(target.drawing);
       clearSelectionPixelsFromCanvas(target);
       const b = target.selection.bounds;
+      const layerBounds = memoSelectionLayerBounds(target.selection) || b;
+      const offsetX = Math.round(Number(target.layerCanvasOffsetX) || 0);
+      const offsetY = Math.round(Number(target.layerCanvasOffsetY) || 0);
+      const drawX = layerBounds.x + offsetX;
+      const drawY = layerBounds.y + offsetY;
       const scale = Math.max(0.01, Number(state.memoTransformScale || 100) / 100);
       const rotate = Number(state.memoTransformRotate || 0) * Math.PI / 180;
       const ctx = target.canvas.getContext('2d');
       ctx.save();
-      ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+      ctx.translate(drawX + b.w / 2, drawY + b.h / 2);
       ctx.rotate(rotate);
       ctx.scale(scale, scale);
       ctx.drawImage(patch, -b.w / 2, -b.h / 2);
@@ -35057,16 +35293,21 @@
       const before = layerDrawingSnapshot(target.drawing);
       clearSelectionPixelsFromCanvas(target);
       const b = target.selection.bounds;
+      const layerBounds = memoSelectionLayerBounds(target.selection) || b;
+      const offsetX = Math.round(Number(target.layerCanvasOffsetX) || 0);
+      const offsetY = Math.round(Number(target.layerCanvasOffsetY) || 0);
+      const drawX = layerBounds.x + offsetX;
+      const drawY = layerBounds.y + offsetY;
       const eye = Math.max(0, Math.min(100, Number(state.memoPerspectiveEye) || 50)) / 100;
       const topScale = 0.42 + eye * 1.16;
       const bottomScale = 1.58 - eye * 1.16;
       const ctx = target.canvas.getContext('2d');
-      const centerX = b.x + b.w / 2;
+      const centerX = drawX + b.w / 2;
       for (let y = 0; y < patch.height; y += 1) {
         const t = patch.height <= 1 ? 0 : y / (patch.height - 1);
         const scale = topScale + (bottomScale - topScale) * t;
         const sw = Math.max(1, b.w * scale);
-        ctx.drawImage(patch, 0, y, patch.width, 1, centerX - sw / 2, b.y + y, sw, 1);
+        ctx.drawImage(patch, 0, y, patch.width, 1, centerX - sw / 2, drawY + y, sw, 1);
       }
       state.memoSelection = null;
       state.memoTransformBox = null;
@@ -35509,11 +35750,13 @@
           state.memoLassoPreview = null;
           refreshMemoEditOverlays(op.drawingRef);
         }
+        redrawActiveLayerCanvasTargets(op.drawingRef);
       } else if (op.type === 'lasso-select') {
         if (!finishMemoLassoSelect(op)) {
           state.memoLassoPreview = null;
           refreshMemoEditOverlays(op.drawingRef);
         }
+        redrawActiveLayerCanvasTargets(op.drawingRef);
       }
       state.memoCurrentLayerRect = null;
       clearActiveLayerCanvasTargets();
@@ -35543,12 +35786,6 @@
     }
 
     function ensureVideoPreviewReadyForDrawing(preferredCanvas) {
-      if (!state.videoEditMode) return preferredCanvas || document.getElementById('videoMemoCanvas');
-      const stage = document.getElementById('videoPreviewStage');
-      if (!stage) return preferredCanvas || document.getElementById('videoMemoCanvas');
-      if (state.timelinePlayheadDragging) {
-        setTimelinePlayheadDragging(document.getElementById('timingDashboard') || document, false);
-      }
       if (preferredCanvas && preferredCanvas.isConnected && preferredCanvas.id === 'videoMemoCanvas') return preferredCanvas;
       return document.getElementById('videoMemoCanvas');
     }
@@ -35592,21 +35829,6 @@
       const target = screen && screen.querySelector ? screen.querySelector('.video-preview-camera-target') : null;
       const rectSource = target || source;
       return rectSource ? rectSource.getBoundingClientRect() : { left: 0, top: 0, width: 1, height: 1 };
-    }
-
-    function videoMemoCanvasElement() {
-      return document.getElementById('videoMemoCanvas');
-    }
-
-    function videoMemoCanvasHitRect(canvas) {
-      const source = canvas || videoMemoCanvasElement();
-      return source && source.getBoundingClientRect ? source.getBoundingClientRect() : null;
-    }
-
-    function eventHitsVideoMemoCanvas(event, canvas) {
-      const rect = videoMemoCanvasHitRect(canvas);
-      if (!rect || !event) return false;
-      return pointInsideClientRect(Number(event.clientX), Number(event.clientY), rect);
     }
 
     function getVideoMemoPointFromEvent(event) {
@@ -35750,11 +35972,13 @@
           state.memoLassoPreview = null;
           refreshMemoEditOverlays(op.drawingRef);
         }
+        redrawActiveLayerCanvasTargets(op.drawingRef);
       } else if (op.type === 'lasso-select') {
         if (!finishMemoLassoSelect(op)) {
           state.memoLassoPreview = null;
           refreshMemoEditOverlays(op.drawingRef);
         }
+        redrawActiveLayerCanvasTargets(op.drawingRef);
       }
       state.memoCurrentLayerRect = null;
       clearActiveLayerCanvasTargets();
@@ -35762,26 +35986,14 @@
       updateMemoUndoRedoButtonsOnly();
     }
 
-    function beginVideoMemoStrokeFromSurface(event) {
-      if (!state.videoEditMode || !memoInteractionActive() || event.button !== 0) return;
-      const target = event.target;
-      if (target && target.closest && target.closest('#videoMemoCanvas, button, input, textarea, select, [contenteditable="true"], .memo-controls-wrap, .memo-quick-window-wrap, .memo-nudge-window-wrap, .memo-color-picker-window-wrap, .memo-tool-options-window-wrap, .scenario-board-window-wrap, .inspector-panel, .video-preview-zoom-controls')) return;
-      const canvas = videoMemoCanvasElement();
-      if (!canvas || !eventHitsVideoMemoCanvas(event, canvas)) return;
-      beginVideoMemoStroke(event);
-      if (state.memoPointerId === event.pointerId) safeMemoSetPointerCapture(event.currentTarget, event.pointerId);
-    }
-
-    function continueVideoMemoStrokeFromSurface(event) {
-      if (!state.videoEditMode) return;
-      continueVideoMemoStroke(event);
-    }
-
-    function endVideoMemoStrokeFromSurface(event) {
-      if (!state.videoEditMode) return;
-      endVideoMemoStroke(event);
-      if (event.currentTarget && event.currentTarget.releasePointerCapture) {
-        try { event.currentTarget.releasePointerCapture(event.pointerId); } catch (error) {}
+    function endActiveMemoRasterStrokeFromDocument(event) {
+      const op = state.memoRasterOp;
+      if (!op || state.memoPointerId !== event.pointerId) return;
+      const target = op.target || {};
+      if (target.type === 'video-conte-layer') {
+        endVideoMemoStroke(event);
+      } else {
+        endMemoStroke(event);
       }
     }
 
@@ -35795,14 +36007,6 @@
         canvas.addEventListener('pointerup', endVideoMemoStroke);
         canvas.addEventListener('pointercancel', endVideoMemoStroke);
         canvas.addEventListener('contextmenu', handleMemoCanvasContextMenu);
-      }
-      const surface = canvas.closest && (canvas.closest('.paper-stage') || canvas.closest('#videoPreviewStage'));
-      if (surface && surface.dataset.videoMemoSurfaceBound !== 'true') {
-        surface.dataset.videoMemoSurfaceBound = 'true';
-        surface.addEventListener('pointerdown', beginVideoMemoStrokeFromSurface);
-        surface.addEventListener('pointermove', continueVideoMemoStrokeFromSurface);
-        surface.addEventListener('pointerup', endVideoMemoStrokeFromSurface);
-        surface.addEventListener('pointercancel', endVideoMemoStrokeFromSurface);
       }
     }
 
@@ -37018,6 +37222,7 @@
       document.addEventListener('pointermove', moveMemoEditToolWindowDrag);
       document.addEventListener('pointermove', continueMemoSpacePan);
       document.addEventListener('pointermove', continueMemoTransformDocument);
+      document.addEventListener('pointerup', endActiveMemoRasterStrokeFromDocument, true);
       document.addEventListener('pointerup', endMemoWindowDrag);
       document.addEventListener('pointerup', endMemoQuickWindowDrag);
       document.addEventListener('pointerup', endMemoNudgeWindowDrag);
@@ -37026,6 +37231,8 @@
       document.addEventListener('pointerup', function(event) { endMemoSpacePan(event, null); });
       document.addEventListener('pointerup', endMemoTransformDocument);
       document.addEventListener('pointerup', endCameraFrameDrag);
+      document.addEventListener('pointercancel', endActiveMemoRasterStrokeFromDocument, true);
+      document.addEventListener('lostpointercapture', endActiveMemoRasterStrokeFromDocument, true);
       document.addEventListener('pointercancel', endMemoWindowDrag);
       document.addEventListener('pointercancel', endMemoQuickWindowDrag);
       document.addEventListener('pointercancel', endMemoNudgeWindowDrag);
