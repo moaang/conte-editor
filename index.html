@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver006</title>
+  <title>Conte Editor Prototype ver007</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6755,7 +6755,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver006</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver007</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6792,7 +6792,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '006';
+    const APP_DISPLAY_VERSION = '007';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -32470,6 +32470,15 @@
       return String(current.layerDrawingRef || '') === String(drawingRef || '') ? current : null;
     }
 
+    function memoCanvasHasActiveStroke(canvas) {
+      // True while a memo raster op is actively painting onto this exact canvas. Async bitmap
+      // repaints (image.onload clearRect, video peer-image copy) must NOT run then, or they wipe a
+      // stroke still being drawn live — the race that made fast consecutive strokes vanish.
+      if (!canvas || !state.memoRasterOp) return false;
+      const targets = Array.isArray(state.memoActiveLayerCanvasEls) ? state.memoActiveLayerCanvasEls : [];
+      return targets.indexOf(canvas) !== -1;
+    }
+
     function drawLayerDrawingPreviewToCanvas(canvas, drawingRef) {
       const ref = String(drawingRef || '');
       if (!canvas || !ref) return;
@@ -32492,6 +32501,7 @@
         const image = new Image();
         image.onload = function() {
           if (canvas.dataset.layerPreviewDrawKey !== key) return;
+          if (memoCanvasHasActiveStroke(canvas)) return;
           if (!applyGeometryBeforeBitmap) applyLayerCanvasBitmapRectGeometry(canvas, rect);
           const ctx = canvas.getContext('2d');
           ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -32500,6 +32510,7 @@
         };
         image.onerror = function() {
           if (canvas.dataset.layerPreviewDrawKey !== key) return;
+          if (memoCanvasHasActiveStroke(canvas)) return;
           resetLayerCanvasBitmapGeometry(canvas);
           const ctx = canvas.getContext('2d');
           ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -32798,6 +32809,7 @@
 
     function copyVideoLayerPeerImageToCanvas(canvas, peerImage, drawingRef) {
       if (!canvas || !peerImage) return false;
+      if (memoCanvasHasActiveStroke(canvas)) return false;
       const ref = String(drawingRef || canvas.dataset && canvas.dataset.layerDrawingRef || '');
       const drawing = getLayerDrawingData(state.project, ref);
       applyLayerCanvasBitmapGeometry(canvas, drawing);
