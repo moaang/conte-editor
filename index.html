@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver053</title>
+  <title>Conte Editor Prototype ver055</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6756,7 +6756,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver053</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver055</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6907,7 +6907,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '053';
+    const APP_DISPLAY_VERSION = '055';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18830,6 +18830,29 @@
       menu.hidden = false;
     }
 
+    function showAudioClipContextMenu(event, clipId, root) {
+      const id = String(clipId || '');
+      const clips = state.project.audio && state.project.audio.clips ? state.project.audio.clips : [];
+      const clip = clips.find(function(item) { return item.id === id; });
+      if (!clip) return;
+      selectAudioClip(id, root);
+      const menu = conteLayerContextMenuEl();
+      menu.innerHTML = '<button type="button" data-audio-clip-menu-action="delete">削除</button>';
+      const button = menu.querySelector('[data-audio-clip-menu-action="delete"]');
+      if (button) {
+        button.addEventListener('click', function(clickEvent) {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
+          hideConteLayerContextMenu();
+          runCommand('Delete dialogue audio', function(project) {
+            deleteAudioClip(project, id);
+          });
+        });
+      }
+      positionContextMenuNearPointer(menu, event, 160, 60);
+      menu.hidden = false;
+    }
+
     function showAudioRecordingStopButton(x, y) {
       hideAudioRecordingStopButton();
       const button = document.createElement('button');
@@ -19484,18 +19507,26 @@
       if (!targetCutId || cutIndexById(state.project, targetCutId) < 0) return;
       selectTimelinePanelForContextAction(root, targetCutId);
       const menu = conteLayerContextMenuEl();
-      menu.innerHTML = '<button type="button" data-conte-layer-menu-action="add-cut">\u30ab\u30c3\u30c8\u8ffd\u52a0</button>';
-      const button = menu.querySelector('[data-conte-layer-menu-action="add-cut"]');
-      if (button) {
+      const canDelete = state.project.cuts.length > 1;
+      menu.innerHTML = [
+        '<button type="button" data-conte-layer-menu-action="add-cut">\u30ab\u30c3\u30c8\u8ffd\u52a0</button>',
+        '<button type="button" data-conte-layer-menu-action="delete-cut"' + (canDelete ? '' : ' disabled') + '>\u30ab\u30c3\u30c8\u524a\u9664</button>'
+      ].join('');
+      menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
           clickEvent.preventDefault();
           clickEvent.stopPropagation();
+          const action = button.dataset.conteLayerMenuAction || '';
           hideConteLayerContextMenu();
-          addConteCutAfterSelection();
+          if (action === 'add-cut') {
+            addConteCutAfterSelection();
+          } else if (action === 'delete-cut') {
+            deletePrimarySelectedPicturePanel();
+          }
         });
-      }
+      });
       const x = Math.min(window.innerWidth - 170, Math.max(8, event.clientX));
-      const y = Math.min(window.innerHeight - 60, Math.max(8, event.clientY));
+      const y = Math.min(window.innerHeight - 90, Math.max(8, event.clientY));
       menu.style.left = x + 'px';
       menu.style.top = y + 'px';
       menu.hidden = false;
@@ -22233,6 +22264,19 @@
           window.addEventListener('pointermove', move);
           window.addEventListener('pointerup', finish);
           window.addEventListener('pointercancel', finish);
+        });
+        clipEl.addEventListener('contextmenu', function(event) {
+          const clipId = clipEl.dataset.audioClipId || '';
+          if (!clipId) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (suppressMobileNativeContextMenu(event)) return;
+          showAudioClipContextMenu(event, clipId, root);
+        });
+        bindMobileLongPressContextMenu(clipEl, function(event) {
+          const clipId = clipEl.dataset.audioClipId || '';
+          if (!clipId) return;
+          showAudioClipContextMenu(event, clipId, root);
         });
       });
     }
@@ -36472,14 +36516,20 @@
         return;
       }
       if (op.type === 'page-draw' && state.memoCurrentStroke) {
+        // Live page memo: stamp only the new segment onto the overlay (incremental) instead of
+        // clearing + re-rendering every stroke on the page each frame. The stroke stays in
+        // page.strokes as vector data, so erase / undo / the final endMemoStroke commit still
+        // full-redraw correctly — only the per-frame live cost (and its ~1-frame rAF delay) is gone.
         const samples = coalescedDrawEvents(event);
         for (let i = 0; i < samples.length; i++) {
           const evRaw = getMemoPointFromEventRaw(samples[i]);
           if (shouldAppendMemoPoint(state.memoCurrentStroke, evRaw)) {
-            state.memoCurrentStroke.points.push({ x: Number(evRaw.x) || 0, y: Number(evRaw.y) || 0 });
+            const previousPoint = state.memoCurrentStroke.points[state.memoCurrentStroke.points.length - 1] || null;
+            const nextPoint = { x: Number(evRaw.x) || 0, y: Number(evRaw.y) || 0 };
+            state.memoCurrentStroke.points.push(nextPoint);
+            drawPageMemoStrokeSegment(state.memoCurrentStroke, previousPoint, nextPoint);
           }
         }
-        scheduleMemoCanvasRedraw();
         return;
       }
       const nextPoint = state.memoCurrentLayerRect ? localLayerMemoPoint(point, state.memoCurrentLayerRect) : point;
