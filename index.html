@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver043</title>
+  <title>Conte Editor Prototype ver044</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver043</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver044</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6798,10 +6798,93 @@
     </div>
   </dialog>
 
+  <style>
+    .project-start-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(28, 28, 26, 0.78);
+    }
+    .project-start-overlay[hidden] { display: none; }
+    .project-start-card {
+      width: min(440px, 90vw);
+      background: var(--panel, #f7f7f3);
+      color: var(--text, #20201c);
+      border-radius: 14px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
+      padding: 30px 28px 26px;
+      text-align: center;
+    }
+    .project-start-title { font-size: 21px; font-weight: 700; letter-spacing: 0.04em; }
+    .project-start-sub { margin-top: 8px; font-size: 13px; opacity: 0.74; line-height: 1.5; }
+    .project-start-actions { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+    .project-start-btn {
+      appearance: none;
+      border: 1px solid rgba(0, 0, 0, 0.18);
+      background: #fff;
+      color: #20201c;
+      border-radius: 9px;
+      padding: 13px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .project-start-btn:hover { background: #f0f0ea; }
+    .project-start-btn.primary { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
+    .project-start-btn.primary:hover { background: #2a62ba; }
+    .project-start-recent { margin-top: 18px; text-align: left; }
+    .project-start-recent[hidden] { display: none; }
+    .project-start-recent-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 8px; }
+    .project-start-recent-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      width: 100%; text-align: left; background: #fff; border: 1px solid rgba(0,0,0,0.14);
+      border-radius: 8px; padding: 9px 11px; margin-bottom: 6px; cursor: pointer; font-size: 13px;
+    }
+    .project-start-recent-item:hover { background: #f0f0ea; }
+    .project-start-recent-item .meta { font-size: 11px; opacity: 0.6; }
+    body.project-locked .workspace { pointer-events: none; }
+    .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
+    #projectCreateTitleInput {
+      display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
+      padding: 10px 11px; font-size: 14px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.22);
+    }
+    .project-create-hint { font-size: 12px; opacity: 0.7; min-height: 16px; margin: 8px 0 0; }
+    .project-create-hint.error { color: #c0392b; opacity: 1; }
+  </style>
+
+  <div id="projectStartOverlay" class="project-start-overlay" hidden>
+    <div class="project-start-card">
+      <div class="project-start-title">Conte Editor</div>
+      <div class="project-start-sub">新しいプロジェクトを作成するか、既存のプロジェクトを開いてください。</div>
+      <div class="project-start-actions">
+        <button id="projectStartNewBtn" type="button" class="project-start-btn primary">新規プロジェクト</button>
+        <button id="projectStartLoadBtn" type="button" class="project-start-btn">プロジェクトを開く</button>
+      </div>
+      <div id="projectStartRecent" class="project-start-recent" hidden></div>
+    </div>
+  </div>
+
+  <dialog id="projectCreateDialog" class="choice-dialog">
+    <form method="dialog">
+      <h2>新規プロジェクト</h2>
+      <label class="project-create-label">タイトル
+        <input id="projectCreateTitleInput" type="text" maxlength="80" placeholder="プロジェクト名" autocomplete="off" />
+      </label>
+      <p id="projectCreateHint" class="project-create-hint"></p>
+      <div class="choice-dialog-actions">
+        <button type="submit" value="create" class="primary">作成</button>
+        <button type="submit" value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '043';
+    const APP_DISPLAY_VERSION = '044';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -6856,6 +6939,9 @@
     const WORKSPACE_STORE_NAME = 'handles';
     const WORKSPACE_HANDLE_KEY = 'workingDirectory';
     const INDEXED_DB_AUTOSAVE_KEY = 'indexedDbAutosaveProject';
+    const INDEXED_DB_PROJECT_INDEX_KEY = 'indexedDbProjectIndex';
+    const INDEXED_DB_PROJECT_PAYLOAD_PREFIX = 'indexedDbProject:';
+    const INDEXED_DB_PROJECT_MAX_SLOTS = 3;
     const INDEXED_DB_AUTOSAVE_DELAY_MS = 1600;
     // Pen strokes save on a long idle debounce so rapid drawing does not autosave per-stroke.
     // A flush on tab hide / pagehide guarantees the last strokes are still persisted.
@@ -6915,6 +7001,7 @@
     // APP: STATE STORE
     const state = {
       project: createInitialProject(),
+      projectActive: false,
       selectedPicturePanelId: 'slot-1',
       selectedBlockId: '',
       selectedAudioClipId: '',
@@ -11817,17 +11904,198 @@
       });
     }
 
+    function projectStartOverlayEl() {
+      return document.getElementById('projectStartOverlay');
+    }
+
+    // The whole editor is "locked" (start overlay shown, workspace not interactive) until a project is
+    // created or restored. setProjectActive(true) unlocks; (false) shows the start screen.
+    function setProjectActive(active) {
+      state.projectActive = Boolean(active);
+      const overlay = projectStartOverlayEl();
+      if (overlay) overlay.hidden = state.projectActive;
+      document.body.classList.toggle('project-locked', !state.projectActive);
+    }
+
+    async function bootProjectStartup() {
+      // Lock immediately (synchronously) so the editable UI never flashes before the async restore
+      // settles.
+      setProjectActive(false);
+      let restored = false;
+      // 1) A remembered working folder (desktop) reopens its project.
+      try { restored = await restoreWorkspaceHandle(); } catch (error) { restored = false; }
+      // 2) Otherwise the most-recently-active IndexedDB project (mobile / desktop without a folder).
+      if (!restored) {
+        try { restored = await restoreLastIndexedDbProject(); } catch (error) { restored = false; }
+      }
+      if (restored) { setProjectActive(true); return; }
+      // 3) Nothing to restore → locked start screen, listing any saved projects to reopen.
+      await renderProjectStartRecent();
+      setProjectActive(false);
+    }
+
+    async function renderProjectStartRecent() {
+      const container = document.getElementById('projectStartRecent');
+      if (!container) return;
+      let slots = [];
+      try {
+        const index = await loadIndexedDbProjectIndex();
+        slots = index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+      } catch (error) { slots = []; }
+      container.innerHTML = '';
+      if (!slots.length) { container.hidden = true; return; }
+      const title = document.createElement('div');
+      title.className = 'project-start-recent-title';
+      title.textContent = '最近のプロジェクト';
+      container.appendChild(title);
+      slots.forEach(function(slot) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'project-start-recent-item';
+        item.dataset.projectSlotId = slot.id;
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = slot.title || '(無題)';
+        const meta = document.createElement('span');
+        meta.className = 'meta';
+        meta.textContent = slot.savedAt ? new Date(slot.savedAt).toLocaleString() : '';
+        item.appendChild(name);
+        item.appendChild(meta);
+        item.addEventListener('click', function() { restoreIndexedDbProjectById(slot.id); });
+        container.appendChild(item);
+      });
+      container.hidden = false;
+    }
+
+    function projectJsonFileNameForTitle(title) {
+      const base = String(title || '').trim() || 'project';
+      return safeProjectJsonFileName(base + '.conte.json');
+    }
+
+    // Title-input modal for a brand-new project. Resolves to the trimmed title, or null if cancelled.
+    function askNewProjectTitle() {
+      return new Promise(function(resolve) {
+        const dialog = document.getElementById('projectCreateDialog');
+        const form = dialog ? dialog.querySelector('form') : null;
+        const input = document.getElementById('projectCreateTitleInput');
+        const hint = document.getElementById('projectCreateHint');
+        if (!dialog || !form || !input) { resolve(null); return; }
+        input.value = '';
+        if (hint) { hint.textContent = ''; hint.classList.remove('error'); }
+        let done = false;
+        const cleanup = function() {
+          form.removeEventListener('submit', onSubmit);
+          dialog.removeEventListener('cancel', onCancel);
+          dialog.removeEventListener('close', onClose);
+        };
+        const finish = function(value) {
+          if (done) return;
+          done = true;
+          cleanup();
+          if (dialog.open) dialog.close();
+          resolve(value);
+        };
+        const onSubmit = function(event) {
+          event.preventDefault();
+          const submitter = event.submitter;
+          if ((submitter && submitter.value) !== 'create') { finish(null); return; }
+          const title = String(input.value || '').trim();
+          if (!title) {
+            if (hint) { hint.textContent = 'タイトルを入力してください。'; hint.classList.add('error'); }
+            try { input.focus(); } catch (error) {}
+            return;
+          }
+          finish(title);
+        };
+        const onCancel = function(event) { event.preventDefault(); finish(null); };
+        const onClose = function() { if (!done) finish(null); };
+        form.addEventListener('submit', onSubmit);
+        dialog.addEventListener('cancel', onCancel);
+        dialog.addEventListener('close', onClose);
+        dialog.returnValue = '';
+        dialog.showModal();
+        setTimeout(function() { try { input.focus(); } catch (error) {} }, 30);
+      });
+    }
+
+    async function workspaceFolderHasProjectJson(handle) {
+      try {
+        if (handle && typeof handle.values === 'function') {
+          for await (const item of handle.values()) {
+            if (item && item.kind === 'file' && /\.conte\.json$/i.test(String(item.name || ''))) return true;
+          }
+        }
+      } catch (error) {}
+      return false;
+    }
+
+    // Pick a working folder for a NEW project. Rejects folders that already contain a *.conte.json —
+    // those belong to "Load", not "New". Returns the directory handle, or null on cancel/reject.
+    async function pickNewProjectFolder() {
+      if (!fileSystemAccessAvailable()) return null;
+      let handle;
+      try {
+        handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      } catch (error) {
+        if (error && error.name === 'AbortError') return null;
+        alert('作業フォルダの選択に失敗しました: ' + (error && error.message ? error.message : error));
+        return null;
+      }
+      if (!handle || handle.kind !== 'directory') return null;
+      if (await workspaceFolderHasProjectJson(handle)) {
+        alert('選択したフォルダには既にプロジェクト（.conte.json）があります。\n新規プロジェクトは空のフォルダを選んでください。既存プロジェクトは「開く」から読み込めます。');
+        return null;
+      }
+      return handle;
+    }
+
     async function startNewProject() {
       try {
-        const choice = await askNewProjectUnsavedChoice();
-        if (choice === 'cancel') return;
-        if (choice === 'save') {
-          const saved = await saveJson();
-          if (!saved) return;
+        // Only ask to preserve unsaved work when a project is actually open. From the locked start
+        // screen there is nothing to lose, so go straight to the title prompt.
+        if (state.projectActive) {
+          const choice = await askNewProjectUnsavedChoice();
+          if (choice === 'cancel') return;
+          if (choice === 'save') {
+            const saved = await saveJson();
+            if (!saved) return;
+          }
         }
-        resetProjectForNewProject();
+        const title = await askNewProjectTitle();
+        if (title === null) return;
+
+        const useFolder = fileSystemAccessAvailable() && !mobileOrTabletRuntime();
+        if (useFolder) {
+          // Pick + validate the folder BEFORE wiping the current project, so a cancel here never
+          // destroys an open project.
+          const handle = await pickNewProjectFolder();
+          if (!handle) return;
+          resetProjectForNewProject();
+          state.project.title = title;
+          state.project.projectId = generateProjectId();
+          normalizeProject(state.project);
+          const ok = await connectWorkspaceFolderHandle(handle, {
+            loadExisting: false,
+            saveCurrent: true,
+            projectFileName: projectJsonFileNameForTitle(title),
+            silent: false
+          });
+          if (!ok) return;
+          setProjectActive(true);
+        } else {
+          // Mobile (no File System Access): title-based project kept in IndexedDB.
+          resetProjectForNewProject();
+          state.project.title = title;
+          state.project.projectId = generateProjectId();
+          state.project.settings = state.project.settings || {};
+          state.project.settings.indexedDbAutosaveEnabled = true;
+          normalizeProject(state.project);
+          setProjectActive(true);
+          refresh();
+          scheduleIndexedDbAutosave(0);
+        }
       } catch (error) {
-        console.error('[new-project] reset failed', error);
+        console.error('[new-project] failed', error);
         alert('New Project failed: ' + (error && error.message ? error.message : error));
       }
     }
@@ -29585,6 +29853,7 @@
           updateWorkspaceUI();
         }
         markProjectSavedBaseline();
+        setProjectActive(true);
         refresh();
         return true;
       } catch (error) {
@@ -29636,11 +29905,11 @@
     }
 
     async function restoreWorkspaceHandle() {
-      if (!fileSystemAccessAvailable()) return;
+      if (!fileSystemAccessAvailable()) return false;
       try {
         const handle = await loadWorkspaceHandle();
-        if (!handle) return;
-        if (!await ensureWorkspacePermission(handle, false)) return;
+        if (!handle) return false;
+        if (!await ensureWorkspacePermission(handle, false)) return false;
         state.workspaceHandle = handle;
         state.workspaceName = handle.name || 'Local workspace';
         state.workspaceStatus = '';
@@ -29648,12 +29917,14 @@
           enabled: true,
           name: state.workspaceName
         }));
-        await loadProjectFromWorkspaceIfExists();
+        const loaded = await loadProjectFromWorkspaceIfExists();
         await hydrateWorkspaceMediaRefs();
         markProjectSavedBaseline();
         refresh();
+        return Boolean(loaded);
       } catch (error) {
         state.workspaceStatus = '';
+        return false;
       }
     }
 
@@ -29808,7 +30079,60 @@
       return ['最終バックアップ', time, kb].filter(Boolean).join('\n');
     }
 
+    function generateProjectId() {
+      return 'conte_' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    }
+
+    function ensureCurrentProjectId() {
+      const id = String(state.project && state.project.projectId || '');
+      if (!id || id === 'conte_project') {
+        state.project.projectId = generateProjectId();
+      }
+      return state.project.projectId;
+    }
+
+    function indexedDbProjectPayloadKey(id) {
+      return INDEXED_DB_PROJECT_PAYLOAD_PREFIX + String(id || '');
+    }
+
+    function normalizeIndexedDbProjectIndex(raw) {
+      const index = raw && typeof raw === 'object' ? raw : {};
+      const slots = Array.isArray(index.slots) ? index.slots.filter(function(slot) {
+        return slot && typeof slot === 'object' && slot.id;
+      }).map(function(slot) {
+        return {
+          id: String(slot.id),
+          title: String(slot.title || ''),
+          savedAt: String(slot.savedAt || ''),
+          bytes: Math.max(0, Math.round(Number(slot.bytes) || 0))
+        };
+      }) : [];
+      return { slots: slots, lastActiveId: String(index.lastActiveId || '') };
+    }
+
+    async function loadIndexedDbProjectIndex() {
+      try {
+        return normalizeIndexedDbProjectIndex(await getWorkspaceDbValue(INDEXED_DB_PROJECT_INDEX_KEY));
+      } catch (error) {
+        return { slots: [], lastActiveId: '' };
+      }
+    }
+
+    async function saveIndexedDbProjectIndex(index) {
+      await putWorkspaceDbValue(INDEXED_DB_PROJECT_INDEX_KEY, normalizeIndexedDbProjectIndex(index));
+    }
+
+    // Back-compat for the stage-settings status/restore/delete UI: surface the last-active slot
+    // (falling back to the legacy single-slot record) as a record-shaped object.
     async function loadIndexedDbAutosaveRecord() {
+      const index = await loadIndexedDbProjectIndex();
+      const slot = index.slots.find(function(item) { return item.id === index.lastActiveId; })
+        || index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); })[0]
+        || null;
+      if (slot) {
+        const payload = await getWorkspaceDbValue(indexedDbProjectPayloadKey(slot.id));
+        return { savedAt: slot.savedAt, title: slot.title, bytes: slot.bytes, projectId: slot.id, payload: String(payload || '') };
+      }
       return getWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY);
     }
 
@@ -29829,19 +30153,80 @@
 
     async function saveProjectToIndexedDbAutosave() {
       if (!indexedDbAutosaveEnabled(state.project)) return false;
+      const id = ensureCurrentProjectId();
       const payload = serializedProjectJson();
-      const record = {
-        savedAt: new Date().toISOString(),
-        schemaVersion: PROJECT_FORMAT_VERSION,
-        projectId: String(state.project && state.project.projectId || ''),
-        title: String(state.project && state.project.title || ''),
-        bytes: payload.length,
-        payload: payload
-      };
-      await putWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY, record);
-      state.indexedDbAutosaveStatus = indexedDbAutosaveRecordLabel(record);
+      const savedAt = new Date().toISOString();
+      const title = String(state.project && state.project.title || '');
+      await putWorkspaceDbValue(indexedDbProjectPayloadKey(id), payload);
+      const index = await loadIndexedDbProjectIndex();
+      const slots = index.slots.filter(function(slot) { return slot.id !== id; });
+      slots.push({ id: id, title: title, savedAt: savedAt, bytes: payload.length });
+      // Keep at most N projects; evict the oldest (by savedAt) and drop its payload.
+      slots.sort(function(a, b) { return String(a.savedAt).localeCompare(String(b.savedAt)); });
+      while (slots.length > INDEXED_DB_PROJECT_MAX_SLOTS) {
+        const evicted = slots.shift();
+        if (evicted && evicted.id) {
+          try { await deleteWorkspaceDbValue(indexedDbProjectPayloadKey(evicted.id)); } catch (error) {}
+        }
+      }
+      await saveIndexedDbProjectIndex({ slots: slots, lastActiveId: id });
+      state.indexedDbAutosaveStatus = indexedDbAutosaveRecordLabel({ savedAt: savedAt, title: title, bytes: payload.length });
       updateStageSettingsUI();
       return true;
+    }
+
+    function applyRestoredIndexedDbProject(payload) {
+      stopTimelinePlayback(false);
+      state.undoStack = [];
+      state.redoStack = [];
+      state.stageSettingsOpen = false;
+      restoreProject(JSON.parse(payload));
+      ensureCurrentProjectId();
+    }
+
+    // Boot auto-restore: reopen the most-recently-active IndexedDB project (mobile, or desktop with no
+    // working folder). Returns true if a project was restored.
+    async function restoreLastIndexedDbProject() {
+      if (!indexedDbAutosaveAvailable()) return false;
+      try {
+        const index = await loadIndexedDbProjectIndex();
+        let slot = index.slots.find(function(item) { return item.id === index.lastActiveId; });
+        if (!slot) slot = index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); })[0] || null;
+        let payload = '';
+        if (slot) {
+          payload = String(await getWorkspaceDbValue(indexedDbProjectPayloadKey(slot.id)) || '');
+        } else {
+          // Legacy single-slot fallback (pre-slot-model autosave).
+          const legacy = await getWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY);
+          payload = legacy && typeof legacy === 'object' ? String(legacy.payload || '') : String(legacy || '');
+        }
+        if (!payload) return false;
+        applyRestoredIndexedDbProject(payload);
+        await hydrateWorkspaceMediaRefs();
+        markProjectSavedBaseline();
+        refresh();
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    async function restoreIndexedDbProjectById(id) {
+      try {
+        const payload = String(await getWorkspaceDbValue(indexedDbProjectPayloadKey(id)) || '');
+        if (!payload) { alert('このプロジェクトのデータが見つかりませんでした。'); return false; }
+        applyRestoredIndexedDbProject(payload);
+        const index = await loadIndexedDbProjectIndex();
+        await saveIndexedDbProjectIndex({ slots: index.slots, lastActiveId: String(id) });
+        await hydrateWorkspaceMediaRefs();
+        markProjectSavedBaseline();
+        setProjectActive(true);
+        refresh();
+        return true;
+      } catch (error) {
+        alert('復元に失敗しました: ' + (error && error.message ? error.message : error));
+        return false;
+      }
     }
 
     function scheduleIndexedDbAutosave(delay) {
@@ -29894,6 +30279,13 @@
     async function deleteIndexedDbAutosave() {
       if (!confirm('IndexedDBバックアップを削除しますか？')) return;
       try {
+        const index = await loadIndexedDbProjectIndex();
+        const targetId = index.lastActiveId || (index.slots[index.slots.length - 1] && index.slots[index.slots.length - 1].id) || '';
+        if (targetId) {
+          try { await deleteWorkspaceDbValue(indexedDbProjectPayloadKey(targetId)); } catch (error) {}
+          const slots = index.slots.filter(function(slot) { return slot.id !== targetId; });
+          await saveIndexedDbProjectIndex({ slots: slots, lastActiveId: '' });
+        }
         await deleteWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY);
         state.indexedDbAutosaveStatus = '削除完了';
         updateStageSettingsUI();
@@ -30922,6 +31314,7 @@
       try {
         const text = await readTextFile(file);
         restoreProject(JSON.parse(String(text || '')));
+        setProjectActive(true);
         const fileName = safeProjectJsonFileName(file.name || 'project.conte.json');
         if (options.connectWorkspace === false) {
           clearWorkspaceConnection({ forgetSavedHandle: true });
@@ -39028,6 +39421,13 @@
       document.getElementById('newProjectBtn').addEventListener('click', startNewProject);
       document.getElementById('saveJsonBtn').addEventListener('click', saveJson);
       document.getElementById('loadJsonBtn').addEventListener('click', chooseJsonForLoad);
+      const projectStartNewBtn = document.getElementById('projectStartNewBtn');
+      if (projectStartNewBtn) projectStartNewBtn.addEventListener('click', startNewProject);
+      const projectStartLoadBtn = document.getElementById('projectStartLoadBtn');
+      if (projectStartLoadBtn) projectStartLoadBtn.addEventListener('click', function() {
+        const loadBtn = document.getElementById('loadJsonBtn');
+        if (loadBtn) loadBtn.click();
+      });
       const appBrandTitle = document.getElementById('appBrandTitle');
       if (appBrandTitle) {
         appBrandTitle.addEventListener('click', openVersionInfoDialog);
@@ -39198,7 +39598,7 @@
     }
     renderVersionInfoDialog();
     refresh();
-    restoreWorkspaceHandle();
+    bootProjectStartup();
   </script>
 </body>
 </html>
