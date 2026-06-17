@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver040</title>
+  <title>Conte Editor Prototype ver041</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver040</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver041</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '040';
+    const APP_DISPLAY_VERSION = '041';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39194,6 +39194,7 @@
       hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:64vw';
       (document.body || document.documentElement).appendChild(hud);
       let penDown = 0, touchDown = 0, penTarget = '-', flipAtPen = '-', drewAfterPen = '-', lastPenType = '-';
+      let stylusTouch = 0, directTouch = 0, stylusWhileFinger = 0, lastTouchTypes = '-';
       function describe(el) {
         if (!el) return 'none';
         let s = String(el.tagName || '?').toLowerCase();
@@ -39215,12 +39216,30 @@
           });
         }
       }, true);
+      function inspectTouches(e) {
+        const list = e.touches || [];
+        const types = [];
+        for (let i = 0; i < list.length; i++) {
+          const tt = String(list[i].touchType || '?');
+          types.push(tt);
+          if (tt === 'stylus') {
+            stylusTouch++;
+            if (state.previewPanelFlipTouch) stylusWhileFinger++;
+          } else {
+            directTouch++;
+          }
+        }
+        if (types.length) lastTouchTypes = types.join('+');
+      }
+      document.addEventListener('touchstart', inspectTouches, true);
+      document.addEventListener('touchmove', inspectTouches, true);
       (function tick() {
         hud.textContent = 'FINGER+PEN ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') +
           '\nfingerDowns ' + touchDown + '   penDowns ' + penDown + ' (' + lastPenType + ')' +
-          '\nflipActive@pen: ' + flipAtPen +
+          '\nflipActive@pen: ' + flipAtPen + '   drewAfterPen: ' + drewAfterPen +
           '\npenTarget: ' + penTarget +
-          '\ndrewAfterPen: ' + drewAfterPen;
+          '\nTOUCH stylus ' + stylusTouch + '  direct ' + directTouch +
+          '\nstylusWhileFinger: ' + stylusWhileFinger + '   live: ' + lastTouchTypes;
         requestAnimationFrame(tick);
       })();
     })();
