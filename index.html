@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver051</title>
+  <title>Conte Editor Prototype ver052</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6345,7 +6345,7 @@
         </div>
         <span id="workspaceStatus" class="workspace-status json-workspace-status">Local off</span>
         <div class="brand-subtitle">汎用5段コンテ / ボード配置 / レイヤー出力</div>
-        <input id="loadJsonInput" type="file" accept="application/json,.json" hidden />
+        <input id="loadJsonInput" type="file" accept="application/json,.json,.zip,application/zip" hidden />
       </div>
       <div id="memoWindow" class="memo-controls-wrap">
         <div class="memo-controls" aria-label="Memo controls">
@@ -6756,7 +6756,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver051</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver052</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6907,7 +6907,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '051';
+    const APP_DISPLAY_VERSION = '052';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31276,9 +31276,155 @@
       });
     }
 
+    function mimeFromFileName(name) {
+      const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+      const ext = match ? match[1] : '';
+      if (ext === 'png') return 'image/png';
+      if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+      if (ext === 'webp') return 'image/webp';
+      if (ext === 'wav') return 'audio/wav';
+      if (ext === 'mp3' || ext === 'mpeg') return 'audio/mpeg';
+      if (ext === 'm4a' || ext === 'aac') return 'audio/aac';
+      if (ext === 'ogg') return 'audio/ogg';
+      if (ext === 'webm') return 'audio/webm';
+      if (ext === 'mp4') return 'audio/mp4';
+      return '';
+    }
+
+    function referencedConteLayerDrawingRefs(project) {
+      const refs = new Set();
+      const cuts = project && Array.isArray(project.cuts) ? project.cuts : [];
+      cuts.forEach(function(cut) {
+        const layers = cut && Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
+        layers.forEach(function(layer) {
+          if (layer && layer.drawingRef) refs.add(String(layer.drawingRef));
+        });
+      });
+      return refs;
+    }
+
+    async function inflateRawDeflate(bytes) {
+      if (typeof DecompressionStream === 'undefined') {
+        throw new Error('この端末では圧縮ZIPを展開できません（最新のSafari/Chromeが必要です）。');
+      }
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      const buffer = await new Response(stream).arrayBuffer();
+      return new Uint8Array(buffer);
+    }
+
+    // Read a ZIP (incl. DEFLATE-compressed, e.g. a Windows-Explorer-zipped working folder) into
+    // [{ name, data:Uint8Array }]. Directories are skipped.
+    async function readZipEntriesAsync(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const view = new DataView(buffer);
+      const decoder = new TextDecoder('utf-8');
+      let eocd = -1;
+      const min = Math.max(0, view.byteLength - 22 - 65535);
+      for (let offset = view.byteLength - 22; offset >= min; offset -= 1) {
+        if (view.getUint32(offset, true) === 0x06054b50) { eocd = offset; break; }
+      }
+      if (eocd < 0) throw new Error('ZIP終端レコードが見つかりません。');
+      const entryCount = view.getUint16(eocd + 10, true);
+      let cursor = view.getUint32(eocd + 16, true);
+      const out = [];
+      for (let index = 0; index < entryCount; index += 1) {
+        if (view.getUint32(cursor, true) !== 0x02014b50) break;
+        const method = view.getUint16(cursor + 10, true);
+        const compressedSize = view.getUint32(cursor + 20, true);
+        const nameLength = view.getUint16(cursor + 28, true);
+        const extraLength = view.getUint16(cursor + 30, true);
+        const commentLength = view.getUint16(cursor + 32, true);
+        const localOffset = view.getUint32(cursor + 42, true);
+        const name = decoder.decode(bytes.slice(cursor + 46, cursor + 46 + nameLength));
+        cursor += 46 + nameLength + extraLength + commentLength;
+        if (/\/$/.test(name)) continue;
+        const localNameLength = view.getUint16(localOffset + 26, true);
+        const localExtraLength = view.getUint16(localOffset + 28, true);
+        const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+        const raw = bytes.slice(dataStart, dataStart + compressedSize);
+        let data;
+        if (method === 0) data = raw;
+        else if (method === 8) data = await inflateRawDeflate(raw);
+        else throw new Error('未対応のZIP圧縮方式です (method ' + method + ')。');
+        out.push({ name: name, data: data });
+      }
+      return out;
+    }
+
+    // Import a zipped working folder (desktop → iPad): loads the JSON and inlines referenced layer
+    // images + audio (video is skipped; orphan files and orphan conte-layer drawings are discarded).
+    async function importConteFolderZip(file) {
+      showLoadingOverlay('ZIPを展開中…');
+      try {
+        const entries = await readZipEntriesAsync(await file.arrayBuffer());
+        const jsonEntry = entries.find(function(entry) { return /(^|\/)[^\/]*\.conte\.json$/i.test(entry.name); })
+          || entries.find(function(entry) { return /\.json$/i.test(entry.name); });
+        if (!jsonEntry) throw new Error('ZIP内にプロジェクトJSON(.conte.json)が見つかりません。');
+        const project = JSON.parse(new TextDecoder('utf-8').decode(jsonEntry.data));
+        const byBase = {};
+        entries.forEach(function(entry) {
+          const base = String(entry.name).split('/').pop().toLowerCase();
+          if (base && !byBase[base]) byBase[base] = entry;
+        });
+        stopTimelinePlayback(false);
+        state.workspaceHandle = null;
+        state.workspaceName = '';
+        state.undoStack = [];
+        state.redoStack = [];
+        restoreProject(project);
+        if (!state.project.projectId || state.project.projectId === 'conte_project') state.project.projectId = generateProjectId();
+        const missing = [];
+        const usedRefs = referencedConteLayerDrawingRefs(state.project);
+        const drawings = state.project.layerDrawings && typeof state.project.layerDrawings === 'object' ? state.project.layerDrawings : {};
+        const refs = Object.keys(drawings);
+        for (let index = 0; index < refs.length; index += 1) {
+          const ref = refs[index];
+          // Discard orphan conte-layer drawings (referenced by no cut).
+          if (/^drawing-conte-layer-/i.test(ref) && !usedRefs.has(ref)) { delete drawings[ref]; continue; }
+          const drawing = drawings[ref];
+          const fileName = drawing && drawing.bitmapStorage && drawing.bitmapStorage.fileName;
+          if (!fileName || drawing.bitmapDataUrl) continue;
+          const entry = byBase[String(fileName).toLowerCase()];
+          if (entry) {
+            drawing.bitmapDataUrl = await blobToDataUrl(new Blob([entry.data], { type: mimeFromFileName(fileName) || 'image/png' }));
+            drawing.bitmapStorage = null;
+            drawing.version = Math.max(1, Math.round(Number(drawing.version) || 0) + 1);
+          } else {
+            missing.push({ kind: 'layer', name: fileName });
+          }
+        }
+        const clips = state.project.audio && Array.isArray(state.project.audio.clips) ? state.project.audio.clips : [];
+        for (let index = 0; index < clips.length; index += 1) {
+          const clip = clips[index];
+          if (clip.audioDataUrl) continue;
+          const fileName = clip.audioFileName || (clip.audioStorage && clip.audioStorage.fileName) || '';
+          if (!fileName) continue;
+          const entry = byBase[String(fileName).toLowerCase()];
+          if (entry) {
+            const mime = clip.audioMime || mimeFromFileName(fileName) || 'audio/mpeg';
+            await saveAudioBlobInline(clip, new Blob([entry.data], { type: mime }), mime);
+          } else {
+            missing.push({ kind: 'audio', name: fileName });
+          }
+        }
+        normalizeProject(state.project);
+        await hydrateWorkspaceMediaRefs();
+        markProjectSavedBaseline();
+        hideLoadingOverlay();
+        setProjectActive(true);
+        refresh();
+        scheduleIndexedDbAutosave(0);
+        if (missing.length) warnMissingProjectAssets(missing);
+      } catch (error) {
+        hideLoadingOverlay();
+        reportProjectLoadError('zip', error);
+      }
+    }
+
     async function loadJsonFile(file, options) {
       if (!file) return;
       options = options || {};
+      if (/\.zip$/i.test(String(file.name || ''))) { await importConteFolderZip(file); return; }
       try {
         const text = await readTextFile(file);
         restoreProject(JSON.parse(String(text || '')));
@@ -31347,7 +31493,7 @@
         try {
           const handles = await window.showOpenFilePicker({
             multiple: false,
-            types: [{ description: 'Conte JSON', accept: { 'application/json': ['.json'] } }]
+            types: [{ description: 'Conte project', accept: { 'application/json': ['.json'], 'application/zip': ['.zip'] } }]
           });
           const handle = handles && handles[0];
           if (!handle) return;
