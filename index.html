@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver046</title>
+  <title>Conte Editor Prototype ver047</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6765,7 +6765,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver046</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver047</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6916,7 +6916,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '046';
+    const APP_DISPLAY_VERSION = '047';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -6979,7 +6979,7 @@
     // A flush on tab hide / pagehide guarantees the last strokes are still persisted.
     const INDEXED_DB_AUTOSAVE_DRAW_DELAY_MS = 12000;
     const INDEXED_DB_AUDIO_KEY_PREFIX = 'indexedDbAudio:';
-    const MOBILE_RECORDING_AUDIO_BITS_PER_SECOND = 24000;
+    const MOBILE_RECORDING_AUDIO_BITS_PER_SECOND = 16000;
     const MOBILE_RECORDING_MAX_BYTES = 64 * 1024 * 1024;
     const LLM_CONTROL_POLL_MS = 1000;
     const LLM_CONTROL_INBOX_DIR = 'llm/inbox';
