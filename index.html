@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver060</title>
+  <title>Conte Editor Prototype ver061</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6877,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver060</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver061</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7028,7 +7028,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '060';
+    const APP_DISPLAY_VERSION = '061';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16622,10 +16622,17 @@
       return byOwner;
     }
 
-    function olClipOwnerFrameRange(video, ownerId, startFrame, endFrame) {
+    function olOwnerPrimaryRange(ownerId) {
+      const video = buildVideoTimelineCached(state.project);
       const map = video && video.primaryByOwner;
-      if (!map) return { startFrame: startFrame, endFrame: endFrame };
-      const range = map[String(ownerId || '')];
+      return map ? (map[String(ownerId || '')] || null) : null;
+    }
+
+    // Clips a [startFrame, endFrame) span to the owner cut's primary (active) range so OL overlap
+    // regions show/hit only the active cut. Returns null when the span falls entirely in the other
+    // cut's region (element should be dropped). No OL => no primary map => span unchanged.
+    function olClipFrameRange(ownerId, startFrame, endFrame) {
+      const range = olOwnerPrimaryRange(ownerId);
       if (!range) return { startFrame: startFrame, endFrame: endFrame };
       const start = Math.max(startFrame, range.start);
       const end = Math.min(endFrame, range.end);
@@ -18471,8 +18478,10 @@
 
     function conteCutNumberSegmentHtml(item, totalFrames) {
       const owner = item.group && item.group.cuts && item.group.cuts[0];
-      const left = framePercent(item.startFrame, totalFrames);
-      const width = Math.max(0.001, framePercent(item.frames, totalFrames));
+      const clip = olClipFrameRange(owner && owner.id || '', item.startFrame, item.startFrame + item.frames);
+      if (!clip) return '';
+      const left = framePercent(clip.startFrame, totalFrames);
+      const width = Math.max(0.001, framePercent(clip.endFrame - clip.startFrame, totalFrames));
       const cutNo = item.group && item.group.cutNo || '';
       return '<div class="video-segment conte-cut-number-segment" data-video-slot-cut-id="' + escapeAttr(owner && owner.id || '') + '" data-conte-owner-cut-id="' + escapeAttr(owner && owner.id || '') + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%" title="' + escapeAttr(cutNo) + '">' +
         '<span class="conte-cut-number-label">' + escapeHtml(cutNo) + '</span>' +
@@ -18558,8 +18567,10 @@
     function conteCutShellsHtml(groups, totalFrames) {
       return (groups || []).map(function(item) {
         const owner = item.group && item.group.cuts && item.group.cuts[0];
-        const left = framePercent(item.startFrame, totalFrames);
-        const width = Math.max(0.001, framePercent(item.frames, totalFrames));
+        const clip = olClipFrameRange(owner && owner.id || '', item.startFrame, item.startFrame + item.frames);
+        if (!clip) return '';
+        const left = framePercent(clip.startFrame, totalFrames);
+        const width = Math.max(0.001, framePercent(clip.endFrame - clip.startFrame, totalFrames));
         return '<span class="conte-cut-shell" data-conte-owner-cut-id="' + escapeAttr(owner && owner.id || '') + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%" title="CUT ' + escapeAttr(item.group && item.group.cutNo || '') + '"></span>';
       }).join('');
     }
@@ -18570,8 +18581,10 @@
       const selectedPanels = selectedPicturePanelSet();
       return (slots || []).map(function(slot) {
         const owner = slot.group && slot.group.cuts && slot.group.cuts[0];
-        const left = framePercent(slot.startFrame, totalFrames);
-        const width = Math.max(0.001, framePercent(slot.frames, totalFrames));
+        const clip = olClipFrameRange(owner && owner.id || '', slot.startFrame, slot.startFrame + slot.frames);
+        if (!clip) return '';
+        const left = framePercent(clip.startFrame, totalFrames);
+        const width = Math.max(0.001, framePercent(clip.endFrame - clip.startFrame, totalFrames));
         const cutId = slot.cut && slot.cut.id || '';
         const title = 'Panel ' + (slot.cut && slot.cut.startRow || '') + ' / CUT ' + (slot.cutNo || '');
         const selected = selectedPanels.has(cutId) ? ' selected-picture-panel' : '';
@@ -18604,8 +18617,10 @@
           return ownerSlots.map(function(slot) {
             const cutId = slot.cut && slot.cut.id || '';
             if (!cutId) return '';
-            const left = framePercent(slot.startFrame, totalFrames);
-            const width = Math.max(0.001, framePercent(Math.max(1, slot.endFrame - slot.startFrame), totalFrames));
+            const clip = olClipFrameRange(ownerId, slot.startFrame, slot.endFrame);
+            if (!clip) return '';
+            const left = framePercent(clip.startFrame, totalFrames);
+            const width = Math.max(0.001, framePercent(Math.max(1, clip.endFrame - clip.startFrame), totalFrames));
             const title = displayName + ' / CUT ' + (slot.cutNo || '') + ' panel';
             const selectedCell = conteLayerRowCoordinateIsSelected(cutId, rowIndex) ? ' selected-layer-cell' : '';
             return '<span class="conte-layer-cell-hit' + selectedCell + '" data-conte-layer-cell-hit="true" data-conte-panel-cut-id="' + escapeAttr(cutId) + '" data-conte-owner-cut-id="' + escapeAttr(ownerId) + '" data-conte-layer-row-index="' + rowIndex + '" data-conte-layer-line-key="' + escapeAttr(lineKey) + '" data-conte-layer-id="' + escapeAttr(anchorLayer.id) + '" data-conte-layer-row-lane="' + lane + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--row-top:' + top + 'px;--layer-color:' + conteLayerColor(anchorLayer) + '" title="' + escapeAttr(title) + '"></span>';
@@ -18618,6 +18633,9 @@
       return (slots || []).map(function(slot) {
         const cutId = slot.cut && slot.cut.id || '';
         if (!cutId) return '';
+        const owner = slot.group && slot.group.cuts && slot.group.cuts[0];
+        const range = olOwnerPrimaryRange(owner && owner.id || '');
+        if (range && (slot.endFrame < range.start || slot.endFrame > range.end)) return '';
         const left = framePercent(slot.endFrame, totalFrames);
         const title = 'Panel boundary: left panel right edge / CUT ' + (slot.cutNo || '');
         return '<span class="conte-panel-boundary-handle" data-conte-panel-edge="right" data-conte-panel-cut-id="' + escapeAttr(cutId) + '" data-video-slot-cut-id="' + escapeAttr(cutId) + '" style="--boundary-left:' + left.toFixed(4) + '%" title="' + escapeAttr(title) + '"></span>';
@@ -18658,8 +18676,10 @@
         const parts = [];
         bundles.forEach(function(bundle, key) {
           if (bundle.count < 2 || bundle.minLane === Infinity || bundle.maxLane < bundle.minLane) return;
-          const left = framePercent(bundle.startFrame, totalFrames);
-          const width = Math.max(0.001, framePercent(Math.max(1, bundle.endFrame - bundle.startFrame), totalFrames));
+          const clip = olClipFrameRange(owner.id, bundle.startFrame, bundle.endFrame);
+          if (!clip) return;
+          const left = framePercent(clip.startFrame, totalFrames);
+          const width = Math.max(0.001, framePercent(Math.max(1, clip.endFrame - clip.startFrame), totalFrames));
           const top = bundle.minLane * CONTE_LAYER_DEFAULT_HEIGHT;
           const height = (bundle.maxLane - bundle.minLane + 1) * CONTE_LAYER_DEFAULT_HEIGHT;
           parts.push('<span class="conte-layer-bundle-box" data-conte-owner-cut-id="' + escapeAttr(owner.id) + '" data-conte-bg-bundle-id="' + escapeAttr(key) + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--bundle-top:' + top + 'px;--bundle-height:' + height + 'px"></span>');
@@ -18722,7 +18742,7 @@
           const endFrame = endSlot ? endSlot.endFrame : item.endFrame;
           // OL: clip the bar to the owner cut's primary (active) range so an overlap region only
           // shows the active cut's layers. null => this layer is fully inside the other cut's region.
-          const clip = olClipOwnerFrameRange(video, owner.id, startFrame, endFrame);
+          const clip = olClipFrameRange(owner.id, startFrame, endFrame);
           if (!clip) return '';
           const left = framePercent(clip.startFrame, totalFrames);
           const width = Math.max(0.001, framePercent(Math.max(1, clip.endFrame - clip.startFrame), totalFrames));
