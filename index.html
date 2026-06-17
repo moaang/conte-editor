@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver048</title>
+  <title>Conte Editor Prototype ver049</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6765,7 +6765,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver048</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver049</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6916,7 +6916,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '048';
+    const APP_DISPLAY_VERSION = '049';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -19223,7 +19223,7 @@
           };
           replaceWorkspaceObjectUrl('audio', clip.id, recordedFile);
         } else {
-          await saveAudioBlobToIndexedDb(clip, recordedFile, mime, session.fileName || '');
+          await saveAudioBlobInline(clip, recordedFile, mime);
         }
         state.project.audio.manualTimeline = true;
         sortAudioClips(state.project);
@@ -22798,6 +22798,16 @@
     async function ensurePlaybackAudioUrlForClip(clip) {
       if (!clip || !clip.id) return '';
       if (state.workspaceObjectUrls.audio[clip.id]) return state.workspaceObjectUrls.audio[clip.id];
+      if (clip.audioDataUrl) {
+        try {
+          const blob = dataUrlToBlob(clip.audioDataUrl);
+          const url = replaceWorkspaceObjectUrl('audio', clip.id, blob);
+          if (!clip.audioTrimDurationFrames || !clip.waveformPeaks || !clip.waveformPeaks.length) {
+            analyzeAudioBlobForClip(clip, blob).catch(function() {});
+          }
+          return url;
+        } catch (error) {}
+      }
       if (audioClipHasIndexedDbStorage(clip)) {
         try {
           const blob = await readAudioBlobFromIndexedDb(clip);
@@ -30131,6 +30141,26 @@
       return clip.audioStorage;
     }
 
+    // Mobile audio (A): store the recording INLINE in the project (base64 on the clip) so the project
+    // JSON is self-contained — autosave, Save, and ZIP all carry the audio, and it survives an iPad
+    // IndexedDB eviction. Playback uses an object URL built from the same blob.
+    async function saveAudioBlobInline(clip, blob, mime) {
+      if (!clip || !clip.id || !blob) return null;
+      const audioMime = mime || blob.type || clip.audioMime || 'audio/webm';
+      const dataUrl = await blobToDataUrl(blob);
+      clip.audioFileName = '';
+      clip.audioMime = audioMime;
+      clip.audioDataUrl = dataUrl;
+      clip.audioStorage = {
+        kind: 'inline',
+        mime: audioMime,
+        size: Math.round(Number(blob.size) || 0),
+        savedAt: new Date().toISOString()
+      };
+      replaceWorkspaceObjectUrl('audio', clip.id, blob);
+      return clip.audioStorage;
+    }
+
     async function readAudioBlobFromIndexedDb(clip) {
       const key = audioClipIndexedDbStorageKey(clip);
       if (!key || !indexedDbAutosaveAvailable()) return null;
@@ -30911,22 +30941,37 @@
 
     async function hydrateIndexedDbAudioRefs(project) {
       const clips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
-      if (!clips.length || !indexedDbAutosaveAvailable()) return { checked: 0, found: 0, missing: 0 };
+      if (!clips.length) return { checked: 0, found: 0, missing: 0 };
       const stats = { checked: 0, found: 0, missing: 0 };
       for (let index = 0; index < clips.length; index += 1) {
         const clip = clips[index];
-        if (!clip || !audioClipHasIndexedDbStorage(clip) || state.workspaceObjectUrls.audio[clip.id]) continue;
-        stats.checked += 1;
-        try {
-          const blob = await readAudioBlobFromIndexedDb(clip);
-          if (!blob) {
-            stats.missing += 1;
-            continue;
-          }
-          replaceWorkspaceObjectUrl('audio', clip.id, blob);
-          stats.found += 1;
-        } catch (error) {
-          stats.missing += 1;
+        if (!clip || state.workspaceObjectUrls.audio[clip.id]) continue;
+        // Inline audio (A) → build the playback object URL from the embedded base64.
+        if (clip.audioDataUrl) {
+          stats.checked += 1;
+          try {
+            replaceWorkspaceObjectUrl('audio', clip.id, dataUrlToBlob(clip.audioDataUrl));
+            stats.found += 1;
+          } catch (error) { stats.missing += 1; }
+          continue;
+        }
+        // Legacy IndexedDB-blob audio → migrate to inline so the project becomes self-contained.
+        if (audioClipHasIndexedDbStorage(clip) && indexedDbAutosaveAvailable()) {
+          stats.checked += 1;
+          try {
+            const blob = await readAudioBlobFromIndexedDb(clip);
+            if (!blob) { stats.missing += 1; continue; }
+            clip.audioDataUrl = await blobToDataUrl(blob);
+            clip.audioFileName = '';
+            clip.audioStorage = {
+              kind: 'inline',
+              mime: clip.audioMime || blob.type || 'audio/webm',
+              size: Math.round(Number(blob.size) || 0),
+              savedAt: new Date().toISOString()
+            };
+            replaceWorkspaceObjectUrl('audio', clip.id, blob);
+            stats.found += 1;
+          } catch (error) { stats.missing += 1; }
         }
       }
       return stats;
