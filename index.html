@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver036</title>
+  <title>Conte Editor Prototype ver037</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver036</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver037</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '036';
+    const APP_DISPLAY_VERSION = '037';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23909,6 +23909,13 @@
     function continuePreviewPanelFlipTouch(event) {
       const touch = state.previewPanelFlipTouch;
       if (!touch || touch.pointerId !== event.pointerId) return;
+      // A pen stroke is being drawn on the current koma — pin the flip offset so resting-finger drift
+      // can't scrub in another panel's preview (which would cover the live canvas mid-stroke).
+      if (state.memoRasterOp) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const deltaY = event.clientY - touch.startY;
       const steps = deltaY > 0 ? Math.floor(deltaY / 40) : Math.ceil(deltaY / 40);
       const nextOffset = -steps;
@@ -36124,6 +36131,10 @@
         return;
       }
       if (!memoInteractionActive()) return;
+      // While the parapara flip is scrubbed to another panel (offset != 0), the screen shows a
+      // preview-only overlay of a DIFFERENT koma — a stroke would land on the hidden current koma, so
+      // block it. At offset 0 the current koma is shown live, so drawing on it proceeds normally.
+      if (state.previewPanelFlipTouch && state.previewPanelFlipTouch.offset) return;
       event.preventDefault();
       event.stopPropagation();
       const canvas = ensureVideoPreviewReadyForDrawing(event.currentTarget);
