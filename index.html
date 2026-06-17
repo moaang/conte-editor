@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver055</title>
+  <title>Conte Editor Prototype ver056</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5441,6 +5441,89 @@
       font-weight: 900;
     }
 
+    .ol-timeline-window {
+      position: fixed;
+      left: var(--ol-window-left, 120px);
+      top: var(--ol-window-top, 120px);
+      width: var(--ol-window-width, 620px);
+      z-index: 1400;
+      background: #1f2329;
+      color: #eef1f5;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 10px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+      font-size: 12px;
+      user-select: none;
+      overflow: hidden;
+    }
+    .ol-timeline-window[hidden] { display: none; }
+    .ol-timeline-window .ol-window-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      cursor: move;
+    }
+    .ol-timeline-window .ol-window-title { font-weight: 800; flex: 1; }
+    .ol-timeline-window .ol-window-header button {
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+      color: inherit;
+      border-radius: 6px;
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .ol-timeline-window .ol-window-header button.ol-apply {
+      background: #2e9b57;
+      border-color: #2e9b57;
+      font-weight: 800;
+    }
+    .ol-timeline-window .ol-window-header button:hover { filter: brightness(1.12); }
+    .ol-timeline-window .ol-window-hint {
+      padding: 4px 10px;
+      color: rgba(238, 241, 245, 0.6);
+      font-size: 11px;
+    }
+    .ol-timeline-window .ol-window-body {
+      position: relative;
+      margin: 4px 10px 12px;
+      background: rgba(0, 0, 0, 0.28);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .ol-clip {
+      position: absolute;
+      height: 24px;
+      box-sizing: border-box;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 4px;
+      background: rgba(86, 132, 214, 0.55);
+      color: #fff;
+      font-size: 11px;
+      line-height: 22px;
+      text-align: center;
+      cursor: ew-resize;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .ol-clip.ol-clip-focus { outline: 2px solid #ffd54a; }
+    .ol-clip-overlap {
+      position: absolute;
+      height: 24px;
+      box-sizing: border-box;
+      background: rgba(255, 138, 76, 0.5);
+      border: 1px solid rgba(255, 138, 76, 0.9);
+      border-radius: 3px;
+      pointer-events: none;
+      font-size: 10px;
+      line-height: 22px;
+      text-align: center;
+      color: #fff;
+      z-index: 2;
+    }
+
     .audio-recording-stop-popover {
       position: fixed;
       z-index: 10040;
@@ -6756,7 +6839,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver055</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver056</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6907,7 +6990,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '055';
+    const APP_DISPLAY_VERSION = '056';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16240,21 +16323,49 @@
       }).join('||');
     }
 
+    // OL (overlap / cross-dissolve): how many frames this cut group is pulled back over the
+    // previous group. Stored on the group-owner cut (the cutNo / group-start cut). 0 = no OL.
+    function cutGroupOlPrevFrames(group) {
+      const owner = group && group.cuts && group.cuts[0];
+      if (!owner) return 0;
+      // While the OL window has an uncommitted draft, the draft value drives the live timeline
+      // (so the main preview reflects the overlap before 적용). Commit writes it into meta; cancel
+      // drops the draft. When no draft is active this is identical to reading meta.olPrevFrames.
+      const draft = state.olDraft;
+      if (draft && draft.active && draft.frames && Object.prototype.hasOwnProperty.call(draft.frames, owner.id)) {
+        const dv = Number(draft.frames[owner.id]);
+        return dv && dv > 0 ? Math.round(dv) : 0;
+      }
+      const value = owner.meta ? Number(owner.meta.olPrevFrames) : 0;
+      return value && value > 0 ? Math.round(value) : 0;
+    }
+
     function cutGroupTimelineItems(project) {
       const fps = fpsForProject(project);
       const groups = collectCutTimingGroups(project);
       const items = [];
       let cursor = 0;
-      groups.forEach(function(group) {
+      groups.forEach(function(group, gi) {
         const fallback = isTimingMarkerGroup(group) ? Math.max(1, Math.round(fps / 2)) : estimatedCutGroupFallbackFrames(project, group);
         const frames = Math.max(1, Math.round(Number(group.durationFrames) || fallback));
+        let start = cursor;
+        let olPrevFrames = 0;
+        if (gi > 0) {
+          const prev = items[gi - 1];
+          // Pull this group left over the previous group, clamped so it never starts before the
+          // previous group's own start (i.e. can't bleed into the group before that).
+          const requested = Math.max(0, Math.min(cutGroupOlPrevFrames(group), prev.frames));
+          start = Math.max(prev.startFrame, cursor - requested);
+          olPrevFrames = cursor - start;
+        }
         items.push({
           group: group,
-          startFrame: cursor,
-          endFrame: cursor + frames,
-          frames: frames
+          startFrame: start,
+          endFrame: start + frames,
+          frames: frames,
+          olPrevFrames: olPrevFrames
         });
-        cursor += frames;
+        cursor = start + frames;
       });
       return items;
     }
@@ -16409,9 +16520,11 @@
     function buildVideoTimeline(project) {
       const groups = cutGroupTimelineItems(project);
       const slots = [];
-      groups.forEach(function(item) {
+      const slotsByGroup = [];
+      groups.forEach(function(item, groupIndex) {
         const group = item.group;
         const cuts = group.cuts && group.cuts.length ? group.cuts : [];
+        slotsByGroup[groupIndex] = [];
         if (!cuts.length) return;
         const allocated = cuts.map(function(cut) { return allocatedPictureFrames(cut); });
         const fixedSum = allocated.reduce(function(sum, frames) { return sum + frames; }, 0);
@@ -16425,7 +16538,7 @@
           if (!frames) frames = distributedFrameValue(item.frames, cuts.length, index);
           frames = Math.max(1, Math.round(frames));
           frames = Math.max(1, Math.min(frames, Math.max(1, item.endFrame - cursor)));
-          slots.push({
+          const slot = {
             group: group,
             groupStartFrame: item.startFrame,
             groupEndFrame: item.endFrame,
@@ -16434,17 +16547,92 @@
             startFrame: cursor,
             endFrame: Math.min(item.endFrame, cursor + frames),
             frames: frames
-          });
+          };
+          slots.push(slot);
+          slotsByGroup[groupIndex].push(slot);
           cursor += frames;
         });
       });
       const totalFrames = groups.reduce(function(max, item) { return Math.max(max, item.endFrame); }, 0);
-      return { groups: groups, slots: slots, totalFrames: Math.max(1, totalFrames) };
+      // OL support: overlaps[] drives the cross-dissolve preview; primarySegments gives a single
+      // non-overlapping slot per frame (the "active" cut) so frame->slot lookups stay deterministic.
+      // When no OL exists, overlaps is empty and primarySegments is null => identical to the old path.
+      const overlaps = buildVideoTimelineOverlaps(groups);
+      const primarySegments = overlaps.length ? buildVideoTimelinePrimarySegments(groups, slotsByGroup, overlaps) : null;
+      return { groups: groups, slots: slots, totalFrames: Math.max(1, totalFrames), overlaps: overlaps, primarySegments: primarySegments };
+    }
+
+    // In an overlap window the "active" (primary / shown) cut defaults to the incoming (back) group
+    // unless the owner cut pins it via meta.olActiveCutId.
+    function cutGroupOlActiveIncoming(item) {
+      const owner = item && item.group && item.group.cuts && item.group.cuts[0];
+      const activeId = owner && owner.meta ? String(owner.meta.olActiveCutId || '') : '';
+      if (!activeId) return true;
+      return activeId === String(owner && owner.id || '');
+    }
+
+    function buildVideoTimelineOverlaps(items) {
+      const overlaps = [];
+      items.forEach(function(item, gi) {
+        if (gi === 0 || !item.olPrevFrames) return;
+        const prev = items[gi - 1];
+        const ownerCut = item.group.cuts[0];
+        const prevCuts = prev.group.cuts;
+        overlaps.push({
+          startFrame: item.startFrame,
+          endFrame: prev.endFrame,
+          frames: item.olPrevFrames,
+          groupIndex: gi,
+          prevGroupIndex: gi - 1,
+          inCutId: ownerCut ? ownerCut.id : '',
+          outCutId: prevCuts && prevCuts.length ? prevCuts[prevCuts.length - 1].id : '',
+          activeCutId: (ownerCut && ownerCut.meta && ownerCut.meta.olActiveCutId) ? String(ownerCut.meta.olActiveCutId) : (ownerCut ? ownerCut.id : ''),
+          activeIncoming: cutGroupOlActiveIncoming(item)
+        });
+      });
+      return overlaps;
+    }
+
+    function buildVideoTimelinePrimarySegments(items, slotsByGroup, overlaps) {
+      const incomingActiveByGroup = {};
+      overlaps.forEach(function(ol) { incomingActiveByGroup[ol.groupIndex] = ol.activeIncoming; });
+      const pStart = items.map(function(item, gi) {
+        if (gi === 0 || !item.olPrevFrames) return item.startFrame;
+        // overlap window belongs to the incoming group unless the active cut is the outgoing one
+        return incomingActiveByGroup[gi] === false ? items[gi - 1].endFrame : item.startFrame;
+      });
+      const segments = [];
+      items.forEach(function(item, gi) {
+        const segStart = pStart[gi];
+        const segEnd = (gi < items.length - 1) ? Math.max(segStart, pStart[gi + 1]) : item.endFrame;
+        (slotsByGroup[gi] || []).forEach(function(slot) {
+          const a = Math.max(slot.startFrame, segStart);
+          const b = Math.min(slot.endFrame, segEnd);
+          if (b > a) segments.push({ startFrame: a, endFrame: b, slot: slot });
+        });
+      });
+      segments.sort(function(x, y) { return x.startFrame - y.startFrame; });
+      return segments;
     }
 
     function videoSlotAtFrame(project, frame) {
       const video = buildVideoTimelineCached(project);
       const target = Math.max(0, Math.round(Number(frame) || 0));
+      // When OL overlaps exist, slots can overlap at boundaries; use the precomputed non-overlapping
+      // primary segments (active cut wins) so the binary search stays valid and deterministic.
+      const primary = video.primarySegments;
+      if (primary && primary.length) {
+        let plow = 0;
+        let phigh = primary.length - 1;
+        while (plow <= phigh) {
+          const pmid = Math.floor((plow + phigh) / 2);
+          const seg = primary[pmid];
+          if (target < seg.startFrame) phigh = pmid - 1;
+          else if (target >= seg.endFrame) plow = pmid + 1;
+          else return seg.slot;
+        }
+        return null;
+      }
       const slots = video.slots || [];
       let low = 0;
       let high = slots.length - 1;
@@ -18853,6 +19041,301 @@
       menu.hidden = false;
     }
 
+    // ===== OL (overlap / cross-dissolve) timeline window =====
+    // Cut-level clips only (panels ignored). Dragging a clip left overlaps it onto the previous
+    // cut group; the change lives in state.olDraft (which drives the live timeline via
+    // cutGroupOlPrevFrames) until 適用 commits it into meta.olPrevFrames and shifts media.
+    function olWindowEl() {
+      let win = document.getElementById('olTimelineWindow');
+      if (win) return win;
+      win = document.createElement('div');
+      win.id = 'olTimelineWindow';
+      win.className = 'ol-timeline-window';
+      win.hidden = true;
+      win.innerHTML =
+        '<div class="ol-window-header" data-ol-window-drag="true">' +
+          '<span class="ol-window-title">OL タイムライン</span>' +
+          '<button type="button" class="ol-apply" data-ol-action="apply">適用</button>' +
+          '<button type="button" data-ol-action="cancel">キャンセル</button>' +
+          '<button type="button" data-ol-action="close">×</button>' +
+        '</div>' +
+        '<div class="ol-window-hint">クリップを左へドラッグして前のカットと OL（クロスディゾルブ）。適用で確定。</div>' +
+        '<div class="ol-window-body" id="olWindowBody"></div>';
+      document.body.appendChild(win);
+      win.querySelectorAll('[data-ol-action]').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const action = btn.dataset.olAction;
+          if (action === 'apply') applyOlDraft();
+          else closeOlWindow(true);
+        });
+      });
+      bindOlWindowHeaderDrag(win);
+      return win;
+    }
+
+    function bindOlWindowHeaderDrag(win) {
+      const header = win.querySelector('[data-ol-window-drag="true"]');
+      if (!header) return;
+      header.addEventListener('pointerdown', function(e) {
+        if (e.button && e.button !== 0) return;
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        e.preventDefault();
+        const rect = win.getBoundingClientRect();
+        const offX = e.clientX - rect.left;
+        const offY = e.clientY - rect.top;
+        const move = function(me) {
+          const left = Math.max(4, Math.min(window.innerWidth - 80, me.clientX - offX));
+          const top = Math.max(4, Math.min(window.innerHeight - 40, me.clientY - offY));
+          win.style.setProperty('--ol-window-left', left + 'px');
+          win.style.setProperty('--ol-window-top', top + 'px');
+        };
+        const up = function() {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+    }
+
+    function olOwnerCutIdForCut(project, cutId) {
+      const id = String(cutId || '');
+      const groups = collectCutTimingGroups(project);
+      for (let i = 0; i < groups.length; i++) {
+        const cuts = groups[i].cuts || [];
+        if (cuts.some(function(c) { return c.id === id; })) return cuts[0] ? cuts[0].id : '';
+      }
+      return groups.length && groups[0].cuts[0] ? groups[0].cuts[0].id : '';
+    }
+
+    function cutGroupHasOl(project, cutId) {
+      const ownerId = olOwnerCutIdForCut(project, cutId);
+      if (!ownerId) return false;
+      const owner = (project.cuts || []).find(function(c) { return c.id === ownerId; });
+      return Boolean(owner && owner.meta && Number(owner.meta.olPrevFrames) > 0);
+    }
+
+    function openOlWindowForCut(cutId) {
+      const groups = collectCutTimingGroups(state.project);
+      if (!groups.length) return;
+      const frames = {};
+      groups.forEach(function(g) {
+        const o = g.cuts[0];
+        if (o && o.meta && Number(o.meta.olPrevFrames) > 0) frames[o.id] = Math.round(Number(o.meta.olPrevFrames));
+      });
+      state.olDraft = { active: true, frames: frames, focusCutId: olOwnerCutIdForCut(state.project, cutId) };
+      invalidateVideoTimelineCache();
+      const win = olWindowEl();
+      win.hidden = false;
+      renderOlWindow();
+      olRefreshMainTimeline();
+    }
+
+    function closeOlWindow(cancelDraft) {
+      const win = document.getElementById('olTimelineWindow');
+      if (win) win.hidden = true;
+      const hadDraft = Boolean(state.olDraft);
+      state.olDraft = null;
+      if (cancelDraft && hadDraft) {
+        invalidateVideoTimelineCache();
+        olRefreshMainTimeline();
+      }
+    }
+
+    function olRefreshMainTimeline() {
+      if (!state.videoEditMode) return;
+      guardedRender('timing', function() { renderTimingDashboard(); });
+      guardedRender('stage', function() { renderVideoPreviewIfChanged(videoTimelineDisplayTotalFrames(state.project)); });
+    }
+
+    function olWindowLayout() {
+      const video = buildVideoTimelineCached(state.project);
+      const items = (video.groups || []).filter(function(it) { return it.group && it.group.cuts && it.group.cuts.length; });
+      const total = Math.max(1, video.totalFrames);
+      const order = items.map(function(it, i) { return i; }).sort(function(a, b) { return items[a].startFrame - items[b].startFrame; });
+      const laneEnds = [];
+      const laneOf = {};
+      order.forEach(function(i) {
+        const it = items[i];
+        let lane = 0;
+        while (lane < laneEnds.length && laneEnds[lane] > it.startFrame + 0.0001) lane++;
+        laneEnds[lane] = it.endFrame;
+        laneOf[i] = lane;
+      });
+      return { items: items, total: total, laneOf: laneOf, lanes: Math.max(1, laneEnds.length) };
+    }
+
+    function renderOlWindow() {
+      const body = document.getElementById('olWindowBody');
+      if (!body || !state.olDraft) return;
+      const fps = fpsForProject(state.project);
+      const layout = olWindowLayout();
+      const rowH = 28;
+      const pad = 4;
+      body.style.height = (pad * 2 + layout.lanes * rowH) + 'px';
+      const bodyWidth = Math.max(1, body.getBoundingClientRect().width || 580);
+      const focusOwner = state.olDraft.focusCutId;
+      let html = '';
+      layout.items.forEach(function(it, i) {
+        const owner = it.group.cuts[0];
+        const ownerId = owner ? owner.id : '';
+        const left = (it.startFrame / layout.total) * 100;
+        const width = Math.max(0.3, (it.frames / layout.total) * 100);
+        const top = pad + layout.laneOf[i] * rowH;
+        const focus = ownerId === focusOwner ? ' ol-clip-focus' : '';
+        html += '<div class="ol-clip' + focus + '" data-ol-owner-id="' + escapeAttr(ownerId) + '" data-ol-prev-frames="' + (it.olPrevFrames || 0) + '" style="left:' + left.toFixed(3) + '%;width:' + width.toFixed(3) + '%;top:' + top + 'px;">' + escapeHtml(String(it.group.cutNo || '·')) + '</div>';
+        if (it.olPrevFrames > 0) {
+          const olWidth = Math.max(0.2, (it.olPrevFrames / layout.total) * 100);
+          const secs = (it.olPrevFrames / Math.max(1, fps)).toFixed(2);
+          html += '<div class="ol-clip-overlap" style="left:' + left.toFixed(3) + '%;width:' + olWidth.toFixed(3) + '%;top:' + top + 'px;">' + secs + 's</div>';
+        }
+      });
+      body.innerHTML = html;
+      bindOlClipDrag(body, layout, bodyWidth / layout.total);
+    }
+
+    function bindOlClipDrag(body, layout, pxPerFrame) {
+      const ppf = pxPerFrame > 0 ? pxPerFrame : 1;
+      body.querySelectorAll('.ol-clip').forEach(function(clip) {
+        clip.addEventListener('pointerdown', function(e) {
+          if (e.button && e.button !== 0) return;
+          const ownerId = clip.dataset.olOwnerId || '';
+          if (!ownerId) return;
+          const idx = layout.items.findIndex(function(it) { return it.group.cuts[0] && it.group.cuts[0].id === ownerId; });
+          if (idx <= 0) return; // first group has no previous cut to overlap
+          e.preventDefault();
+          const prevFrames = layout.items[idx - 1].frames;
+          const startOl = Number(clip.dataset.olPrevFrames) || 0;
+          const startX = e.clientX;
+          const move = function(me) {
+            const deltaFrames = (startX - me.clientX) / ppf; // drag left => more overlap
+            let next = Math.round(startOl + deltaFrames);
+            next = Math.max(0, Math.min(prevFrames, next));
+            olSetDraftFrames(ownerId, next);
+          };
+          const up = function() {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+          };
+          window.addEventListener('pointermove', move);
+          window.addEventListener('pointerup', up);
+        });
+      });
+    }
+
+    function olSetDraftFrames(ownerId, frames) {
+      if (!state.olDraft) return;
+      const v = Math.max(0, Math.round(Number(frames) || 0));
+      const cur = state.olDraft.frames[ownerId] || 0;
+      if (cur === v) return;
+      if (v > 0) state.olDraft.frames[ownerId] = v;
+      else delete state.olDraft.frames[ownerId];
+      invalidateVideoTimelineCache();
+      renderOlWindow();
+      olRefreshMainTimeline();
+    }
+
+    function olGroupIndexAtFrame(items, frame) {
+      const f = Math.max(0, Math.round(Number(frame) || 0));
+      for (let i = 0; i < items.length; i++) { if (f < items[i].endFrame) return i; }
+      return items.length - 1;
+    }
+
+    function remapTimelineMediaForOl(project, oldItems, oldStartByOwner, newStartByOwner) {
+      if (!oldItems.length) return;
+      const deltaForFrame = function(frame) {
+        const gi = olGroupIndexAtFrame(oldItems, frame);
+        const owner = oldItems[gi] && oldItems[gi].group.cuts[0];
+        if (!owner) return 0;
+        return (oldStartByOwner[owner.id] || 0) - (newStartByOwner[owner.id] || 0);
+      };
+      if (project.audio && Array.isArray(project.audio.clips)) {
+        project.audio.clips.forEach(function(c) {
+          const d = deltaForFrame(c.startFrame);
+          if (d) { c.startFrame = Math.max(0, Math.round((Number(c.startFrame) || 0) - d)); c.manualTiming = true; }
+        });
+        project.audio.manualTimeline = true;
+      }
+      if (project.video && Array.isArray(project.video.clips)) {
+        project.video.clips.forEach(function(c) {
+          const d = deltaForFrame(c.startFrame);
+          if (d) c.startFrame = Math.max(0, Math.round((Number(c.startFrame) || 0) - d));
+        });
+      }
+    }
+
+    function rearrangeAudioAfterOl(project) {
+      if (!project.audio || !Array.isArray(project.audio.clips)) return;
+      normalizeAudioClips(project);
+      const clips = project.audio.clips.filter(function(c) { return !c.hidden; }).slice().sort(function(a, b) { return (Number(a.startFrame) || 0) - (Number(b.startFrame) || 0); });
+      clips.forEach(function(c) { placeAudioClipOnNonOverlappingTrack(project, c, c.trackId); });
+      sortAudioClips(project);
+    }
+
+    function olCommitDraftToProject(project, frames) {
+      collectCutTimingGroups(project).forEach(function(g) {
+        const owner = g.cuts[0];
+        if (!owner || !Object.prototype.hasOwnProperty.call(frames, owner.id)) return;
+        owner.meta = owner.meta || {};
+        const v = Math.max(0, Math.round(Number(frames[owner.id]) || 0));
+        if (v > 0) owner.meta.olPrevFrames = v;
+        else delete owner.meta.olPrevFrames;
+      });
+    }
+
+    function applyOlDraft() {
+      const draft = state.olDraft;
+      if (!draft || !draft.active) { closeOlWindow(false); return; }
+      const frames = Object.assign({}, draft.frames);
+      try {
+        // OLD layout (draft off) to remap media positions onto the new (overlapped) timeline.
+        draft.active = false;
+        invalidateVideoTimelineCache();
+        const oldItems = cutGroupTimelineItems(state.project);
+        const oldStartByOwner = {};
+        oldItems.forEach(function(it) { const o = it.group.cuts[0]; if (o) oldStartByOwner[o.id] = it.startFrame; });
+        runTimelineStructureCommand('Apply OL', function(project) {
+          olCommitDraftToProject(project, frames);
+          invalidateVideoTimelineCache();
+          const newItems = cutGroupTimelineItems(project);
+          const newStartByOwner = {};
+          newItems.forEach(function(it) { const o = it.group.cuts[0]; if (o) newStartByOwner[o.id] = it.startFrame; });
+          remapTimelineMediaForOl(project, oldItems, oldStartByOwner, newStartByOwner);
+          rearrangeAudioAfterOl(project);
+        }, { partialTimeline: false });
+      } catch (error) {
+        try { console.error('Apply OL failed', error); } catch (ignore) {}
+      }
+      state.olDraft = null;
+      closeOlWindow(false);
+    }
+
+    function releaseOlForCut(cutId) {
+      const ownerId = olOwnerCutIdForCut(state.project, cutId);
+      if (!ownerId) return;
+      try {
+        invalidateVideoTimelineCache();
+        const oldItems = cutGroupTimelineItems(state.project);
+        const oldStartByOwner = {};
+        oldItems.forEach(function(it) { const o = it.group.cuts[0]; if (o) oldStartByOwner[o.id] = it.startFrame; });
+        runTimelineStructureCommand('Release OL', function(project) {
+          const found = collectCutTimingGroups(project).find(function(g) { return g.cuts[0] && g.cuts[0].id === ownerId; });
+          const owner = found && found.cuts[0];
+          if (owner && owner.meta) delete owner.meta.olPrevFrames;
+          invalidateVideoTimelineCache();
+          const newItems = cutGroupTimelineItems(project);
+          const newStartByOwner = {};
+          newItems.forEach(function(it) { const o = it.group.cuts[0]; if (o) newStartByOwner[o.id] = it.startFrame; });
+          remapTimelineMediaForOl(project, oldItems, oldStartByOwner, newStartByOwner);
+          rearrangeAudioAfterOl(project);
+        }, { partialTimeline: false });
+      } catch (error) {
+        try { console.error('Release OL failed', error); } catch (ignore) {}
+      }
+    }
+
     function showAudioRecordingStopButton(x, y) {
       hideAudioRecordingStopButton();
       const button = document.createElement('button');
@@ -19508,9 +19991,12 @@
       selectTimelinePanelForContextAction(root, targetCutId);
       const menu = conteLayerContextMenuEl();
       const canDelete = state.project.cuts.length > 1;
+      const hasOl = cutGroupHasOl(state.project, targetCutId);
       menu.innerHTML = [
         '<button type="button" data-conte-layer-menu-action="add-cut">\u30ab\u30c3\u30c8\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="delete-cut"' + (canDelete ? '' : ' disabled') + '>\u30ab\u30c3\u30c8\u524a\u9664</button>'
+        '<button type="button" data-conte-layer-menu-action="delete-cut"' + (canDelete ? '' : ' disabled') + '>\u30ab\u30c3\u30c8\u524a\u9664</button>',
+        '<button type="button" data-conte-layer-menu-action="ol-window">OL \u4f5c\u6210</button>',
+        (hasOl ? '<button type="button" data-conte-layer-menu-action="ol-release">OL \u89e3\u9664</button>' : '')
       ].join('');
       menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
@@ -19522,11 +20008,15 @@
             addConteCutAfterSelection();
           } else if (action === 'delete-cut') {
             deletePrimarySelectedPicturePanel();
+          } else if (action === 'ol-window') {
+            openOlWindowForCut(targetCutId);
+          } else if (action === 'ol-release') {
+            releaseOlForCut(targetCutId);
           }
         });
       });
       const x = Math.min(window.innerWidth - 170, Math.max(8, event.clientX));
-      const y = Math.min(window.innerHeight - 90, Math.max(8, event.clientY));
+      const y = Math.min(window.innerHeight - 140, Math.max(8, event.clientY));
       menu.style.left = x + 'px';
       menu.style.top = y + 'px';
       menu.hidden = false;
