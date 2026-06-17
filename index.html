@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver044</title>
+  <title>Conte Editor Prototype ver045</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver044</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver045</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6853,6 +6853,29 @@
     }
     .project-create-hint { font-size: 12px; opacity: 0.7; min-height: 16px; margin: 8px 0 0; }
     .project-create-hint.error { color: #c0392b; opacity: 1; }
+    .project-loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(28, 28, 26, 0.6);
+    }
+    .project-loading-overlay[hidden] { display: none; }
+    .project-loading-card {
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      background: var(--panel, #f7f7f3); color: var(--text, #20201c);
+      border-radius: 12px; padding: 26px 34px; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.4);
+      min-width: 200px;
+    }
+    .project-loading-spinner {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid rgba(0, 0, 0, 0.15); border-top-color: #2f6fd1;
+      animation: project-loading-spin 0.8s linear infinite;
+    }
+    @keyframes project-loading-spin { to { transform: rotate(360deg); } }
+    .project-loading-message { font-size: 13px; font-weight: 600; opacity: 0.85; text-align: center; white-space: pre-line; }
   </style>
 
   <div id="projectStartOverlay" class="project-start-overlay" hidden>
@@ -6881,10 +6904,17 @@
     </form>
   </dialog>
 
+  <div id="projectLoadingOverlay" class="project-loading-overlay" hidden>
+    <div class="project-loading-card">
+      <div class="project-loading-spinner" aria-hidden="true"></div>
+      <div id="projectLoadingMessage" class="project-loading-message">読み込み中…</div>
+    </div>
+  </div>
+
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '044';
+    const APP_DISPLAY_VERSION = '045';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -11917,10 +11947,79 @@
       document.body.classList.toggle('project-locked', !state.projectActive);
     }
 
+    function showLoadingOverlay(message) {
+      const overlay = document.getElementById('projectLoadingOverlay');
+      const msg = document.getElementById('projectLoadingMessage');
+      if (msg) msg.textContent = message || '読み込み中…';
+      if (overlay) overlay.hidden = false;
+    }
+
+    function hideLoadingOverlay() {
+      const overlay = document.getElementById('projectLoadingOverlay');
+      if (overlay) overlay.hidden = true;
+    }
+
+    // A debug-usable error report: a stable context code + the real error name/message and the first
+    // meaningful stack frame, so a failed load can actually be diagnosed.
+    function reportProjectLoadError(context, error) {
+      const code = 'LOAD_' + String(context || 'GENERIC').toUpperCase().replace(/[^A-Z0-9_]+/g, '_');
+      const name = error && error.name ? String(error.name) : 'Error';
+      const message = error && error.message ? String(error.message) : String(error == null ? 'unknown' : error);
+      let frame = '';
+      if (error && error.stack) {
+        const lines = String(error.stack).split('\n').map(function(line) { return line.trim(); }).filter(Boolean);
+        frame = lines.length > 1 ? lines[1] : (lines[0] || '');
+      }
+      try { console.error('[project-load] ' + code, error); } catch (e) {}
+      alert('プロジェクトの読み込みに失敗しました。\n\n[' + code + ']\n' + name + ': ' + message + (frame ? '\n' + frame : ''));
+      return code;
+    }
+
+    // Post-hydration scan: a referenced external file that has no resolved data/object URL is missing.
+    function collectMissingProjectAssets(project) {
+      const missing = [];
+      const drawings = project && project.layerDrawings && typeof project.layerDrawings === 'object' ? project.layerDrawings : {};
+      Object.keys(drawings).forEach(function(ref) {
+        const drawing = drawings[ref];
+        if (drawing && drawing.bitmapStorage && drawing.bitmapStorage.fileName && !String(drawing.bitmapDataUrl || '')) {
+          missing.push({ kind: 'layer', name: String(drawing.bitmapStorage.fileName) });
+        }
+      });
+      const videoClips = project && project.video && Array.isArray(project.video.clips) ? project.video.clips : [];
+      videoClips.forEach(function(clip) {
+        if (clip && clip.mediaFileName && !String(clip.mediaDataUrl || '')) {
+          missing.push({ kind: 'video', name: String(clip.mediaFileName) });
+        }
+      });
+      const audioUrls = state.workspaceObjectUrls && state.workspaceObjectUrls.audio || {};
+      const audioClips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
+      audioClips.forEach(function(clip) {
+        if (clip && clip.audioFileName && !audioUrls[clip.id]) {
+          missing.push({ kind: 'audio', name: String(clip.audioFileName) });
+        }
+      });
+      return missing;
+    }
+
+    // Warn about missing assets (the project still opens). Blocking alert → OK continues. Returns the
+    // missing count.
+    function warnMissingProjectAssets(missing) {
+      if (!missing || !missing.length) return 0;
+      const byKind = { layer: 0, video: 0, audio: 0 };
+      missing.forEach(function(item) { if (byKind[item.kind] != null) byKind[item.kind] += 1; });
+      const names = missing.slice(0, 12).map(function(item) { return '・[' + item.kind + '] ' + item.name; }).join('\n');
+      const more = missing.length > 12 ? '\n…他 ' + (missing.length - 12) + ' 件' : '';
+      alert('一部の素材ファイルが見つかりませんでした。\nプロジェクトは開けますが、該当の絵/音声/動画は表示されません。\n\n'
+        + '画像レイヤー: ' + byKind.layer + ' / 動画: ' + byKind.video + ' / 音声: ' + byKind.audio + '\n\n'
+        + names + more);
+      return missing.length;
+    }
+
     async function bootProjectStartup() {
       // Lock immediately (synchronously) so the editable UI never flashes before the async restore
       // settles.
       setProjectActive(false);
+      showLoadingOverlay('プロジェクトを確認中…');
       let restored = false;
       // 1) A remembered working folder (desktop) reopens its project.
       try { restored = await restoreWorkspaceHandle(); } catch (error) { restored = false; }
@@ -11928,7 +12027,12 @@
       if (!restored) {
         try { restored = await restoreLastIndexedDbProject(); } catch (error) { restored = false; }
       }
-      if (restored) { setProjectActive(true); return; }
+      hideLoadingOverlay();
+      if (restored) {
+        setProjectActive(true);
+        warnMissingProjectAssets(collectMissingProjectAssets(state.project));
+        return;
+      }
       // 3) Nothing to restore → locked start screen, listing any saved projects to reopen.
       await renderProjectStartRecent();
       setProjectActive(false);
@@ -29810,6 +29914,7 @@
         state.workspaceHandle = handle;
         state.workspaceName = handle.name || 'Local workspace';
         state.workspaceStatus = '';
+        showLoadingOverlay(options.loadExisting !== false ? 'プロジェクトを読み込み中…' : '作業フォルダを準備中…');
         await saveWorkspaceHandle(handle);
         state.project.settings = state.project.settings || {};
         const workspacePatch = {
@@ -29853,11 +29958,18 @@
           updateWorkspaceUI();
         }
         markProjectSavedBaseline();
+        hideLoadingOverlay();
         setProjectActive(true);
         refresh();
+        if (loaded) warnMissingProjectAssets(collectMissingProjectAssets(state.project));
         return true;
       } catch (error) {
-        if (!options.silent) alert('Working folder setup failed: ' + (error && error.message ? error.message : error));
+        hideLoadingOverlay();
+        if (options.loadExisting !== false) {
+          reportProjectLoadError('workspace', error);
+        } else if (!options.silent) {
+          alert('Working folder setup failed: ' + (error && error.message ? error.message : error));
+        }
         return false;
       }
     }
@@ -30212,19 +30324,27 @@
     }
 
     async function restoreIndexedDbProjectById(id) {
+      showLoadingOverlay('プロジェクトを読み込み中…');
       try {
         const payload = String(await getWorkspaceDbValue(indexedDbProjectPayloadKey(id)) || '');
-        if (!payload) { alert('このプロジェクトのデータが見つかりませんでした。'); return false; }
+        if (!payload) {
+          hideLoadingOverlay();
+          alert('このプロジェクトのデータが見つかりませんでした。');
+          return false;
+        }
         applyRestoredIndexedDbProject(payload);
         const index = await loadIndexedDbProjectIndex();
         await saveIndexedDbProjectIndex({ slots: index.slots, lastActiveId: String(id) });
         await hydrateWorkspaceMediaRefs();
         markProjectSavedBaseline();
+        hideLoadingOverlay();
         setProjectActive(true);
         refresh();
+        warnMissingProjectAssets(collectMissingProjectAssets(state.project));
         return true;
       } catch (error) {
-        alert('復元に失敗しました: ' + (error && error.message ? error.message : error));
+        hideLoadingOverlay();
+        reportProjectLoadError('indexeddb', error);
         return false;
       }
     }
@@ -31315,12 +31435,15 @@
         const text = await readTextFile(file);
         restoreProject(JSON.parse(String(text || '')));
         setProjectActive(true);
+        showLoadingOverlay('プロジェクトを読み込み中…');
         const fileName = safeProjectJsonFileName(file.name || 'project.conte.json');
         if (options.connectWorkspace === false) {
           clearWorkspaceConnection({ forgetSavedHandle: true });
           await hydrateWorkspaceMediaRefs();
           markProjectSavedBaseline();
+          hideLoadingOverlay();
           refresh();
+          warnMissingProjectAssets(collectMissingProjectAssets(state.project));
           return;
         }
         if (options.connectWorkspace !== false && fileSystemAccessAvailable()) {
@@ -31337,7 +31460,9 @@
               state.workspaceStatus = '接続済\n' + state.workspaceName + '/' + fileName;
               await hydrateWorkspaceMediaRefs();
               markProjectSavedBaseline();
+              hideLoadingOverlay();
               refresh();
+              warnMissingProjectAssets(collectMissingProjectAssets(state.project));
               return;
             } catch (error) {}
           }
@@ -31353,16 +31478,19 @@
             requireProjectFile: true,
             warnMissingProjectFile: Boolean(options.warnIfWorkspaceLinkBroken)
           });
-          if (selected && state.workspaceHandle) return;
+          if (selected && state.workspaceHandle) { hideLoadingOverlay(); return; }
         }
         if (options.warnIfWorkspaceLinkBroken && !state.workspaceHandle) {
           alert('JSONは読み込みましたが、作業フォルダが接続されていません。リンク素材が表示されない場合は、このJSONが入っているプロジェクトフォルダをLoad JSONまたはSave JSONで接続してください。');
         }
         await hydrateWorkspaceMediaRefs();
         markProjectSavedBaseline();
+        hideLoadingOverlay();
         refresh();
+        warnMissingProjectAssets(collectMissingProjectAssets(state.project));
       } catch (error) {
-        alert('JSON load failed: ' + (error && error.message ? error.message : error));
+        hideLoadingOverlay();
+        reportProjectLoadError('json', error);
       }
     }
 
@@ -31388,16 +31516,21 @@
 
     async function chooseJsonForLoad(event) {
       const directFileMode = event && (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey);
-      if (directFileMode || !fileSystemAccessAvailable()) {
-        await chooseJsonFileForLoad();
-        return;
+      try {
+        if (directFileMode || !fileSystemAccessAvailable()) {
+          await chooseJsonFileForLoad();
+        } else {
+          await selectWorkspaceFolder({
+            silent: true,
+            loadExisting: true,
+            saveCurrent: false,
+            warnMissingProjectFile: true
+          });
+        }
+      } catch (error) {
+        hideLoadingOverlay();
+        reportProjectLoadError('open', error);
       }
-      await selectWorkspaceFolder({
-        silent: true,
-        loadExisting: true,
-        saveCurrent: false,
-        warnMissingProjectFile: true
-      });
     }
 
     async function preparePaperFrameImageFile(file) {
