@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver049</title>
+  <title>Conte Editor Prototype ver050</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6607,15 +6607,6 @@
                   </label>
                   <div id="workspaceAutosaveStatus" class="stage-settings-status"></div>
                 </div>
-                <div id="mobileZipPackageSettings" hidden>
-                  <div class="stage-settings-divider"></div>
-                  <div class="stage-settings-actions">
-                    <button id="zipPackageExportBtn" type="button">ZIP書き出し</button>
-                    <button id="zipPackageImportBtn" type="button">ZIP読み込み</button>
-                  </div>
-                  <div class="stage-settings-note">JSONのみ。音声・映像・外部レイヤー画像ファイルは含まれません。</div>
-                  <div id="zipPackageStatus" class="stage-settings-status"></div>
-                </div>
               </div>
             </div>
             <div class="stage-onion-skin-wrap">
@@ -6765,7 +6756,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver049</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver050</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6916,7 +6907,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '049';
+    const APP_DISPLAY_VERSION = '050';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31492,14 +31483,51 @@
       return true;
     }
 
+    // Deliver a JSON file to the OS: share sheet first (reliable "Save to Files" on iPad/Android),
+    // falling back to a download link. Mirrors deliverZipPackage but for the self-contained JSON.
+    async function deliverJsonFile(payload, fileName) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      const file = typeof File !== 'undefined' ? new File([blob], fileName, { type: 'application/json' }) : null;
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      if (file && nav && typeof nav.share === 'function') {
+        try {
+          if (!nav.canShare || nav.canShare({ files: [file] })) {
+            await nav.share({ files: [file], title: fileName });
+            return;
+          }
+        } catch (error) {
+          if (error && error.name === 'AbortError') return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function saveJsonShare() {
+      const payload = serializedProjectJson();
+      const fileName = projectJsonFileNameForTitle(state.project.title || state.project.projectId || 'project');
+      await deliverJsonFile(payload, fileName);
+      state.workspaceStatus = '書き出し\n' + fileName;
+      markProjectSavedBaseline();
+      return true;
+    }
+
     async function saveJson() {
       try {
+        // Mobile (no File System Access): the project JSON is self-contained (audio inline), so just
+        // hand the .conte.json to the OS share sheet → Files app. No ZIP wrapper needed.
+        if (!fileSystemAccessAvailable()) {
+          return await saveJsonShare();
+        }
         if (!state.workspaceHandle) {
           const selected = await selectWorkspaceFolder({ silent: true, loadExisting: false, saveCurrent: false });
-          if (!selected || !state.workspaceHandle) {
-            if (!fileSystemAccessAvailable()) return saveJsonDownload();
-            return false;
-          }
+          if (!selected || !state.workspaceHandle) return false;
         }
         return await saveProjectToWorkspace();
       } catch (error) {
@@ -39315,10 +39343,6 @@
       const workspaceAutosaveToggle = document.getElementById('workspaceAutosaveToggle');
       const workspaceAutosaveMinutesInput = document.getElementById('workspaceAutosaveMinutesInput');
       const workspaceAutosaveStatus = document.getElementById('workspaceAutosaveStatus');
-      const zipSettings = document.getElementById('mobileZipPackageSettings');
-      const zipExport = document.getElementById('zipPackageExportBtn');
-      const zipImport = document.getElementById('zipPackageImportBtn');
-      const zipStatus = document.getElementById('zipPackageStatus');
       if (button) {
         button.classList.toggle('active', Boolean(state.stageSettingsOpen));
         button.setAttribute('aria-expanded', state.stageSettingsOpen ? 'true' : 'false');
@@ -39344,11 +39368,6 @@
       if (workspaceAutosaveStatus) {
         workspaceAutosaveStatus.textContent = workspaceAutosaveReason || state.workspaceAutosaveStatus || ('次回: ' + workspaceAutosaveMinutes() + '分ごと');
       }
-      const zipEnabled = mobileZipPackageAvailable();
-      if (zipSettings) zipSettings.hidden = !zipEnabled;
-      if (zipExport) zipExport.disabled = !zipEnabled;
-      if (zipImport) zipImport.disabled = !zipEnabled;
-      if (zipStatus) zipStatus.textContent = state.zipPackageStatus || '';
     }
 
     function updateVideoCameraFrameToggleUI() {
@@ -39593,14 +39612,6 @@
         syncWorkspaceAutosaveTimer();
         updateStageSettingsUI();
         scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
-      });
-      document.getElementById('zipPackageExportBtn').addEventListener('click', function(event) {
-        event.preventDefault();
-        exportMobileZipPackage();
-      });
-      document.getElementById('zipPackageImportBtn').addEventListener('click', function(event) {
-        event.preventDefault();
-        chooseMobileZipPackageForImport();
       });
       document.getElementById('autoMaToggle').addEventListener('change', function(event) {
         state.project.settings = state.project.settings || {};
