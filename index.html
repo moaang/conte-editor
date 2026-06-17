@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver061</title>
+  <title>Conte Editor Prototype ver062</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6877,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver061</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver062</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7028,7 +7028,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '061';
+    const APP_DISPLAY_VERSION = '062';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16390,9 +16390,11 @@
         let olPrevFrames = 0;
         if (gi > 0) {
           const prev = items[gi - 1];
-          // Pull this group left over the previous group, clamped so it never starts before the
-          // previous group's own start (i.e. can't bleed into the group before that).
-          const requested = Math.max(0, Math.min(cutGroupOlPrevFrames(group), prev.frames));
+          // Pull this group left over the previous group, clamped to min(prev length, own length):
+          // - <= prev.frames keeps this group's start >= prev start (can't bleed into the group before).
+          // - <= frames (own length) keeps the NEXT group's start >= prev end (the following cut can't
+          //   slide into the previous cut when this dissolving cut is shorter than the overlap).
+          const requested = Math.max(0, Math.min(cutGroupOlPrevFrames(group), prev.frames, frames));
           start = Math.max(prev.startFrame, cursor - requested);
           olPrevFrames = cursor - start;
         }
@@ -19347,13 +19349,16 @@
           const idx = layout.items.findIndex(function(it) { return it.group.cuts[0] && it.group.cuts[0].id === ownerId; });
           if (idx <= 0) return; // first group has no previous cut to overlap
           e.preventDefault();
-          const prevFrames = layout.items[idx - 1].frames;
+          // Max overlap = min(previous cut length, this cut's own length): the first keeps this cut
+          // from passing the previous cut's start, the second keeps the NEXT cut from sliding into
+          // the previous cut when this cut is shorter than the overlap.
+          const maxOl = Math.min(layout.items[idx - 1].frames, layout.items[idx].frames);
           const startOl = Number(clip.dataset.olPrevFrames) || 0;
           const startX = e.clientX;
           const move = function(me) {
             const deltaFrames = (startX - me.clientX) / ppf; // drag left => more overlap
             let next = Math.round(startOl + deltaFrames);
-            next = Math.max(0, Math.min(prevFrames, next));
+            next = Math.max(0, Math.min(maxOl, next));
             olSetDraftFrames(ownerId, next);
           };
           const up = function() {
