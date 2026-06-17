@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver039</title>
+  <title>Conte Editor Prototype ver040</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver039</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver040</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '039';
+    const APP_DISPLAY_VERSION = '040';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23899,13 +23899,16 @@
         offset: 0,
         side: zone.side
       };
-      // NOTE: do NOT setPointerCapture the finger here. On iPadOS Safari, capturing a touch pointer
-      // suppresses the concurrent Apple Pencil pointer stream until the finger lifts — which is
-      // exactly the "can't draw while holding the parapara finger" bug. The stage has
-      // touch-action:none and the scrub is vertical within the stage, so the surface's own
-      // pointermove/up listeners track the finger fine without capture, leaving the pencil free.
-      // Document-level move/up are also bound on gesture start as a fallback if the finger drifts off
-      // the surface.
+      // CRITICAL (iPadOS Safari finger+Pencil): a touch pointer is IMPLICITLY pointer-captured to its
+      // target on pointerdown (even without calling setPointerCapture). While that implicit capture is
+      // held, the concurrent Apple Pencil's pointer-event stream is suppressed entirely until the
+      // finger lifts — measured: penDowns never increments while a finger is held. Explicitly RELEASE
+      // the implicit capture so the Pencil's pointerdown fires and drawing works with the finger down.
+      // The finger is still tracked via the document-level pointermove/up listeners bound below
+      // (capture is not needed: the stage has touch-action:none and the scrub is vertical).
+      if (surfaceEl && surfaceEl.releasePointerCapture && (!surfaceEl.hasPointerCapture || surfaceEl.hasPointerCapture(event.pointerId))) {
+        try { surfaceEl.releasePointerCapture(event.pointerId); } catch (error) {}
+      }
       document.addEventListener('pointermove', continuePreviewPanelFlipTouch);
       document.addEventListener('pointerup', endPreviewPanelFlipTouch);
       document.addEventListener('pointercancel', endPreviewPanelFlipTouch);
