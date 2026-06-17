@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver063</title>
+  <title>Conte Editor Prototype ver064</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6877,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver063</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver064</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7028,7 +7028,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '063';
+    const APP_DISPLAY_VERSION = '064';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7616,19 +7616,6 @@
       return fastClone(state.project);
     }
 
-    function snapshotProjectCore() {
-      const project = state.project || {};
-      const memoPages = project.memoPages;
-      const layerDrawings = project.layerDrawings;
-      project.memoPages = {};
-      project.layerDrawings = {};
-      try {
-        return fastClone(project);
-      } finally {
-        project.memoPages = memoPages;
-        project.layerDrawings = layerDrawings;
-      }
-    }
 
     function snapshotMemoPages() {
       return fastClone(state.project.memoPages || {});
@@ -8386,16 +8373,6 @@
       }
     }
 
-    function layerDrawingRefsFromCuts(cuts) {
-      const refs = [];
-      (cuts || []).forEach(function(cut) {
-        (cut && Array.isArray(cut.conteLayers) ? cut.conteLayers : []).forEach(function(layer) {
-          const ref = String(layer && layer.drawingRef || '');
-          if (ref && refs.indexOf(ref) < 0) refs.push(ref);
-        });
-      });
-      return refs;
-    }
 
     function layerDrawingStateForRefs(project, refs) {
       const drawings = project && project.layerDrawings || {};
@@ -9426,10 +9403,6 @@
         .trim();
     }
 
-    async function readPdfTextLoose(file) {
-      const pdf = await readPdfDocumentLoose(file);
-      return pdf.text;
-    }
 
     async function readPdfDocumentLoose(file) {
       const buffer = await file.arrayBuffer();
@@ -9727,22 +9700,6 @@
       return lines.join('\n');
     }
 
-    async function extractPdfPositionedText(streams, cmap) {
-      const output = [];
-      let itemBudget = 26000;
-      for (let streamIndex = 0; streamIndex < streams.length; streamIndex += 1) {
-        const stream = streams[streamIndex];
-        if (itemBudget <= 0 || output.length >= 1600) break;
-        if (!/BT[\s\S]*?(Tj|TJ)/.test(stream)) continue;
-        const items = extractPdfTextItems(stream, cmap, itemBudget);
-        itemBudget -= items.length;
-        groupPdfItemsByVerticalColumns(items).forEach(function(line) {
-          if (output.length < 1600) output.push(line);
-        });
-        if (streamIndex % 3 === 0) await yieldToBrowser();
-      }
-      return output.join('\n').trim();
-    }
 
     async function extractPdfPositionedPages(streams, cmap) {
       const pages = [];
@@ -10435,29 +10392,6 @@
 
     // APP: SCENARIO PARSER
 
-    function analyzeImportedTextQuality(lines, options) {
-      const lengths = lines.map(function(line) { return Array.from(line).length; });
-      const total = lengths.reduce(function(sum, value) { return sum + value; }, 0);
-      const averageLineLength = lines.length ? total / lines.length : 0;
-      const singleCharLines = lengths.filter(function(value) { return value <= 2; }).length;
-      const singleCharLineRatio = lines.length ? singleCharLines / lines.length : 0;
-      const quoteStarts = lines.join('\n').match(/[「『]/g) || [];
-      const quoteEnds = lines.join('\n').match(/[」』]/g) || [];
-      const quotePairRecoveryRate = quoteStarts.length ? Math.min(quoteStarts.length, quoteEnds.length) / quoteStarts.length : 1;
-      const sceneMarkerCount = lines.filter(isSceneHeadingLine).length;
-      const castMarkerCount = lines.filter(isCastSectionLine).length;
-      const verticalExtractionUnreliable = options.sourceType === 'pdf' && lines.length > 30 && (singleCharLineRatio > 0.38 || (averageLineLength < 6 && quotePairRecoveryRate < 0.55));
-      return {
-        sourceType: options.sourceType || '',
-        singleCharLineRatio: singleCharLineRatio,
-        averageLineLength: averageLineLength,
-        quotePairRecoveryRate: quotePairRecoveryRate,
-        sceneMarkerRecoveryRate: lines.length ? sceneMarkerCount / lines.length : 0,
-        castMarkerRecoveryRate: lines.length ? castMarkerCount / lines.length : 0,
-        verticalColumnConfidence: verticalExtractionUnreliable ? 0.3 : 0.75,
-        verticalExtractionUnreliable: verticalExtractionUnreliable
-      };
-    }
 
     function isFrontDateLine(line) {
       return /^\d{4}[./-]\d{1,2}[./-]\d{1,2}$/.test(line) || /^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/.test(line);
@@ -10548,13 +10482,6 @@
       };
     }
 
-    function parseScenarioBlocks(text, sourceDocumentId, options) {
-      const parsed = parseScenarioDocument(text, Object.assign({}, options || {}, { sourceDocumentId: sourceDocumentId }));
-      parsed.blocks.extractionQuality = parsed.quality;
-      parsed.blocks.importWarnings = parsed.warnings;
-      parsed.blocks.stats = parsed.stats;
-      return parsed.blocks;
-    }
 
     function splitIntoSourcePages(text, options) {
       options = options || {};
@@ -10814,18 +10741,6 @@
       return { type: 'dialogue', speaker: speaker, modifier: modifier, subtype: modifier ? 'dialogue_' + modifier.toLowerCase() : 'dialogue', text: text, fullText: line, confidence: score >= 7 ? 0.88 : 0.52, score: score };
     }
 
-    function sceneHeadingScore(line, context) {
-      let score = 0;
-      if (/^[笳○●◯〇◇◆■□△▲▽▼縲]/.test(line) && !isCastSectionLine(line)) score += 5;
-      if (/繝ｻ|・/.test(line)) score += 3;
-      if (/(亥|（|\(|朝|昼|夜|夕|譛|譏|螟)/.test(line)) score += 2;
-      if (/(螳､|驛ｨ螻|驕楢ｷｯ|貂ｯ貉ｾ|蟄ｦ譬｡|謨吝ｮ､|蜈ｬ蝨|螳ｶ|部屋|学校|教室|公園|家|店|道|港|駅)/.test(line)) score += 2;
-      if (context && context.bodyStarted) score += 2;
-      if (isCastSectionLine(line)) score -= 8;
-      if (context && context.zone === 'cast_list') score -= 6;
-      if (charLength(line) <= 1) score -= 5;
-      return score;
-    }
 
     // APP: SCENARIO PARSER SIMPLE STATE MACHINE OVERRIDE
     function scenarioFoldText(value) {
@@ -12450,9 +12365,6 @@
       return cuts;
     }
 
-    function hasVisualSubjectChange(text) {
-      return /(画面|カメラ|PAN|BG|BOOK|見る|見える|振り返|立ち上|近づ|移動|切り替|螳ｻ髱｢|繧ｫ繝｡繝ｩ|隕九ｋ|謖ｯ繧願ｿ斐ｋ|霑代▼)/.test(String(text || ''));
-    }
 
     function refreshCutConfidence(cut, blocks) {
       const confidences = blocks.map(function(block) { return Number(block.meta && block.meta.confidence) || 0.5; });
@@ -13198,21 +13110,6 @@
       return conteLayerLineIdsForOwner(project, found.ownerCut, conteLayerLineKey(found.layer));
     }
 
-    function toggleConteLayerRowVisibility(project, layerId) {
-      const found = findConteLayerById(project, layerId);
-      if (!found || !found.layer || !found.ownerCut || !Array.isArray(found.ownerCut.conteLayers)) return [];
-      const lineKey = conteLayerLineKey(found.layer);
-      const rowLayers = found.ownerCut.conteLayers.filter(function(layer) {
-        return layer && layer.id && conteLayerLineKey(layer) === lineKey;
-      });
-      if (!rowLayers.length) return [];
-      const nextVisible = rowLayers.some(function(layer) { return layer.visible === false; });
-      rowLayers.forEach(function(layer) {
-        layer.visible = nextVisible;
-      });
-      state.timelineStatus = nextVisible ? 'Conte layer row shown.' : 'Conte layer row hidden.';
-      return rowLayers.map(function(layer) { return layer.id; });
-    }
 
     function captureConteLayerVisibilityState(project, layerIds) {
       const ids = Array.isArray(layerIds) ? layerIds : [];
@@ -13380,11 +13277,6 @@
       return null;
     }
 
-    function setConteLayerCoordinateSelection(project, cutId, lineKey, options) {
-      const ownerCut = conteLayerOwnerCut(project, cutId);
-      const rowIndex = conteLayerRowIndexForOwnerLineKey(ownerCut, lineKey);
-      return rowIndex >= 0 ? setConteLayerRowCoordinateSelection(project, cutId, rowIndex, options) : null;
-    }
 
     function syncConteLayerSelectionToPanel(project, cutId) {
       const targetCutId = String(cutId || '');
@@ -13662,24 +13554,6 @@
       syncConteLayerOrderCodes(layers);
     }
 
-    function placeConteLayerAtBottom(layers, layerId) {
-      const targetId = String(layerId || '');
-      if (!Array.isArray(layers) || !targetId) return;
-      const ordered = sortConteLayersByOrder(layers);
-      const target = ordered.find(function(layer) { return layer && layer.id === targetId; });
-      if (!target) {
-        assignConteLayerOrders(layers);
-        return;
-      }
-      const withoutTarget = ordered.filter(function(layer) { return layer && layer.id !== targetId; });
-      withoutTarget.unshift(target);
-      withoutTarget.forEach(function(layer, index) {
-        if (layer) {
-          layer.order = index + 1;
-        }
-      });
-      syncConteLayerOrderCodes(layers);
-    }
 
     function placeConteLayerAboveBottomMedia(layers, layerId) {
       const targetId = String(layerId || '');
@@ -13819,14 +13693,6 @@
       });
     }
 
-    function forEachConteLayer(project, callback) {
-      if (!project || !Array.isArray(project.cuts) || typeof callback !== 'function') return;
-      project.cuts.forEach(function(cut) {
-        (cut && Array.isArray(cut.conteLayers) ? cut.conteLayers : []).forEach(function(layer) {
-          callback(layer, cut);
-        });
-      });
-    }
 
     function conteLayerLaneIndex(layer, fallbackIndex) {
       return Math.max(0, Math.round(Number(fallbackIndex) || 0));
@@ -13939,12 +13805,6 @@
       layer.panelSpan = conteLayerOwnerGroupLength(project, ownerCut);
     }
 
-    function normalizeBgLayersToOwnerSpan(project, ownerCut) {
-      if (!project || !ownerCut || !Array.isArray(ownerCut.conteLayers)) return;
-      ownerCut.conteLayers.forEach(function(layer) {
-        normalizeBgLayerToOwnerSpan(project, ownerCut, layer);
-      });
-    }
 
     function makeConteLayersBg(project, layerIds) {
       const ids = Array.from(new Set((layerIds || []).map(function(id) { return String(id || ''); }).filter(Boolean)));
@@ -14029,13 +13889,6 @@
       return ownerMap;
     }
 
-    function conteLayerBgSharedCounts(project) {
-      const counts = new Map();
-      conteLayerBgSharedOwnerMap(project).forEach(function(ownerRefs, key) {
-        counts.set(key, ownerRefs.size);
-      });
-      return counts;
-    }
 
     function doupoReferenceCutForCut(project, cut) {
       if (!project || !cut) return null;
@@ -14071,9 +13924,6 @@
       return referenceCutNo ? (referenceCutNo + ' 同ポ') : '同ポ';
     }
 
-    function cutHasDoupoLabel(project, cut) {
-      return Boolean(doupoLabelTextForCut(project, cut));
-    }
 
     function firstAvailableConteLayerLane(occupied, preferredLane) {
       const preferred = Math.max(0, Math.round(Number(preferredLane) || 0));
@@ -14097,33 +13947,7 @@
       });
     }
 
-    function availableConteLayerLaneForOwner(project, ownerCut, layerId, startIndex, endIndex, preferredLane) {
-      const occupied = new Set();
-      markOccupiedConteLayerLanesForOwner(project, ownerCut, layerId, startIndex, endIndex, occupied);
-      return firstAvailableConteLayerLane(occupied, preferredLane);
-    }
 
-    function availableConteLayerLane(project, layerId, startIndex, endIndex, preferredLane) {
-      const occupied = new Set();
-      if (!project || !Array.isArray(project.cuts)) return Math.max(0, Math.round(Number(preferredLane) || 0));
-      const video = buildVideoTimelineCached(project);
-      const slots = video.slots || [];
-      const start = clampNumber(startIndex, 0, Math.max(0, slots.length - 1), 0);
-      const end = clampNumber(endIndex, start, Math.max(0, slots.length - 1), start);
-      const ownerIds = new Set();
-      for (let index = start; index <= end; index += 1) {
-        const ownerId = cutGroupOwnerIdFromSlot(slots[index]);
-        if (ownerId) ownerIds.add(ownerId);
-      }
-      if (!ownerIds.size) {
-        project.cuts.forEach(function(cut) { if (cut && cut.conteLayers && cut.conteLayers.length) ownerIds.add(cut.id); });
-      }
-      ownerIds.forEach(function(ownerId) {
-        const ownerCut = project.cuts.find(function(cut) { return cut && cut.id === ownerId; });
-        markOccupiedConteLayerLanesForOwner(project, ownerCut, layerId, start, end, occupied);
-      });
-      return firstAvailableConteLayerLane(occupied, preferredLane);
-    }
 
     function conteLayerSharedKey(layer) {
       if (!layer) return '';
@@ -14518,26 +14342,6 @@
       }).map(function(item) { return item.id; });
     }
 
-    function placeConteLayerGroupAboveBottomMedia(layers, layerIds) {
-      const ids = new Set((layerIds || []).map(function(id) { return String(id || ''); }).filter(Boolean));
-      if (!Array.isArray(layers) || !ids.size) {
-        assignConteLayerOrders(layers);
-        return;
-      }
-      const ordered = sortConteLayersByOrder(layers);
-      const group = [];
-      const rest = [];
-      ordered.forEach(function(layer) {
-        if (!layer) return;
-        if (ids.has(layer.id)) group.push(layer);
-        else rest.push(layer);
-      });
-      rest.concat(group).forEach(function(layer, index) {
-        layer.order = index + 1;
-        layer.layerLineOrder = layer.order;
-      });
-      syncConteLayerOrderCodes(layers);
-    }
 
     function duplicateConteLayerGroupToPanel(project, sourceLayerIds, targetCutId, panelStart, options) {
       const sortedIds = sortedConteLayerIdsBySourceOrder(project, sourceLayerIds);
@@ -14583,24 +14387,6 @@
       return created;
     }
 
-    function moveConteLayerToPanel(project, layerId, targetCutId, panelStart) {
-      const found = findConteLayerById(project, layerId);
-      const targetOwner = conteLayerOwnerCut(project, targetCutId);
-      if (!found || !targetOwner) return null;
-      if (found.ownerCut.id !== targetOwner.id) {
-        return duplicateConteLayerToPanel(project, layerId, targetCutId, panelStart);
-      }
-      const ownerIndex = cutIndexById(project, found.ownerCut.id);
-      const targetIndex = cutIndexById(project, targetCutId);
-      const fallbackIndex = ownerIndex + Math.max(0, Math.round(Number(panelStart) || 0));
-      const startIndex = clampNumber(targetIndex >= 0 ? targetIndex : fallbackIndex, 0, Math.max(0, project.cuts.length - 1), ownerIndex);
-      found.layer.startPanelCutId = project.cuts[startIndex] ? project.cuts[startIndex].id : '';
-      found.layer.panelStart = Math.max(0, startIndex - ownerIndex);
-      found.layer.panelSpan = clampNumber(found.layer.panelSpan, 1, Math.max(1, project.cuts.length - startIndex), 1);
-      setSelectedConteLayers([found.layer.id], found.layer.id);
-      setCurrentPicturePanelId(targetOwner.id);
-      return found.layer;
-    }
 
     function conteLayerLineRangeCollision(project, found, startIndex, endIndex, movingIds) {
       if (!project || !found || !found.layer || !found.ownerCut) return false;
@@ -15446,14 +15232,6 @@
       return total;
     }
 
-    function isPictureFrameSlot(cut) {
-      return Boolean(cut && (
-        cut.meta && cut.meta.videoMedia ||
-        Math.max(0, Math.round(Number(cut.pictureFrames) || 0)) ||
-        Math.max(0, Math.round(Number(cut.pictureFramesInferred) || 0)) ||
-        cut.pictureFramesManual
-      ));
-    }
 
     function isFixedPictureFrame(cut) {
       return Boolean(cut && cut.pictureFramesManual && Math.max(0, Math.round(Number(cut.pictureFrames) || 0)));
@@ -15519,12 +15297,6 @@
       return cutGroupLastIndex(project, startIndex);
     }
 
-    function hasPictureFrameContent(cut) {
-      return Boolean(cut && (
-        cut.meta && cut.meta.videoMedia ||
-        isFixedPictureFrame(cut)
-      ));
-    }
 
     function cutNoDisplayForIndex(project, index) {
       const cut = project && project.cuts[index];
@@ -15569,12 +15341,6 @@
       return !isFixedPictureFrame(cut) ? Math.max(0, Math.round(Number(cut && cut.pictureFramesInferred) || 0)) : 0;
     }
 
-    function isDurationDisplaySlot(cut) {
-      const project = state.project;
-      const index = cutIndexById(project, cut && cut.id);
-      const startIndex = cutGroupStartIndex(project, index);
-      return startIndex >= 0 && index === cutGroupDurationDisplayIndex(project, startIndex);
-    }
 
     function framesToTime(frames) {
       const fps = Math.max(1, Number(state.project.fps) || 24);
@@ -15648,18 +15414,12 @@
       return visibleCuts().reduce(function(sum, cut) { return sum + displayDurationFramesForCut(cut); }, 0);
     }
 
-    function defaultTargetDurationFrames(project) {
-      return DEFAULT_TARGET_SECONDS * Math.max(1, Number(project && project.fps) || 24);
-    }
 
     function projectTargetFrames(project) {
       const target = Number(project && project.settings && project.settings.targetDurationFrames);
       return Math.max(0, Math.round(Number.isFinite(target) && target > 0 ? target : 0));
     }
 
-    function projectTargetFramesIsSet(project) {
-      return projectTargetFrames(project) > 0;
-    }
 
     function totalConteFrames(project) {
       const groups = collectCutTimingGroups(project || state.project);
@@ -15966,12 +15726,6 @@
       return number;
     }
 
-    function ensureExternalAudioTrack(project) {
-      writeAudioTimelineTrack(project);
-      const tracks = audioTimelineTracks(project).filter(function(track) { return track.id !== 'dialogue-main'; });
-      if (tracks.length) return tracks[0].id;
-      return addExternalAudioTrack(project);
-    }
 
     function addExternalAudioTrack(project) {
       project.timeline = project.timeline && typeof project.timeline === 'object' ? project.timeline : { tracks: [] };
@@ -16003,13 +15757,7 @@
       return number;
     }
 
-    function audioTimelineTrackIndex(project, trackId) {
-      return audioTimelineTracks(project).findIndex(function(track) { return track.id === trackId; });
-    }
 
-    function audioTrackHasClips(project, trackId) {
-      return audioTimelineDisplayClips(project).some(function(clip) { return (clip.trackId || 'dialogue-main') === trackId; });
-    }
 
     function removeAudioTrackRecord(project, trackId) {
       project.timeline = project.timeline && typeof project.timeline === 'object' ? project.timeline : { tracks: [] };
@@ -16978,9 +16726,6 @@
       }).filter(function(entry) { return entry.frames > 0; });
     }
 
-    function audioClipOverlapsMultipleGroups(project, clip) {
-      return clipOverlapGroups(project, clip).length > 1;
-    }
 
     function audioContinuationClipIds(clips, groupItems) {
       const ids = new Set();
@@ -17033,22 +16778,6 @@
       }).filter(Boolean);
     }
 
-    function moveAudioClipToFrame(project, clipId, startFrame) {
-      normalizeAudioClips(project);
-      const clip = project.audio.clips.find(function(item) { return item.id === clipId; });
-      if (!clip) return;
-      project.audio.manualTimeline = true;
-      const video = buildVideoTimelineCached(project);
-      const audioEnd = audioTimelineDisplayClips(project).reduce(function(max, item) {
-        return Math.max(max, item.startFrame + item.durationFrames);
-      }, 0);
-      const total = Math.max(video.totalFrames, audioEnd, clip.startFrame + clip.durationFrames);
-      clip.startFrame = clampNumber(startFrame, 0, Math.max(0, total - clip.durationFrames), 0);
-      clip.manualTiming = true;
-      sortAudioClips(project);
-      applyAudioTimelineToCuts(project);
-      writeAudioTimelineTrack(project);
-    }
 
     function deleteAudioClip(project, clipId) {
       normalizeAudioClips(project);
@@ -17124,19 +16853,6 @@
       if (!clip.audioDurationFrames && sourceFrames) clip.audioDurationFrames = sourceFrames;
     }
 
-    function trimAudioClipInTimeline(project, clipId, edge, original, deltaFrames) {
-      normalizeAudioClips(project);
-      const clip = project.audio.clips.find(function(item) { return item.id === clipId; });
-      if (!clip) return;
-      project.audio.manualTimeline = true;
-      applyAudioClipTrimDelta(clip, edge, original, deltaFrames);
-      if (!clip.audioTrimDurationFrames) clip.audioTrimDurationFrames = clip.durationFrames;
-      clip.waveformPeaks = waveformPeaksForClipTrim(clip);
-      clip.manualTiming = true;
-      sortAudioClips(project);
-      applyAudioTimelineToCuts(project);
-      writeAudioTimelineTrack(project);
-    }
 
     function applyAudioTimelineToCuts(project) {
       if (state.audioPerfTrace) console.time('applyAudioTimelineToCuts');
@@ -18822,15 +18538,6 @@
       ].join(':');
     }
 
-    function videoTimelineSlotHtml(slot, totalFrames) {
-      const left = framePercent(slot.startFrame, totalFrames);
-      const width = Math.max(0.35, framePercent(slot.frames, totalFrames));
-      const hasLayerImage = slot.cut && layerDrawingEntriesForCut(state.project, slot.cut.id).length;
-      const imageClass = slot.cut && (pictureSrcForCut(slot.cut) || hasLayerImage) ? ' has-image' : '';
-      const selectedClass = slot.cut && selectedPicturePanelSet().has(slot.cut.id) ? ' selected-picture-panel' : '';
-      const owner = slot.group && slot.group.cuts && slot.group.cuts[0];
-      return '<div class="video-segment conte-panel-segment' + imageClass + selectedClass + '" data-video-slot-cut-id="' + escapeAttr(slot.cut && slot.cut.id || '') + '" data-conte-owner-cut-id="' + escapeAttr(owner && owner.id || '') + '" style="--left:' + left.toFixed(2) + '%;--width:' + width.toFixed(2) + '%" title="' + escapeAttr(slot.cutNo || '') + '">' + escapeHtml(slot.cutNo || '') + '</div>';
-    }
 
     function videoTimelineBoundaryHtml(slots, totalFrames) {
       const seen = new Set();
@@ -20555,10 +20262,6 @@
       });
     }
 
-    function conteLayerIdFromDataTransfer(dataTransfer) {
-      const ids = conteLayerIdsFromDataTransfer(dataTransfer);
-      return ids[0] || '';
-    }
 
     function conteLayerIdsFromDataTransfer(dataTransfer) {
       if (!dataTransfer) return [];
@@ -20641,69 +20344,7 @@
       return clampNumber(index, 0, Math.max(0, visualRows - 1), 0);
     }
 
-    function reorderConteLayerWithinOwner(project, layerId, targetIndex) {
-      const found = findConteLayerById(project, layerId);
-      if (!found || !found.ownerCut || !Array.isArray(found.ownerCut.conteLayers)) return false;
-      const ordered = conteLayersTopToBottom(found.ownerCut.conteLayers);
-      const currentIndex = ordered.findIndex(function(layer) { return layer && layer.id === layerId; });
-      if (currentIndex < 0) return false;
-      const target = clampNumber(targetIndex, 0, Math.max(0, ordered.length - 1), currentIndex);
-      if (target === currentIndex) return false;
-      const layer = ordered.splice(currentIndex, 1)[0];
-      integrateMediaLayerIntoDrawingOrder(layer);
-      ordered.splice(target, 0, layer);
-      ordered.forEach(function(item, index) {
-        if (item) {
-          item.order = ordered.length - index;
-          item.layerLineOrder = item.order;
-        }
-      });
-      syncConteLayerOrderCodes(found.ownerCut.conteLayers);
-      setSelectedConteLayers([layerId], layerId);
-      setCurrentPicturePanelId(found.ownerCut.id);
-      return true;
-    }
 
-    function reorderConteLayerGroupWithinOwner(project, layerIds, targetIndex, primaryLayerId) {
-      const ids = Array.from(new Set((layerIds || []).map(function(id) { return String(id || ''); }).filter(Boolean)));
-      if (!ids.length) return false;
-      const primary = findConteLayerById(project, primaryLayerId || ids[ids.length - 1]);
-      const ownerCut = primary && primary.ownerCut;
-      if (!ownerCut || !Array.isArray(ownerCut.conteLayers)) return false;
-      const idSet = new Set(ids);
-      const ordered = conteLayersTopToBottom(ownerCut.conteLayers).filter(Boolean);
-      const indexed = ordered.map(function(layer, index) {
-        return { layer: layer, index: index };
-      });
-      const groupItems = indexed.filter(function(item) {
-        return item.layer && idSet.has(item.layer.id);
-      });
-      if (!groupItems.length) return false;
-      const groupIds = groupItems.map(function(item) { return item.layer.id; });
-      const nonGroupDrawing = indexed.filter(function(item) {
-        return item.layer && !idSet.has(item.layer.id);
-      });
-      const groupFirstIndex = groupItems.reduce(function(min, item) {
-        return Math.min(min, item.index);
-      }, Infinity);
-      const target = clampNumber(targetIndex, 0, Math.max(0, ordered.length - 1), groupFirstIndex);
-      const insertIndex = clampNumber(nonGroupDrawing.filter(function(item) {
-        return target > groupFirstIndex ? item.index <= target : item.index < target;
-      }).length, 0, nonGroupDrawing.length, 0);
-      const finalTopToBottom = nonGroupDrawing.slice(0, insertIndex).map(function(item) { return item.layer; })
-        .concat(groupItems.map(function(item) { return item.layer; }))
-        .concat(nonGroupDrawing.slice(insertIndex).map(function(item) { return item.layer; }));
-      finalTopToBottom.forEach(function(layer, index) {
-        if (!layer) return;
-        layer.order = finalTopToBottom.length - index;
-        layer.layerLineOrder = layer.order;
-      });
-      syncConteLayerOrderCodes(ownerCut.conteLayers);
-      const selectedPrimary = groupIds.indexOf(primaryLayerId) >= 0 ? primaryLayerId : groupIds[groupIds.length - 1];
-      setSelectedConteLayers(groupIds, selectedPrimary);
-      setCurrentPicturePanelId(ownerCut.id);
-      return true;
-    }
 
     function conteLayerRowsTopToBottom(ownerCut) {
       const rows = new Map();
@@ -20909,56 +20550,7 @@
       return insertIndex >= 0 ? insertIndex : rows.length;
     }
 
-    function nextAvailableConteLayerKomaIndexForLine(project, sourceLayer, targetOwner, lineKey, lastIndex, searchStart) {
-      const key = String(lineKey || '');
-      if (!project || !sourceLayer || !targetOwner || !key) return -1;
-      const video = buildVideoTimelineCached(project);
-      const slots = video.slots || [];
-      const ownerIndex = cutIndexById(project, targetOwner.id);
-      if (ownerIndex < 0) return -1;
-      const start = Math.max(Math.round(Number(searchStart) || 0), Math.max(0, ownerIndex));
-      const end = Math.min(Math.max(0, Math.round(Number(lastIndex) || 0)), Math.max(0, slots.length - 1));
-      const preferredLane = conteLayerPreferredLaneForLine(project, targetOwner, key, sourceLayer);
-      const laneMap = conteLayerLaneMapForOwner(project, targetOwner);
-      const layers = Array.isArray(targetOwner.conteLayers) ? targetOwner.conteLayers : [];
-      for (let index = start; index <= end; index += 1) {
-        const slot = slots[index];
-        const cutId = slot && slot.cut && slot.cut.id || '';
-        if (!cutId) continue;
-        if (conteLayerLineActiveAtPanel(project, cutId, key)) continue;
-        const occupied = new Set();
-        layers.forEach(function(layer, layerIndex) {
-          if (!layer || conteLayerLineKey(layer) === key) return;
-          const range = layerSlotIndexRange(project, layer, targetOwner);
-          if (range.startIndex < 0 || range.endIndex < 0) return;
-          if (!conteLayerRangesOverlap(index, index, range.startIndex, range.endIndex)) return;
-          occupied.add(laneMap.has(layer.id) ? laneMap.get(layer.id) : conteLayerLaneIndex(layer, layerIndex));
-        });
-        if (!occupied.has(preferredLane)) return index;
-      }
-      return -1;
-    }
 
-    function nextAvailableConteLayerKomaIndex(project, found, range, lastIndex, searchStart) {
-      if (!project || !found || !found.layer || !found.ownerCut) return -1;
-      const video = buildVideoTimelineCached(project);
-      const slots = video.slots || [];
-      const laneMap = conteLayerLaneMapForOwner(project, found.ownerCut);
-      const preferredLane = laneMap.has(found.layer.id) ? laneMap.get(found.layer.id) : 0;
-      const ownerIndex = cutIndexById(project, found.ownerCut.id);
-      const start = Math.max(Math.round(Number(searchStart) || 0), Math.max(0, ownerIndex));
-      const end = Math.min(Math.max(0, Math.round(Number(lastIndex) || 0)), Math.max(0, slots.length - 1));
-      for (let index = start; index <= end; index += 1) {
-        const slot = slots[index];
-        const cutId = slot && slot.cut && slot.cut.id || '';
-        if (!cutId) continue;
-        if (findExistingConteLayerLinkAtPanel(project, found.layer, cutId)) continue;
-        const occupied = new Set();
-        markOccupiedConteLayerLanesForOwner(project, found.ownerCut, found.layer.id, index, index, occupied);
-        if (!occupied.has(preferredLane)) return index;
-      }
-      return -1;
-    }
 
     function timelineSlotRangeFrames(slots, startIndex, endIndex) {
       const startSlot = slots && slots[startIndex];
@@ -21079,16 +20671,6 @@
       return [];
     }
 
-    function contePanelCopyIndicesForLayerEdge(edge, startSlotIndex, startEndIndex, latestStart, latestEnd) {
-      const indices = [];
-      if (edge === 'right' && latestEnd > startEndIndex) {
-        for (let index = startEndIndex + 1; index <= latestEnd; index += 1) indices.push(index);
-      }
-      if (edge === 'left' && latestStart < startSlotIndex) {
-        for (let index = latestStart; index < startSlotIndex; index += 1) indices.push(index);
-      }
-      return indices;
-    }
 
     function conteLayerOwnerSlotBounds(slots, ownerCutId) {
       let start = -1;
@@ -21146,17 +20728,6 @@
       return layers.length;
     }
 
-    function applyLayerInsertPreviewSlot(layerEl, project, targetCutId) {
-      const targetOwner = conteLayerOwnerCut(project, targetCutId);
-      if (!targetOwner) return;
-      const video = buildVideoTimelineCached(project);
-      const slots = video.slots || [];
-      const targetIndex = slots.findIndex(function(slot) { return slot.cut && slot.cut.id === targetCutId; });
-      const laneIndex = targetIndex >= 0
-        ? conteLayerBottomDrawingInsertLaneForTarget(project, targetCutId)
-        : conteLayerInsertIndexForTarget(project, targetCutId);
-      layerEl.style.setProperty('--layer-top', (laneIndex * CONTE_LAYER_DEFAULT_HEIGHT) + 'px');
-    }
 
     function bindConteLayerPointerDrag(root, layerEl, totalFrames) {
       layerEl.addEventListener('pointerdown', function(event) {
@@ -23744,15 +23315,6 @@
       return Math.min(total, handledFrames || total);
     }
 
-    function timingFallbackPageSegments(project, targetFrames) {
-      const pages = timingDialoguePages(project);
-      if (!pages.length) return [];
-      const target = Math.max(1, Math.round(Number(targetFrames) || 0));
-      const slot = Math.max(1, Math.floor(target / pages.length));
-      return pages.map(function(page, index) {
-        return { type: 'handled', start: index * slot, frames: Math.max(1, Math.floor(slot * 0.18)) };
-      });
-    }
 
     function timingSegmentHtml(segment, targetFrames) {
       const left = framePercent(segment.start, targetFrames);
@@ -23946,34 +23508,6 @@
       return '<div class="timing-page-range" style="--page-left:' + range.left.toFixed(2) + '%;--page-width:' + range.width.toFixed(2) + '%"><span class="timing-page-range-label">p' + range.pageNo + '</span></div>';
     }
 
-    function timingPageMarkers(project, targetFrames) {
-      const groups = collectCutTimingGroups(project || state.project);
-      const markers = new Map();
-      let cursor = 0;
-      groups.forEach(function(group) {
-        const blocks = linkedBlocksForCutGroup(project || state.project, group);
-        const dialoguePages = uniquePageNumbers(blocks.filter(function(block) {
-          return DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0;
-        }));
-        const pages = dialoguePages.length ? dialoguePages : uniquePageNumbers(blocks);
-        pages.forEach(function(pageNo) {
-          if (!markers.has(pageNo)) markers.set(pageNo, framePercent(cursor, targetFrames));
-        });
-        cursor += Math.max(0, Math.round(Number(group.durationFrames) || 0));
-      });
-      if (!markers.size) {
-        const pages = timingDialoguePages(project || state.project);
-        pages.forEach(function(pageNo, index) {
-          const left = pages.length <= 1 ? 0 : index / (pages.length - 1) * 100;
-          markers.set(pageNo, left);
-        });
-      }
-      return Array.from(markers.entries()).sort(function(left, right) {
-        return left[1] - right[1] || left[0] - right[0];
-      }).map(function(entry) {
-        return { pageNo: entry[0], left: Math.max(0, Math.min(100, entry[1])) };
-      });
-    }
 
     function timingDialoguePages(project) {
       const blocks = getProjectBlocks(project || state.project);
@@ -23996,9 +23530,6 @@
       return '<div class="timing-page-marker" style="--page-left:' + marker.left.toFixed(2) + '%"></div>';
     }
 
-    function timingPageLabelHtml(marker) {
-      return '<span class="timing-page-range-label" style="--page-left:' + marker.left.toFixed(2) + '%">p' + marker.pageNo + '</span>';
-    }
 
     function dialogueAutoTimingFramesForText(text) {
       const moraFrames = estimateDialogueMora(text) * DIALOGUE_FRAMES_PER_MORA + DIALOGUE_HANDLE_FRAMES * 2;
@@ -24893,9 +24424,6 @@
       return slots[targetIndex] || null;
     }
 
-    function paraparaPreviousSlot(project) {
-      return paraparaSlotByOffset(project, -1);
-    }
 
     function clearParaparaPreviewOverlay() {
       if (state.paraparaPreviewTimer) clearTimeout(state.paraparaPreviewTimer);
@@ -25234,9 +24762,6 @@
       return Number(value || 0) * cameraViewScaleForRect(rect);
     }
 
-    function cameraScreenDeltaToCoord(value, rect) {
-      return Number(value || 0) / cameraViewScaleForRect(rect);
-    }
 
     function normalizedCameraFrameTransform(transform) {
       const source = transform || {};
@@ -25887,28 +25412,7 @@
       }).join('') + '</div>';
     }
 
-    function drawDataUrlToCanvas(canvas, dataUrl, options) {
-      if (!canvas || !dataUrl) return false;
-      options = options || {};
-      const ctx = canvas.getContext('2d');
-      const image = new Image();
-      image.onload = function() {
-        if (options.clear !== false) ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        if (typeof options.after === 'function') options.after();
-      };
-      image.src = dataUrl;
-      return true;
-    }
 
-    function renderLayerDrawingCanvas(drawing, width, height) {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(Number(width) || LAYER_DRAWING_WIDTH));
-      canvas.height = Math.max(1, Math.round(Number(height) || LAYER_DRAWING_HEIGHT));
-      const dataUrl = drawing && drawing.bitmapDataUrl || '';
-      if (dataUrl) drawLayerDrawingBitmapToCanvas(canvas, drawing, { clear: true });
-      return canvas;
-    }
 
     function layerDrawingBitmapRect(drawing) {
       return {
@@ -26008,23 +25512,6 @@
       return true;
     }
 
-    function layerDrawingDataUrl(project, drawingRef, width, height) {
-      const ref = String(drawingRef || '');
-      if (!ref) return '';
-      const drawing = getLayerDrawingData(project, ref);
-      if (!layerDrawingHasInk(drawing)) return '';
-      const targetWidth = Math.max(1, Math.round(Number(width) || LAYER_DRAWING_WIDTH));
-      const targetHeight = Math.max(1, Math.round(Number(height) || LAYER_DRAWING_HEIGHT));
-      const version = Math.max(0, Math.round(Number(drawing.version) || 0));
-      const rect = layerDrawingBitmapRect(drawing);
-      const key = [ref, version, drawing.bitmapDataUrl.length, rect.x, rect.y, rect.w, rect.h, targetWidth, targetHeight].join(':');
-      const cached = state.layerDrawingDataUrlCache && state.layerDrawingDataUrlCache[ref];
-      if (isLayerDrawingCompositionPending(ref)) return cached && cached.url ? cached.url : '';
-      if (cached && cached.key === key) return cached.url;
-      const url = drawing.bitmapDataUrl;
-      state.layerDrawingDataUrlCache[ref] = { key: key, url: url };
-      return url;
-    }
 
     function drawVideoPreviewLayerCanvases(root) {
       const scope = root && root.querySelectorAll ? root : document;
@@ -26856,9 +26343,6 @@
       }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true, skipPlayheadSelectionSync: true });
     }
 
-    function nextCutNumberForSlot(project, index) {
-      return cutNumberSuggestionForSlot(project, index).value;
-    }
 
     function cutNumberSuggestionForSlot(project, index) {
       const parsed = findPreviousPureCutNumber(project, index);
@@ -27312,12 +26796,6 @@
       return true;
     }
 
-    function readCutMarker(cut) {
-      return {
-        cutNo: String(cut && cut.cutNo || ''),
-        durationFrames: Math.max(0, Math.round(Number(cut && cut.durationFrames) || 0))
-      };
-    }
 
     function writeCutMarker(cut, marker) {
       cut.cutNo = marker.cutNo || '';
@@ -27326,14 +26804,7 @@
       cut.meta.userOverride = true;
     }
 
-    function clearCutMarker(cut) {
-      writeCutMarker(cut, { cutNo: '', durationFrames: 0 });
-    }
 
-    function createTrailingBlankCut(project) {
-      const cut = createBlankCutForSlot(project, project.cuts.length);
-      return cut;
-    }
 
     function createBlankCutForSlot(project, index) {
       const cut = createBlankCut(index + 1);
@@ -27921,12 +27392,6 @@
       return false;
     }
 
-    function renderSummaryLineSamples(lines) {
-      if (!lines || !lines.length) return '<div class="summary-lines"><div class="summary-line">No placed body lines yet.</div></div>';
-      return '<div class="summary-lines">' + lines.slice(0, 6).map(function(block) {
-        return '<div class="summary-line"><span class="block-tags">' + renderBlockTags(block) + '</span><br>' + escapeHtml(block.text || block.rawText || '') + '</div>';
-      }).join('') + '</div>';
-    }
 
     function normalizeGenderUi(value) {
       return value === 'male' || value === 'female' ? value : 'other';
@@ -27946,18 +27411,6 @@
       return 'Other';
     }
 
-    function renderGenderOptions(current) {
-      const options = [
-        ['male', 'Male'],
-        ['female', 'Female'],
-        ['other', 'Other']
-      ];
-      const selected = normalizeGenderUi(current);
-      return options.map(function(option) {
-        const value = option[0];
-        return '<option value="' + value + '"' + (selected === value ? ' selected' : '') + '>' + option[1] + '</option>';
-      }).join('');
-    }
 
     function renderVoiceAgeOptions(current) {
       const options = [
@@ -28091,30 +27544,6 @@
       return labels;
     }
 
-    function characterVoiceCacheLabel(name) {
-      ensureDialogueAudioCandidateClips(state.project);
-      const key = scenarioMetaKey(name);
-      let cached = 0;
-      let pending = 0;
-      let empty = 0;
-      (state.project.audio && state.project.audio.clips || []).forEach(function(clip) {
-        if (scenarioMetaKey(clip.characterName || '') !== key) return;
-        const profile = characterVoiceProfile(state.project, clip.characterName || name || 'Unknown', {
-          gender: clip.characterGender || '',
-          age: clip.characterAge || ''
-        });
-        if ((profile.ttsProvider || defaultTtsProvider(state.project)) !== 'voicevox') return;
-        const text = voicevoxClipSpeechText(clip, profile);
-        if (!text) {
-          empty += 1;
-          return;
-        }
-        const hasAudio = Boolean(clip.audioFileName);
-        if (hasAudio && !voicevoxClipAudioIsStale(clip, text) && !voicevoxClipNeedsAudioAnalysis(clip)) cached += 1;
-        else pending += 1;
-      });
-      return '音声: 生成待ち ' + pending + ' / 生成済 ' + cached + (empty ? ' / 空 ' + empty : '');
-    }
 
     function voicevoxSpeakerLabel(id) {
       const target = String(id || '');
@@ -29557,21 +28986,6 @@
       });
     }
 
-    function groupSourceBlocks(blocks) {
-      const groups = [
-        { key: 'body', label: '本文候補', blocks: [] },
-        { key: 'front', label: '表紙・メタ情報', blocks: [] },
-        { key: 'cast', label: '登場人物', blocks: [] },
-        { key: 'comment', label: 'コメント・修正', blocks: [] },
-        { key: 'low', label: '低信頼', blocks: [] }
-      ];
-      blocks.forEach(function(block) {
-        const group = blockGroupKey(block);
-        const target = groups.find(function(item) { return item.key === group; }) || groups[groups.length - 1];
-        target.blocks.push(block);
-      });
-      return groups.filter(function(group) { return group.blocks.length > 0; });
-    }
 
     function blockGroupKey(block) {
       if (block.meta && block.meta.confidence < 0.6) return 'low';
@@ -30304,20 +29718,6 @@
       }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
     }
 
-    function removeConteLayerById(project, layerId) {
-      const found = findConteLayerById(project, layerId);
-      if (!found || !found.ownerCut || !Array.isArray(found.ownerCut.conteLayers)) return false;
-      found.ownerCut.conteLayers = found.ownerCut.conteLayers.filter(function(layer) {
-        return layer.id !== layerId;
-      });
-      if (found.ownerCut.conteLayers.length) {
-        markConteLayerOwnerHasLayers(found.ownerCut);
-        assignConteLayerOrders(found.ownerCut.conteLayers);
-      } else {
-        markConteLayerOwnerNoLayers(found.ownerCut);
-      }
-      return true;
-    }
 
     function removeConteLayersByIds(project, layerIds) {
       const ids = new Set((layerIds || []).map(function(id) { return String(id || ''); }).filter(Boolean));
@@ -30587,38 +29987,7 @@
       return deleteSelectedPicturePanels();
     }
 
-    function moveSelectedPicturePanel(delta) {
-      const panelId = primarySelectedPicturePanelId();
-      const index = state.project.cuts.findIndex(function(item) { return item.id === panelId; });
-      const target = index + delta;
-      if (index < 0 || target < 0 || target >= state.project.cuts.length) return;
-      runTimelineStructureCommand('Move picture panel', function(project) {
-        const cuts = project.cuts;
-        const temp = cuts[index].order;
-        cuts[index].order = cuts[target].order;
-        cuts[target].order = temp;
-      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
-    }
 
-    function addCut() {
-      runTimelineStructureCommand('Add cut', function(project) {
-        const insertIndex = project.cuts.length;
-        const video = buildVideoTimeline(project);
-        const insertFrame = video.totalFrames;
-        const cut = createBlankCut(project.cuts.length + 1);
-        cut.id = 'cut-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-        cut.cutNo = cutNumberSuggestionForSlot(project, insertIndex).value;
-        const frames = initializeAddedConteCutTiming(project, cut);
-        project.cuts.push(cut);
-        resetCutOrders(project);
-        shiftTimelineMediaAfterFrame(project, insertFrame, frames);
-        setCurrentPicturePanelId(cut.id);
-        const selectedPanels = selectedPicturePanelSet();
-        selectedPanels.clear();
-        selectedPanels.add(cut.id);
-        state.activeConteSelectionType = 'panel';
-      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
-    }
 
     // APP: EXPORT / IMPORT
     function unassignBlock(blockId) {
@@ -30885,34 +30254,6 @@
       }
     }
 
-    async function saveAudioBlobToIndexedDb(clip, blob, mime, fileName) {
-      if (!clip || !clip.id || !blob) return null;
-      if (!indexedDbAutosaveAvailable()) throw new Error('IndexedDB is not available for audio storage.');
-      const key = indexedDbAudioStorageKey(clip.id);
-      const audioMime = mime || blob.type || clip.audioMime || 'audio/webm';
-      const record = {
-        kind: 'audioBlob',
-        clipId: String(clip.id || ''),
-        fileName: String(fileName || clip.audioFileName || ''),
-        mime: audioMime,
-        size: Math.round(Number(blob.size) || 0),
-        savedAt: new Date().toISOString(),
-        blob: blob
-      };
-      await putWorkspaceDbValue(key, record);
-      clip.audioFileName = '';
-      clip.audioMime = audioMime;
-      clip.audioStorage = {
-        kind: 'indexeddb',
-        key: key,
-        fileName: record.fileName,
-        mime: audioMime,
-        size: record.size,
-        savedAt: record.savedAt
-      };
-      replaceWorkspaceObjectUrl('audio', clip.id, blob);
-      return clip.audioStorage;
-    }
 
     // Mobile audio (A): store the recording INLINE in the project (base64 on the clip) so the project
     // JSON is self-contained — autosave, Save, and ZIP all carry the audio, and it survives an iPad
@@ -31936,14 +31277,6 @@
       }
     }
 
-    function projectHasUnsavedChanges() {
-      if (!state.projectSavedSnapshot) return false;
-      try {
-        return serializedProjectJson() !== state.projectSavedSnapshot;
-      } catch (error) {
-        return true;
-      }
-    }
 
     async function saveProjectToWorkspace() {
       if (!state.workspaceHandle) {
@@ -33499,12 +32832,6 @@
       return state.memoCompositeDirty;
     }
 
-    function markLayerDrawingCompositionPending(drawingRef) {
-      const ref = String(drawingRef || '');
-      if (!ref) return;
-      pendingLayerDrawingRefSet().add(ref);
-      state.memoCompositeDirty = true;
-    }
 
     function clearLayerDrawingCompositionPending(drawingRef) {
       const ref = String(drawingRef || '');
@@ -33745,12 +33072,6 @@
       return fallbackMemoPictureRectForCut(id);
     }
 
-    function drawLayerDrawingOnMemoPage(ctx, drawing, rect, width, height) {
-      if (!drawing || !rect) return;
-      (drawing.strokes || []).forEach(function(stroke) {
-        drawMemoStroke(ctx, pageStrokeFromLayerStroke(stroke, rect), width, height);
-      });
-    }
 
     function memoActiveLayerStrokeExcludeId(drawingRef) {
       const current = state.memoCurrentStroke;
@@ -33777,11 +33098,6 @@
       return canvas;
     }
 
-    function currentMemoStrokeForDrawingRef(drawingRef) {
-      const current = state.memoCurrentStroke;
-      if (!current || !memoStrokeUsesLayerRect(current)) return null;
-      return String(current.layerDrawingRef || '') === String(drawingRef || '') ? current : null;
-    }
 
     function memoCanvasHasActiveStroke(canvas) {
       // True while a memo raster op is actively painting onto this exact canvas. Async bitmap
@@ -34115,18 +33431,6 @@
       }
     }
 
-    function scheduleVisibleLayerCanvasRedraw(drawingRef) {
-      const ref = String(drawingRef || '');
-      if (!ref) return;
-      layerCanvasRedrawRefSet().add(ref);
-      if (state.layerCanvasRedrawRaf) return;
-      state.layerCanvasRedrawRaf = requestAnimationFrame(function() {
-        const refs = Array.from(layerCanvasRedrawRefSet());
-        layerCanvasRedrawRefSet().clear();
-        state.layerCanvasRedrawRaf = 0;
-        refs.forEach(redrawVisibleLayerCanvasesForRef);
-      });
-    }
 
     function ensurePaperLayerCanvasForTarget(target) {
       if (!target || !target.cutId || !target.drawingRef) return [];
@@ -34249,15 +33553,6 @@
       });
     }
 
-    function scheduleActiveLayerCanvasRedraw(drawingRef) {
-      const ref = String(drawingRef || '');
-      if (!ref) return;
-      if (state.activeLayerCanvasRedrawRaf) return;
-      state.activeLayerCanvasRedrawRaf = requestAnimationFrame(function() {
-        state.activeLayerCanvasRedrawRaf = 0;
-        redrawActiveLayerCanvasTargets(ref);
-      });
-    }
 
     function drawLayerPreviewCanvasOnMemoPage(ctx, previewCanvas, rect, width, height) {
       if (!previewCanvas || !rect) return;
@@ -34270,25 +33565,6 @@
       );
     }
 
-    function renderPendingLayerDrawingsToMemoContext(ctx, pageNo, width, height) {
-      const pendingRefs = pendingLayerDrawingRefSet();
-      if (!pendingRefs.size) return;
-      const rectMap = {};
-      memoPictureHitboxes().forEach(function(rect) {
-        rectMap[rect.cutId] = rect;
-      });
-      visibleCuts().forEach(function(cut) {
-        if (!cut || Number(cut.pageNo) !== Number(pageNo)) return;
-        const rect = memoLayerRectForCut(cut.id, rectMap);
-        if (!rect) return;
-        activeConteLayersForCut(state.project, cut.id).forEach(function(entry) {
-          const ref = entry.layer && entry.layer.drawingRef || '';
-          if (!ref || !pendingRefs.has(ref) || entry.layer.visible === false) return;
-          const preview = layerDrawingPreviewCanvas(state.project, ref, LAYER_DRAWING_WIDTH, LAYER_DRAWING_HEIGHT, memoActiveLayerStrokeExcludeId(ref));
-          drawLayerPreviewCanvasOnMemoPage(ctx, preview, rect, width, height);
-        });
-      });
-    }
 
     function drawMemoStroke(ctx, stroke, width, height, offsetX, offsetY) {
       const points = Array.isArray(stroke.points) ? stroke.points : [];
@@ -34517,27 +33793,7 @@
       return { canvas: canvas, rect: unionRect, editRect: editRect };
     }
 
-    function rememberMemoBitmapBefore(stroke, snapshot) {
-      if (!stroke || !stroke.id || !snapshot) return;
-      state.memoBitmapHistory[stroke.id] = Object.assign(state.memoBitmapHistory[stroke.id] || {}, {
-        drawingRef: stroke.layerDrawingRef || '',
-        cutId: stroke.cutId || '',
-        before: snapshot
-      });
-      state.memoBitmapHistoryOrder = state.memoBitmapHistoryOrder.filter(function(id) { return id !== stroke.id; });
-      state.memoBitmapHistoryOrder.push(stroke.id);
-      while (state.memoBitmapHistoryOrder.length > MEMO_BITMAP_HISTORY_LIMIT) {
-        const oldId = state.memoBitmapHistoryOrder.shift();
-        if (oldId) delete state.memoBitmapHistory[oldId];
-      }
-    }
 
-    function rememberMemoBitmapAfter(stroke) {
-      if (!stroke || !stroke.id || !state.memoBitmapHistory[stroke.id]) return;
-      const canvas = firstActiveLayerCanvas();
-      const snapshot = captureCanvasBitmap(canvas);
-      if (snapshot) state.memoBitmapHistory[stroke.id].after = snapshot;
-    }
 
     function canvasTargetsForMemoStroke(stroke) {
       if (!stroke || !stroke.layerDrawingRef) return [];
@@ -34680,43 +33936,11 @@
       return type === 'conte-layer' || type === 'video-conte-layer';
     }
 
-    function cutHasAnyActiveConteLayer(project, cutId) {
-      return activeConteLayersForCut(project, cutId).some(function(entry) {
-        return entry && entry.layer;
-      });
-    }
 
     function cutHasActiveMediaLayer(project, cutId) {
       return cutHasVideoMedia(project, cutId);
     }
 
-    function ensureTopDrawableConteLayerForCut(project, cutId, options) {
-      options = options || {};
-      let top = topDrawableConteLayerForCut(project, cutId);
-      if (top && top.layer) return top;
-      if (options.createForMedia !== true || !cutHasActiveMediaLayer(project, cutId)) return null;
-      const cutIndex = cutIndexById(project, cutId);
-      if (cutIndex < 0) return null;
-      const owner = conteLayerOwnerCut(project, cutId) || project.cuts[cutIndex];
-      if (!owner) return null;
-      const ownerIndex = cutIndexById(project, owner.id);
-      owner.conteLayers = Array.isArray(owner.conteLayers) ? owner.conteLayers : [];
-      if (!conteLayerCanCreate(owner.conteLayers)) {
-        state.timelineStatus = 'Conte layer limit is A-Z.';
-        return null;
-      }
-      const layer = createConteLayer({
-        order: nextConteLayerOrder(owner.conteLayers),
-        startPanelCutId: cutId,
-        panelStart: Math.max(0, cutIndex - ownerIndex),
-        panelSpan: 1,
-        drawingRef: newLayerDrawingRef('drawing')
-      });
-      owner.conteLayers.push(layer);
-      placeConteLayerAboveBottomMedia(owner.conteLayers, layer.id);
-      getLayerDrawingData(project, layer.drawingRef);
-      return { ownerCut: owner, layer: layer, layerIndex: owner.conteLayers.length - 1, lane: owner.conteLayers.length - 1 };
-    }
 
     function selectedConteLayerIsActiveOnCut(project, layerId, cutId) {
       const targetId = String(layerId || '');
@@ -35152,16 +34376,7 @@
       return true;
     }
 
-    function currentLayerCanvasSnapshot() {
-      const canvas = firstActiveLayerCanvas();
-      return canvas ? canvas.toDataURL('image/png') : '';
-    }
 
-    function ensureRasterCanvasSize(canvas) {
-      if (!canvas) return;
-      if (canvas.width !== LAYER_DRAWING_WIDTH) canvas.width = LAYER_DRAWING_WIDTH;
-      if (canvas.height !== LAYER_DRAWING_HEIGHT) canvas.height = LAYER_DRAWING_HEIGHT;
-    }
 
     function prepareLayerCanvasForRasterEdit(canvas, drawing) {
       if (!canvas) return;
@@ -36295,19 +35510,7 @@
       return patch;
     }
 
-    function memoPointToCanvasPx(point, canvas) {
-      return {
-        x: Math.max(0, Math.min(canvas.width, (Number(point && point.x) || 0) * canvas.width)),
-        y: Math.max(0, Math.min(canvas.height, (Number(point && point.y) || 0) * canvas.height))
-      };
-    }
 
-    function memoPointToCanvasPxRaw(point, canvas) {
-      return {
-        x: (Number(point && point.x) || 0) * canvas.width,
-        y: (Number(point && point.y) || 0) * canvas.height
-      };
-    }
 
     function memoLayerPointToWorkCanvasPxRaw(point, target) {
       return {
@@ -36606,36 +35809,6 @@
       drawMemoTransformOpPreview(op);
     }
 
-    function moveMemoSelectionByPixels(selection, dx, dy) {
-      if (!selection || !selection.maskCanvas) return null;
-      const px = Math.round(Number(dx) || 0);
-      const py = Math.round(Number(dy) || 0);
-      const mask = createReadbackCanvas();
-      mask.width = Math.max(1, selection.maskCanvas.width || LAYER_DRAWING_WIDTH);
-      mask.height = Math.max(1, selection.maskCanvas.height || LAYER_DRAWING_HEIGHT);
-      mask.getContext('2d').drawImage(selection.maskCanvas, px, py);
-      const bounds = memoSelectionBounds(mask);
-      if (!bounds) return null;
-      const nx = px / Math.max(1, LAYER_DRAWING_WIDTH);
-      const ny = py / Math.max(1, LAYER_DRAWING_HEIGHT);
-      function movePoint(point) {
-        return { x: (Number(point && point.x) || 0) + nx, y: (Number(point && point.y) || 0) + ny };
-      }
-      return {
-        drawingRef: selection.drawingRef,
-        maskCanvas: mask,
-        bitmapX: memoSelectionBitmapX(selection),
-        bitmapY: memoSelectionBitmapY(selection),
-        bounds: bounds,
-        points: Array.isArray(selection.points) ? selection.points.map(movePoint) : null,
-        paths: Array.isArray(selection.paths) ? selection.paths.map(function(path) {
-          return {
-            mode: path && path.mode || 'replace',
-            points: Array.isArray(path && path.points) ? path.points.map(movePoint) : []
-          };
-        }) : null
-      };
-    }
 
     function beginMemoTransformOp(event, canvas, layerTarget, localPoint) {
       const mode = state.memoEditTool === 'perspective' ? 'perspective' : 'transform';
@@ -37398,19 +36571,6 @@
       return document.getElementById('videoMemoCanvas');
     }
 
-    function renderPendingLayerDrawingsToVideoMemoContext(ctx, width, height) {
-      const pendingRefs = pendingLayerDrawingRefSet();
-      if (!pendingRefs.size) return;
-      const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
-      const cutId = slot && slot.cut && slot.cut.id || '';
-      if (!cutId) return;
-      activeConteLayersForCut(state.project, cutId).forEach(function(entry) {
-        const ref = entry.layer && entry.layer.drawingRef || '';
-        if (!ref || !pendingRefs.has(ref) || entry.layer.visible === false) return;
-        const preview = layerDrawingPreviewCanvas(state.project, ref, width, height, memoActiveLayerStrokeExcludeId(ref));
-        if (preview) ctx.drawImage(preview, 0, 0, width, height);
-      });
-    }
 
     function scheduleVideoMemoCanvasRedraw() {
       if (state.videoMemoRedrawRaf) return;
@@ -38207,12 +37367,6 @@
       return MEMO_SIZE_PRESETS[memoSizePresetIndex(value)] || MEMO_SIZE_PRESETS[0];
     }
 
-    function setActiveMemoSize(value) {
-      const next = memoSizePresetValue(value);
-      if (state.memoTool === 'eraser') state.memoEraserSize = next;
-      else state.memoPenSize = next;
-      return next;
-    }
 
     function setActiveMemoSizeByPresetIndex(index) {
       const clampedIndex = clampNumber(index, 0, MEMO_SIZE_PRESETS.length - 1, memoSizePresetIndex(activeMemoSize()));
@@ -39567,14 +38721,6 @@
       return lines;
     }
 
-    function drawContainedImage(ctx, image, x, y, w, h) {
-      const iw = image.naturalWidth || image.width;
-      const ih = image.naturalHeight || image.height;
-      const scale = Math.min(w / iw, h / ih);
-      const dw = iw * scale;
-      const dh = ih * scale;
-      ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-    }
 
     function drawCoverImage(ctx, image, x, y, w, h) {
       const iw = image.naturalWidth || image.width;
@@ -39609,16 +38755,6 @@
       });
     }
 
-    function downloadBlob(blob, fileName) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
 
     function asciiBytes(text) {
       const string = String(text || '');
