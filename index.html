@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver065</title>
+  <title>Conte Editor Prototype ver066</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6877,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver065</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver066</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7026,9 +7026,29 @@
   </div>
 
   <script>
+    // ================================================================================================
+    //  FILE MAP — single-file app (~40k lines). Jump between areas with Ctrl-F on "## SECTION:".
+    //  Sections, top → bottom:
+    //    1. APP: CONSTANTS / STATE ......... globals, default project, settings, undo/redo commands
+    //    2. IMPORT: PDF + SCENARIO PARSING . read script files into blocks
+    //    3. CONTE LAYERS (data model) ...... layer/koma data, lane layout, bg bundles
+    //    4. AUDIO CLIPS (model + timing) ... dialogue/recording clips, trim, sync to cuts
+    //    5. VIDEO TIMELINE + OL ............ buildVideoTimeline, overlap / cross-dissolve, slots
+    //    6. TIMELINE DOM ................... track / ruler / scrollbar HTML builders
+    //    7. CONTE-LAYER TIMELINE ........... lane interaction: select / drag / drop / context menus
+    //    8. AUDIO PLAYBACK ................. transport clock, audio scheduling
+    //    9. VIDEO PREVIEW RENDER ........... compose preview screen, OL dissolve, camera transform
+    //   10. VOICEVOX / TTS AUDIO ........... TTS synthesis + voice profiles
+    //   11. CUT / PANEL STRUCTURE OPS ...... add / delete / move / duplicate cuts & panels
+    //   12. WORKSPACE FILE IO ............. read / write project + media to the local folder
+    //   13. MEMO / DRAWING SUBSYSTEM ....... canvas drawing (paper page memo + video layer bitmap)
+    //   14. MEMO TOOLS / UI STATE ......... brush / eraser / lasso / transform tools, toolbars
+    //   15. INIT / BOOTSTRAP .............. wiring, event listeners, startup (near file end)
+    //  (Cache invalidation rules: Ctrl-F "CACHE REGISTRY".)
+    // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '065';
+    const APP_DISPLAY_VERSION = '066';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -9404,6 +9424,10 @@
     }
 
 
+
+    // ##################################################################################
+    // ## SECTION: IMPORT: PDF + SCENARIO PARSING
+    // ##################################################################################
     async function readPdfDocumentLoose(file) {
       const buffer = await file.arrayBuffer();
       const streams = await extractPdfStreams(buffer);
@@ -13018,6 +13042,10 @@
       return result;
     }
 
+
+    // ##################################################################################
+    // ## SECTION: CONTE LAYERS (data model + lanes)
+    // ##################################################################################
     function conteLayerIsBg(layer) {
       return Boolean(layer && layer.layerRole === 'bg');
     }
@@ -15459,6 +15487,10 @@
       return Math.max(1, trim || source || duration || 1);
     }
 
+
+    // ##################################################################################
+    // ## SECTION: AUDIO CLIPS (model + timing)
+    // ##################################################################################
     function normalizeAudioClipVisibleDuration(clip) {
       if (!clip) return;
       clip.audioDurationFrames = Math.max(0, Math.round(Number(clip.audioDurationFrames) || 0));
@@ -16269,6 +16301,28 @@
       return Math.max(1, oneSecondFrames(project || state.project), audioTimelineTotalFrames(project));
     }
 
+    // ============================================================================================
+    // CACHE REGISTRY — every render/compute cache and how to invalidate it. If you mutate state that
+    // feeds one of these, call its invalidator. Most cut/timing/OL edits go through runCommand /
+    // runTimelineStructureCommand, which already invalidate the timeline cache for you. A forgotten
+    // invalidation shows up as stale UI (e.g. the OL dissolve "hard cut" bug was a stale preview key).
+    //
+    //   Cache (state field / DOM)                  Invalidator                            Cleared when
+    //   -----------------------------------------  -------------------------------------  ----------------------
+    //   videoTimelineCache (built timeline)        invalidateVideoTimelineCache()         cut / timing / OL edit
+    //     auto-keyed by videoTimelineSignature()   (bump historyMeta.videoTimelineRevision to auto-expire)
+    //   preview DOM (stage.previewKey/seekUnitKey) invalidateVideoPreviewRenderCache()    preview content change
+    //     scoped to one drawing                    invalidateVideoPreviewForDrawingRef(ref)
+    //   layerDrawingDataUrlCache[ref] +            clearLayerDrawingDataUrlCacheForRef    a layer drawing edited
+    //     memoLayerPreviewCache[ref]                 (ref)   (also clears preview above)
+    //   audioWaveformCssCache[clipId]              delete on the clip                     audio clip trim / edit
+    //   audio buffers by character                 invalidateAudioForCharacter(p, name)   voice / character change
+    //   layer paste preview                        invalidateLayerDrawingPastePreview(ref) paste source changed
+    // ============================================================================================
+
+    // ##################################################################################
+    // ## SECTION: VIDEO TIMELINE + OL (overlap / cross-dissolve)
+    // ##################################################################################
     function invalidateVideoTimelineCache() {
       state.videoTimelineCacheKey = '';
       state.videoTimelineCache = null;
@@ -17632,6 +17686,10 @@
       });
     }
 
+
+    // ##################################################################################
+    // ## SECTION: TIMELINE DOM (tracks / ruler / scrollbar)
+    // ##################################################################################
     function updateTimelineStickyLabelOffset(root, scrollLeft) {
       const targetRoot = root || document.getElementById('timingDashboard') || document;
       if (!targetRoot || !targetRoot.querySelector) return;
@@ -19688,6 +19746,10 @@
       return anchorLayerId ? conteLayerRowIndexForLayer(project, anchorLayerId) : -1;
     }
 
+
+    // ##################################################################################
+    // ## SECTION: CONTE-LAYER TIMELINE (interaction)
+    // ##################################################################################
     function selectConteLayerCellFromTimeline(root, panelCutId, rowIndexOrLineKey, anchorLayerId, additive) {
       const targetCutId = String(panelCutId || '');
       const rowIndex = conteLayerRowIndexFromSelectionInput(state.project, targetCutId, rowIndexOrLineKey, anchorLayerId);
@@ -22835,6 +22897,10 @@
       }
     }
 
+
+    // ##################################################################################
+    // ## SECTION: AUDIO PLAYBACK
+    // ##################################################################################
     function playbackAudioContextConstructor() {
       return window.AudioContext || window.webkitAudioContext || null;
     }
@@ -23919,6 +23985,10 @@
       renderVideoPreviewForSlot(stageEl, slot, activeClips, previewKey, true);
     }
 
+
+    // ##################################################################################
+    // ## SECTION: VIDEO PREVIEW RENDER
+    // ##################################################################################
     function renderVideoPreviewIfChanged(totalFramesOverride, activeClipsOverride) {
       const stageEl = document.getElementById('videoPreviewStage');
       if (!stageEl) return;
@@ -27703,6 +27773,10 @@
       });
     }
 
+
+    // ##################################################################################
+    // ## SECTION: VOICEVOX / TTS AUDIO
+    // ##################################################################################
     function voicevoxSpeakerGenderGuess(item) {
       const text = String((item && item.name || '') + ' ' + (item && item.style || '') + ' ' + (item && item.type || ''));
       if (/(玄野武宏|白上虎太郎|青山龍星|剣崎雌雄|麒ヶ島宗麟|†聖騎士|紅桜|雀松朱司|栗田まろん|ちび式じい|男性|男声|male)/i.test(text)) return 'male';
@@ -29891,6 +29965,10 @@
       });
     }
 
+
+    // ##################################################################################
+    // ## SECTION: CUT / PANEL STRUCTURE OPS
+    // ##################################################################################
     function removePicturePanelsByIds(project, ids) {
       const removeSet = new Set((ids || []).filter(Boolean));
       if (!removeSet.size || project.cuts.length <= 1) return false;
@@ -32083,6 +32161,10 @@
       }
     }
 
+
+    // ##################################################################################
+    // ## SECTION: WORKSPACE FILE IO (save / load)
+    // ##################################################################################
     async function appendBlobToWorkspace(relativeDir, fileName, blob) {
       if (!await ensureWorkspacePermission(state.workspaceHandle, true)) throw new Error('Working folder write permission was not granted.');
       const dir = relativeDir ? await getWorkspaceDirectory(relativeDir, true) : state.workspaceHandle;
@@ -34113,6 +34195,10 @@
       };
     }
 
+
+    // ##################################################################################
+    // ## SECTION: MEMO / DRAWING SUBSYSTEM
+    // ##################################################################################
     function memoCanvasPixelAtEvent(canvas, event) {
       if (!canvas || String(canvas.tagName || '').toLowerCase() !== 'canvas') return null;
       const rect = canvas.getBoundingClientRect();
@@ -37337,6 +37423,10 @@
       document.addEventListener('pointercancel', endScenarioWindowDrag);
     }
 
+
+    // ##################################################################################
+    // ## SECTION: MEMO TOOLS / UI STATE
+    // ##################################################################################
     function activeMemoSize() {
       return state.memoTool === 'eraser' ? state.memoEraserSize : state.memoPenSize;
     }
