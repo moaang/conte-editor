@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver052</title>
+  <title>Conte Editor Prototype ver053</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6756,7 +6756,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver052</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver053</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6907,7 +6907,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '052';
+    const APP_DISPLAY_VERSION = '053';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31139,7 +31139,10 @@
     }
 
     function serializedProjectJson() {
-      return JSON.stringify(projectForJsonStorage(), null, 2);
+      // Compact (no indentation): roughly halves the file/IndexedDB size and speeds up every
+      // save / autosave / unsaved-changes comparison. The file is never hand-edited, so readability
+      // is not a concern; JSON.parse loads compact and pretty-printed files identically.
+      return JSON.stringify(projectForJsonStorage());
     }
 
     function markProjectSavedBaseline() {
