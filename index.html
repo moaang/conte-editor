@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver058</title>
+  <title>Conte Editor Prototype ver059</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -3204,6 +3204,10 @@
 
     .video-preview-layered.video-preview-ol-out {
       z-index: 0;
+    }
+
+    .video-preview-layered.video-preview-ol-over {
+      z-index: 2;
     }
 
     .video-preview-screen.paper-frame-active .video-preview-camera-target {
@@ -6873,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver058</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver059</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7024,7 +7028,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '058';
+    const APP_DISPLAY_VERSION = '059';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16593,7 +16597,39 @@
       // When no OL exists, overlaps is empty and primarySegments is null => identical to the old path.
       const overlaps = buildVideoTimelineOverlaps(groups);
       const primarySegments = overlaps.length ? buildVideoTimelinePrimarySegments(groups, slotsByGroup, overlaps) : null;
-      return { groups: groups, slots: slots, totalFrames: Math.max(1, totalFrames), overlaps: overlaps, primarySegments: primarySegments };
+      const primaryByOwner = overlaps.length ? buildVideoTimelinePrimaryByOwner(groups, overlaps) : null;
+      return { groups: groups, slots: slots, totalFrames: Math.max(1, totalFrames), overlaps: overlaps, primarySegments: primarySegments, primaryByOwner: primaryByOwner };
+    }
+
+    // Per-owner primary frame range [start, end): the slice of the timeline where this cut group is
+    // the active/shown one (overlap windows assigned to whichever cut is active). Drives clipping of
+    // the conte layer lane so an overlap region only shows the active cut's layers.
+    function buildVideoTimelinePrimaryByOwner(items, overlaps) {
+      const incomingActiveByGroup = {};
+      overlaps.forEach(function(ol) { incomingActiveByGroup[ol.groupIndex] = ol.activeIncoming; });
+      const pStart = items.map(function(item, gi) {
+        if (gi === 0 || !item.olPrevFrames) return item.startFrame;
+        return incomingActiveByGroup[gi] === false ? items[gi - 1].endFrame : item.startFrame;
+      });
+      const byOwner = {};
+      items.forEach(function(item, gi) {
+        const owner = item.group && item.group.cuts && item.group.cuts[0];
+        if (!owner) return;
+        const segStart = pStart[gi];
+        const segEnd = (gi < items.length - 1) ? Math.max(segStart, pStart[gi + 1]) : item.endFrame;
+        byOwner[String(owner.id)] = { start: segStart, end: segEnd };
+      });
+      return byOwner;
+    }
+
+    function olClipOwnerFrameRange(video, ownerId, startFrame, endFrame) {
+      const map = video && video.primaryByOwner;
+      if (!map) return { startFrame: startFrame, endFrame: endFrame };
+      const range = map[String(ownerId || '')];
+      if (!range) return { startFrame: startFrame, endFrame: endFrame };
+      const start = Math.max(startFrame, range.start);
+      const end = Math.min(endFrame, range.end);
+      return end > start ? { startFrame: start, endFrame: end } : null;
     }
 
     // In an overlap window the "active" (primary / shown) cut defaults to the incoming (back) group
@@ -18684,8 +18720,12 @@
           const endSlot = slots[Math.min(slots.length - 1, startIndex + span - 1)] || slots[slots.length - 1];
           const startFrame = startSlot ? startSlot.startFrame : item.startFrame;
           const endFrame = endSlot ? endSlot.endFrame : item.endFrame;
-          const left = framePercent(startFrame, totalFrames);
-          const width = Math.max(0.001, framePercent(Math.max(1, endFrame - startFrame), totalFrames));
+          // OL: clip the bar to the owner cut's primary (active) range so an overlap region only
+          // shows the active cut's layers. null => this layer is fully inside the other cut's region.
+          const clip = olClipOwnerFrameRange(video, owner.id, startFrame, endFrame);
+          if (!clip) return '';
+          const left = framePercent(clip.startFrame, totalFrames);
+          const width = Math.max(0.001, framePercent(Math.max(1, clip.endFrame - clip.startFrame), totalFrames));
           const lane = laneMap.has(layer.id) ? laneMap.get(layer.id) : conteLayerLaneIndex(layer, index);
           const top = lane * CONTE_LAYER_DEFAULT_HEIGHT;
           const selected = selectedLayerIds.has(layer.id) ? ' selected' : '';
@@ -25065,24 +25105,55 @@
 
     // OL cross-dissolve render: drop the outgoing cut's frame behind the (already rendered) incoming
     // layered stack and fade the incoming in via opacity = t. Only runs inside an overlap window.
+    // Builds a full cut-level composite (.video-preview-layered): picture + video-media clip +
+    // all conte layer drawings (image mode), matching what renderVideoPreviewForSlot draws for the
+    // primary cut. Used as the other side of the OL cross-dissolve so the whole frame dissolves.
+    function olCutCompositeLayeredHtml(cut, className, opacity) {
+      if (!cut) return '';
+      const parts = [];
+      const pic = pictureSrcForCut(cut);
+      if (pic) parts.push('<img src="' + escapeAttr(pic) + '" alt="" draggable="false">');
+      if (!videoMediaTrackIsHidden(state.project)) {
+        const vc = videoMediaClipAtFrame(state.project, state.videoPlayheadFrames, cut.id);
+        const vcSrc = videoClipMediaSrc(vc);
+        if (vcSrc) {
+          if (vc && vc.sourceType === 'video') parts.push('<video src="' + escapeAttr(vcSrc) + '" muted playsinline preload="metadata" draggable="false"></video>');
+          else parts.push('<img src="' + escapeAttr(vcSrc) + '" alt="" draggable="false">');
+        }
+      }
+      if (!videoTrackIsHidden(state.project)) {
+        const orderMaps = layerStackOrderMapsForCut(state.project, cut.id);
+        layerDrawingEntriesForCut(state.project, cut.id).forEach(function(entry) {
+          const ref = entry.layer && entry.layer.drawingRef || '';
+          const layerId = entry.layer && entry.layer.id || '';
+          if (!ref) return;
+          const z = orderMaps.byLayerId.get(layerId) || orderMaps.byDrawingRef.get(ref) || 1;
+          const drawing = getLayerDrawingData(state.project, ref);
+          const layerSrc = drawing && drawing.bitmapDataUrl ? ' src="' + escapeAttr(drawing.bitmapDataUrl) + '"' : '';
+          parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '"' + layerSrc + ' decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + '">');
+        });
+      }
+      const style = typeof opacity === 'number' ? ' style="opacity:' + opacity + '"' : '';
+      return '<div class="video-preview-layered ' + className + '"' + style + '>' + parts.join('') + '</div>';
+    }
+
     function applyVideoOverlapDissolve(stageEl) {
       if (!stageEl) return;
       const overlap = videoOverlapAtFrame(state.project, state.videoPlayheadFrames);
       const layered = stageEl.querySelector('.video-preview-camera-target');
       if (!overlap || !layered) return;
-      // Cross-dissolve is always outgoing -> incoming. The primary (rendered) layer is the active
-      // cut; we add the other cut as a sibling so the incoming one fades in by opacity = t.
+      // Cross-dissolve is always outgoing -> incoming, between the two cuts' FULL composites. The
+      // primary (rendered) layer is the active cut; we add the other cut's full composite as a
+      // sibling so the incoming side fades in by opacity = t.
       const primaryIsIncoming = overlap.overlap.activeCutId === overlap.overlap.inCutId;
       if (primaryIsIncoming) {
-        const outSrc = overlap.outCut ? pictureSrcForCut(overlap.outCut) : '';
-        if (!outSrc) return;
-        layered.insertAdjacentHTML('beforebegin', '<div class="video-preview-layered video-preview-ol-out"><img src="' + escapeAttr(outSrc) + '" alt="" draggable="false"></div>');
+        if (!overlap.outCut) return;
+        layered.insertAdjacentHTML('beforebegin', olCutCompositeLayeredHtml(overlap.outCut, 'video-preview-ol-out', 1));
         layered.style.opacity = String(overlap.t);
         stageEl.dataset.olDissolveRole = 'primary';
       } else {
-        const inSrc = overlap.inCut ? pictureSrcForCut(overlap.inCut) : '';
-        if (!inSrc) return;
-        layered.insertAdjacentHTML('afterend', '<div class="video-preview-layered video-preview-ol-out" style="z-index:2;opacity:' + overlap.t + '"><img src="' + escapeAttr(inSrc) + '" alt="" draggable="false"></div>');
+        if (!overlap.inCut) return;
+        layered.insertAdjacentHTML('afterend', olCutCompositeLayeredHtml(overlap.inCut, 'video-preview-ol-out video-preview-ol-over', overlap.t));
         stageEl.dataset.olDissolveRole = 'overlay';
       }
     }
