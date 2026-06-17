@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver041</title>
+  <title>Conte Editor Prototype ver042</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver041</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver042</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '041';
+    const APP_DISPLAY_VERSION = '042';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23899,19 +23899,9 @@
         offset: 0,
         side: zone.side
       };
-      // CRITICAL (iPadOS Safari finger+Pencil): a touch pointer is IMPLICITLY pointer-captured to its
-      // target on pointerdown (even without calling setPointerCapture). While that implicit capture is
-      // held, the concurrent Apple Pencil's pointer-event stream is suppressed entirely until the
-      // finger lifts — measured: penDowns never increments while a finger is held. Explicitly RELEASE
-      // the implicit capture so the Pencil's pointerdown fires and drawing works with the finger down.
-      // The finger is still tracked via the document-level pointermove/up listeners bound below
-      // (capture is not needed: the stage has touch-action:none and the scrub is vertical).
-      if (surfaceEl && surfaceEl.releasePointerCapture && (!surfaceEl.hasPointerCapture || surfaceEl.hasPointerCapture(event.pointerId))) {
-        try { surfaceEl.releasePointerCapture(event.pointerId); } catch (error) {}
+      if (surfaceEl && surfaceEl.setPointerCapture) {
+        try { surfaceEl.setPointerCapture(event.pointerId); } catch (error) {}
       }
-      document.addEventListener('pointermove', continuePreviewPanelFlipTouch);
-      document.addEventListener('pointerup', endPreviewPanelFlipTouch);
-      document.addEventListener('pointercancel', endPreviewPanelFlipTouch);
       event.preventDefault();
       event.stopPropagation();
     }
@@ -23919,13 +23909,6 @@
     function continuePreviewPanelFlipTouch(event) {
       const touch = state.previewPanelFlipTouch;
       if (!touch || touch.pointerId !== event.pointerId) return;
-      // A pen stroke is being drawn on the current koma — pin the flip offset so resting-finger drift
-      // can't scrub in another panel's preview (which would cover the live canvas mid-stroke).
-      if (state.memoRasterOp) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
       const deltaY = event.clientY - touch.startY;
       const steps = deltaY > 0 ? Math.floor(deltaY / 40) : Math.ceil(deltaY / 40);
       const nextOffset = -steps;
@@ -23942,9 +23925,10 @@
       const touch = state.previewPanelFlipTouch;
       if (!touch || touch.pointerId !== event.pointerId) return;
       state.previewPanelFlipTouch = null;
-      document.removeEventListener('pointermove', continuePreviewPanelFlipTouch);
-      document.removeEventListener('pointerup', endPreviewPanelFlipTouch);
-      document.removeEventListener('pointercancel', endPreviewPanelFlipTouch);
+      const surfaceEl = event.currentTarget;
+      if (surfaceEl && surfaceEl.releasePointerCapture) {
+        try { surfaceEl.releasePointerCapture(event.pointerId); } catch (error) {}
+      }
       clearParaparaPreviewOverlay();
       event.preventDefault();
       event.stopPropagation();
@@ -36140,10 +36124,6 @@
         return;
       }
       if (!memoInteractionActive()) return;
-      // While the parapara flip is scrubbed to another panel (offset != 0), the screen shows a
-      // preview-only overlay of a DIFFERENT koma — a stroke would land on the hidden current koma, so
-      // block it. At offset 0 the current koma is shown live, so drawing on it proceeds normally.
-      if (state.previewPanelFlipTouch && state.previewPanelFlipTouch.offset) return;
       event.preventDefault();
       event.stopPropagation();
       const canvas = ensureVideoPreviewReadyForDrawing(event.currentTarget);
@@ -39184,65 +39164,6 @@
     renderVersionInfoDialog();
     refresh();
     restoreWorkspaceHandle();
-
-    // ---- Finger+Pencil concurrency probe. Inert unless URL contains "perf" (e.g. .../#perf). ----
-    // Hold a finger in the gray (parapara) and draw with the Pencil. Tells whether the pen pointerdown
-    // even fires while a finger is down, what element it hits, and whether a draw op started.
-    (function setupFingerPenProbe() {
-      if (!/perf/i.test(String(location.hash || '') + String(location.search || ''))) return;
-      const hud = document.createElement('div');
-      hud.style.cssText = 'position:fixed;top:6px;right:6px;z-index:2147483647;background:rgba(0,0,0,0.82);color:#1eff1e;font:11px/1.35 ui-monospace,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:64vw';
-      (document.body || document.documentElement).appendChild(hud);
-      let penDown = 0, touchDown = 0, penTarget = '-', flipAtPen = '-', drewAfterPen = '-', lastPenType = '-';
-      let stylusTouch = 0, directTouch = 0, stylusWhileFinger = 0, lastTouchTypes = '-';
-      function describe(el) {
-        if (!el) return 'none';
-        let s = String(el.tagName || '?').toLowerCase();
-        if (el.id) s += '#' + el.id;
-        else if (typeof el.className === 'string' && el.className) s += '.' + el.className.split(' ')[0];
-        return s;
-      }
-      document.addEventListener('pointerdown', function(e) {
-        const pt = String(e.pointerType || '');
-        if (pt === 'touch') touchDown++;
-        if (pt === 'pen' || pt === 'mouse') {
-          penDown++;
-          lastPenType = pt;
-          penTarget = describe(e.target);
-          const flip = state.previewPanelFlipTouch;
-          flipAtPen = flip ? ('YES off=' + flip.offset) : 'no';
-          Promise.resolve().then(function() {
-            try { drewAfterPen = state.memoRasterOp ? ('op:' + (state.memoRasterOp.type || '?')) : 'NO-OP'; } catch (err) { drewAfterPen = 'err'; }
-          });
-        }
-      }, true);
-      function inspectTouches(e) {
-        const list = e.touches || [];
-        const types = [];
-        for (let i = 0; i < list.length; i++) {
-          const tt = String(list[i].touchType || '?');
-          types.push(tt);
-          if (tt === 'stylus') {
-            stylusTouch++;
-            if (state.previewPanelFlipTouch) stylusWhileFinger++;
-          } else {
-            directTouch++;
-          }
-        }
-        if (types.length) lastTouchTypes = types.join('+');
-      }
-      document.addEventListener('touchstart', inspectTouches, true);
-      document.addEventListener('touchmove', inspectTouches, true);
-      (function tick() {
-        hud.textContent = 'FINGER+PEN ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') +
-          '\nfingerDowns ' + touchDown + '   penDowns ' + penDown + ' (' + lastPenType + ')' +
-          '\nflipActive@pen: ' + flipAtPen + '   drewAfterPen: ' + drewAfterPen +
-          '\npenTarget: ' + penTarget +
-          '\nTOUCH stylus ' + stylusTouch + '  direct ' + directTouch +
-          '\nstylusWhileFinger: ' + stylusWhileFinger + '   live: ' + lastTouchTypes;
-        requestAnimationFrame(tick);
-      })();
-    })();
   </script>
 </body>
 </html>
