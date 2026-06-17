@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver034</title>
+  <title>Conte Editor Prototype ver035</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver034</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver035</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '034';
+    const APP_DISPLAY_VERSION = '035';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -35757,10 +35757,14 @@
     }
 
     function beginMemoDrawFromViewport(event) {
-      // Let pen/eraser/lasso strokes START in the gray "outside" area (the stage around the white
-      // canvas), but only for expandable komas and BG layers. Mirrors beginMemoTransformFromViewport:
-      // catch stage-level presses that are NOT on the draw canvas, then re-dispatch to the normal
-      // begin handler (which finds the target and sets pointer capture so moves keep flowing).
+      // Let strokes START in the gray "outside" area (the stage around the white canvas), then
+      // re-dispatch to the normal begin handler (which finds the target and sets pointer capture so
+      // moves keep flowing). Mirrors beginMemoTransformFromViewport for stage-level presses.
+      //   - pen / eraser: only for expandable komas and BG layers (drawing out there must expand the
+      //     canvas, which only those targets allow).
+      //   - lasso select / lasso stamp: allowed on ANY koma — a selection polygon is just point
+      //     coords (not pinned canvas pixels), so starting the marquee in the gray and dragging into
+      //     the white to grab on-canvas ink has no geometry/perf cost.
       if (state.memoRasterOp) return false;
       if (!memoInteractionActive() || state.memoSpacePanActive || event.button !== 0) return false;
       if (!memoPrimaryPointerDownAllowed(event)) return false;
@@ -35771,7 +35775,9 @@
       if (!stage) return false;
       if (event.target.closest && event.target.closest('#memoCanvas, #videoMemoCanvas')) return false;
       const layerTarget = currentMemoTransformLayerTarget();
-      if (!layerTarget || !memoTargetAllowsOutsideCanvas(layerTarget)) return false;
+      if (!layerTarget) return false;
+      const isLassoTool = tool === 'lasso-select' || tool === 'lasso-stamp';
+      if (!isLassoTool && !memoTargetAllowsOutsideCanvas(layerTarget)) return false;
       if (state.videoEditMode) beginVideoMemoStroke(event);
       else beginMemoStroke(event);
       return Boolean(state.memoRasterOp);
