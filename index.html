@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver042</title>
+  <title>Conte Editor Prototype ver043</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver042</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver043</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '042';
+    const APP_DISPLAY_VERSION = '043';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -32486,6 +32486,21 @@
       return targets.indexOf(canvas) !== -1;
     }
 
+    function layerPreviewImageCacheMap() {
+      if (!(state.layerPreviewImageCache instanceof Map)) state.layerPreviewImageCache = new Map();
+      return state.layerPreviewImageCache;
+    }
+
+    function cacheLayerPreviewImage(ref, key, image) {
+      const cache = layerPreviewImageCacheMap();
+      cache.delete(ref);
+      cache.set(ref, { key: key, image: image });
+      if (cache.size > 240) {
+        const firstKey = cache.keys().next().value;
+        cache.delete(firstKey);
+      }
+    }
+
     function drawLayerDrawingPreviewToCanvas(canvas, drawingRef) {
       const ref = String(drawingRef || '');
       if (!canvas || !ref) return;
@@ -32503,17 +32518,34 @@
           rect.w,
           rect.h
         ].join(':');
+        // This canvas already shows this exact bitmap → nothing to do. Skips the needless async
+        // re-decode that used to re-run for every UNCHANGED previous panel on each re-render
+        // (the inefficiency that also caused the random blank-then-return flashes).
+        if (canvas.dataset.layerPreviewDrawKey === key && canvas.dataset.layerPreviewPainted === '1') return;
         canvas.dataset.layerPreviewDrawKey = key;
+        const paint = function(img) {
+          if (canvas.dataset.layerPreviewDrawKey !== key) return;
+          if (memoCanvasHasActiveStroke(canvas)) return;
+          applyLayerCanvasBitmapRectGeometry(canvas, rect);
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          drawMemoSelectionOverlayOnCanvas(canvas, ref);
+          canvas.dataset.layerPreviewPainted = '1';
+        };
+        // A decoded image for this exact bitmap is cached → paint it SYNCHRONOUSLY, so a freshly
+        // (re)created canvas never flashes blank while an async decode is in flight.
+        const cached = layerPreviewImageCacheMap().get(ref);
+        if (cached && cached.key === key && cached.image && cached.image.complete && cached.image.naturalWidth) {
+          paint(cached.image);
+          return;
+        }
+        canvas.dataset.layerPreviewPainted = '';
         if (applyGeometryBeforeBitmap) applyLayerCanvasBitmapRectGeometry(canvas, rect);
         const image = new Image();
         image.onload = function() {
-          if (canvas.dataset.layerPreviewDrawKey !== key) return;
-          if (memoCanvasHasActiveStroke(canvas)) return;
-          if (!applyGeometryBeforeBitmap) applyLayerCanvasBitmapRectGeometry(canvas, rect);
-          const ctx = canvas.getContext('2d');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-          drawMemoSelectionOverlayOnCanvas(canvas, ref);
+          cacheLayerPreviewImage(ref, key, image);
+          paint(image);
         };
         image.onerror = function() {
           if (canvas.dataset.layerPreviewDrawKey !== key) return;
@@ -32525,11 +32557,14 @@
         };
         image.src = drawing.bitmapDataUrl;
       } else {
+        layerPreviewImageCacheMap().delete(ref);
         if (canvas.width !== LAYER_DRAWING_WIDTH) canvas.width = LAYER_DRAWING_WIDTH;
         if (canvas.height !== LAYER_DRAWING_HEIGHT) canvas.height = LAYER_DRAWING_HEIGHT;
         resetLayerCanvasBitmapGeometry(canvas);
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.dataset.layerPreviewPainted = '';
+        canvas.dataset.layerPreviewDrawKey = '';
         drawMemoSelectionOverlayOnCanvas(canvas, ref);
       }
     }
