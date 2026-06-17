@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver045</title>
+  <title>Conte Editor Prototype ver046</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6594,6 +6594,7 @@
                   <button id="indexedDbAutosaveDeleteBtn" type="button">削除</button>
                 </div>
                 <div id="indexedDbAutosaveStatus" class="stage-settings-status"></div>
+                <div id="indexedDbProjectSlots" class="stage-settings-slots"></div>
                 <div id="workspaceAutosaveSettings" hidden>
                   <div class="stage-settings-divider"></div>
                   <label class="stage-settings-check">
@@ -6764,7 +6765,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver045</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver046</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6835,16 +6836,6 @@
     .project-start-btn:hover { background: #f0f0ea; }
     .project-start-btn.primary { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .project-start-btn.primary:hover { background: #2a62ba; }
-    .project-start-recent { margin-top: 18px; text-align: left; }
-    .project-start-recent[hidden] { display: none; }
-    .project-start-recent-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 8px; }
-    .project-start-recent-item {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      width: 100%; text-align: left; background: #fff; border: 1px solid rgba(0,0,0,0.14);
-      border-radius: 8px; padding: 9px 11px; margin-bottom: 6px; cursor: pointer; font-size: 13px;
-    }
-    .project-start-recent-item:hover { background: #f0f0ea; }
-    .project-start-recent-item .meta { font-size: 11px; opacity: 0.6; }
     body.project-locked .workspace { pointer-events: none; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
     #projectCreateTitleInput {
@@ -6876,6 +6867,18 @@
     }
     @keyframes project-loading-spin { to { transform: rotate(360deg); } }
     .project-loading-message { font-size: 13px; font-weight: 600; opacity: 0.85; text-align: center; white-space: pre-line; }
+    .stage-settings-slots { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .stage-settings-slots:empty { display: none; }
+    .stage-settings-slot {
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.14); border-radius: 7px; padding: 6px 8px; background: rgba(0, 0, 0, 0.02);
+    }
+    .stage-settings-slot-info { flex: 1; min-width: 0; }
+    .stage-settings-slot-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stage-settings-slot-meta { font-size: 10px; opacity: 0.6; }
+    .stage-settings-slot-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .stage-settings-slot-actions button { font-size: 11px; padding: 3px 8px; }
+    .stage-settings-slot.current { border-color: #2f6fd1; background: rgba(47, 111, 209, 0.08); }
   </style>
 
   <div id="projectStartOverlay" class="project-start-overlay" hidden>
@@ -6886,7 +6889,6 @@
         <button id="projectStartNewBtn" type="button" class="project-start-btn primary">新規プロジェクト</button>
         <button id="projectStartLoadBtn" type="button" class="project-start-btn">プロジェクトを開く</button>
       </div>
-      <div id="projectStartRecent" class="project-start-recent" hidden></div>
     </div>
   </div>
 
@@ -6914,7 +6916,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '045';
+    const APP_DISPLAY_VERSION = '046';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -12033,42 +12035,9 @@
         warnMissingProjectAssets(collectMissingProjectAssets(state.project));
         return;
       }
-      // 3) Nothing to restore → locked start screen, listing any saved projects to reopen.
-      await renderProjectStartRecent();
+      // 3) Nothing to restore → locked start screen. (Saved IndexedDB projects are managed in the
+      // settings tab, not here — they auto-restore on reload, so this screen is the genuinely-empty case.)
       setProjectActive(false);
-    }
-
-    async function renderProjectStartRecent() {
-      const container = document.getElementById('projectStartRecent');
-      if (!container) return;
-      let slots = [];
-      try {
-        const index = await loadIndexedDbProjectIndex();
-        slots = index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
-      } catch (error) { slots = []; }
-      container.innerHTML = '';
-      if (!slots.length) { container.hidden = true; return; }
-      const title = document.createElement('div');
-      title.className = 'project-start-recent-title';
-      title.textContent = '最近のプロジェクト';
-      container.appendChild(title);
-      slots.forEach(function(slot) {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'project-start-recent-item';
-        item.dataset.projectSlotId = slot.id;
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = slot.title || '(無題)';
-        const meta = document.createElement('span');
-        meta.className = 'meta';
-        meta.textContent = slot.savedAt ? new Date(slot.savedAt).toLocaleString() : '';
-        item.appendChild(name);
-        item.appendChild(meta);
-        item.addEventListener('click', function() { restoreIndexedDbProjectById(slot.id); });
-        container.appendChild(item);
-      });
-      container.hidden = false;
     }
 
     function projectJsonFileNameForTitle(title) {
@@ -30302,22 +30271,39 @@
       if (!indexedDbAutosaveAvailable()) return false;
       try {
         const index = await loadIndexedDbProjectIndex();
-        let slot = index.slots.find(function(item) { return item.id === index.lastActiveId; });
-        if (!slot) slot = index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); })[0] || null;
-        let payload = '';
-        if (slot) {
-          payload = String(await getWorkspaceDbValue(indexedDbProjectPayloadKey(slot.id)) || '');
-        } else {
+        // Try the last-active slot first, then the rest by recency, so one corrupt slot never locks
+        // the app out of its other saved projects.
+        const byRecency = index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+        const order = [];
+        const active = index.slots.find(function(item) { return item.id === index.lastActiveId; });
+        if (active) order.push(active);
+        byRecency.forEach(function(slot) { if (!active || slot.id !== active.id) order.push(slot); });
+        for (let i = 0; i < order.length; i += 1) {
+          const slot = order[i];
+          const payload = String(await getWorkspaceDbValue(indexedDbProjectPayloadKey(slot.id)) || '');
+          if (!payload) continue;
+          try {
+            applyRestoredIndexedDbProject(payload);
+            await saveIndexedDbProjectIndex({ slots: index.slots, lastActiveId: slot.id });
+            await hydrateWorkspaceMediaRefs();
+            markProjectSavedBaseline();
+            refresh();
+            return true;
+          } catch (error) { /* corrupt slot → try the next one */ }
+        }
+        if (!order.length) {
           // Legacy single-slot fallback (pre-slot-model autosave).
           const legacy = await getWorkspaceDbValue(INDEXED_DB_AUTOSAVE_KEY);
-          payload = legacy && typeof legacy === 'object' ? String(legacy.payload || '') : String(legacy || '');
+          const payload = legacy && typeof legacy === 'object' ? String(legacy.payload || '') : String(legacy || '');
+          if (payload) {
+            applyRestoredIndexedDbProject(payload);
+            await hydrateWorkspaceMediaRefs();
+            markProjectSavedBaseline();
+            refresh();
+            return true;
+          }
         }
-        if (!payload) return false;
-        applyRestoredIndexedDbProject(payload);
-        await hydrateWorkspaceMediaRefs();
-        markProjectSavedBaseline();
-        refresh();
-        return true;
+        return false;
       } catch (error) {
         return false;
       }
@@ -30346,6 +30332,65 @@
         hideLoadingOverlay();
         reportProjectLoadError('indexeddb', error);
         return false;
+      }
+    }
+
+    // Settings-tab list of saved IndexedDB projects (up to 3), each with 復元 / 削除. This is the primary
+    // place to manage them (the locked start screen rarely appears once auto-restore is in place).
+    async function renderIndexedDbProjectSlots() {
+      const container = document.getElementById('indexedDbProjectSlots');
+      if (!container) return;
+      if (!indexedDbAutosaveAvailable()) { container.innerHTML = ''; return; }
+      let index = { slots: [], lastActiveId: '' };
+      try { index = await loadIndexedDbProjectIndex(); } catch (error) { index = { slots: [], lastActiveId: '' }; }
+      const slots = index.slots.slice().sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+      const currentId = String(state.project && state.project.projectId || '');
+      container.innerHTML = '';
+      slots.forEach(function(slot) {
+        const isCurrent = slot.id === currentId;
+        const row = document.createElement('div');
+        row.className = 'stage-settings-slot' + (isCurrent ? ' current' : '');
+        const info = document.createElement('div');
+        info.className = 'stage-settings-slot-info';
+        const title = document.createElement('div');
+        title.className = 'stage-settings-slot-title';
+        title.textContent = (slot.title || '(無題)') + (isCurrent ? '（現在）' : '');
+        const meta = document.createElement('div');
+        meta.className = 'stage-settings-slot-meta';
+        const kb = slot.bytes ? Math.ceil(slot.bytes / 1024) + 'KB' : '';
+        meta.textContent = [slot.savedAt ? new Date(slot.savedAt).toLocaleString() : '', kb].filter(Boolean).join(' / ');
+        info.appendChild(title);
+        info.appendChild(meta);
+        const actions = document.createElement('div');
+        actions.className = 'stage-settings-slot-actions';
+        const restoreBtn = document.createElement('button');
+        restoreBtn.type = 'button';
+        restoreBtn.textContent = '復元';
+        restoreBtn.disabled = isCurrent;
+        restoreBtn.addEventListener('click', function() { restoreIndexedDbProjectById(slot.id); });
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.textContent = '削除';
+        delBtn.addEventListener('click', function() { deleteIndexedDbProjectSlot(slot.id, slot.title); });
+        actions.appendChild(restoreBtn);
+        actions.appendChild(delBtn);
+        row.appendChild(info);
+        row.appendChild(actions);
+        container.appendChild(row);
+      });
+    }
+
+    async function deleteIndexedDbProjectSlot(id, title) {
+      if (!confirm('「' + (title || '(無題)') + '」のバックアップを削除しますか？')) return;
+      try {
+        try { await deleteWorkspaceDbValue(indexedDbProjectPayloadKey(id)); } catch (error) {}
+        const index = await loadIndexedDbProjectIndex();
+        const slots = index.slots.filter(function(slot) { return slot.id !== id; });
+        const lastActiveId = index.lastActiveId === id ? '' : index.lastActiveId;
+        await saveIndexedDbProjectIndex({ slots: slots, lastActiveId: lastActiveId });
+        await renderIndexedDbProjectSlots();
+      } catch (error) {
+        alert('削除に失敗しました: ' + (error && error.message ? error.message : error));
       }
     }
 
@@ -39242,6 +39287,7 @@
       if (autosaveStatus) autosaveStatus.textContent = state.indexedDbAutosaveStatus || (indexedDbAutosaveAvailable() ? 'バックアップ未確認' : 'IndexedDB非対応');
       if (autosaveRestore) autosaveRestore.disabled = !indexedDbAutosaveAvailable();
       if (autosaveDelete) autosaveDelete.disabled = !indexedDbAutosaveAvailable();
+      if (state.stageSettingsOpen && indexedDbAutosaveAvailable()) renderIndexedDbProjectSlots();
       const workspaceAutosaveVisible = workspaceAutosaveUiAvailable();
       const workspaceAutosaveReason = workspaceAutosaveDisabledReason();
       const workspaceSettings = workspaceAutosaveVisible ? workspaceAutosaveSettings() : null;
