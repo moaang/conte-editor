@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver037</title>
+  <title>Conte Editor Prototype ver038</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6764,7 +6764,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver037</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver038</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -6801,7 +6801,7 @@
   <script>
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '037';
+    const APP_DISPLAY_VERSION = '038';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23899,9 +23899,16 @@
         offset: 0,
         side: zone.side
       };
-      if (surfaceEl && surfaceEl.setPointerCapture) {
-        try { surfaceEl.setPointerCapture(event.pointerId); } catch (error) {}
-      }
+      // NOTE: do NOT setPointerCapture the finger here. On iPadOS Safari, capturing a touch pointer
+      // suppresses the concurrent Apple Pencil pointer stream until the finger lifts — which is
+      // exactly the "can't draw while holding the parapara finger" bug. The stage has
+      // touch-action:none and the scrub is vertical within the stage, so the surface's own
+      // pointermove/up listeners track the finger fine without capture, leaving the pencil free.
+      // Document-level move/up are also bound on gesture start as a fallback if the finger drifts off
+      // the surface.
+      document.addEventListener('pointermove', continuePreviewPanelFlipTouch);
+      document.addEventListener('pointerup', endPreviewPanelFlipTouch);
+      document.addEventListener('pointercancel', endPreviewPanelFlipTouch);
       event.preventDefault();
       event.stopPropagation();
     }
@@ -23932,10 +23939,9 @@
       const touch = state.previewPanelFlipTouch;
       if (!touch || touch.pointerId !== event.pointerId) return;
       state.previewPanelFlipTouch = null;
-      const surfaceEl = event.currentTarget;
-      if (surfaceEl && surfaceEl.releasePointerCapture) {
-        try { surfaceEl.releasePointerCapture(event.pointerId); } catch (error) {}
-      }
+      document.removeEventListener('pointermove', continuePreviewPanelFlipTouch);
+      document.removeEventListener('pointerup', endPreviewPanelFlipTouch);
+      document.removeEventListener('pointercancel', endPreviewPanelFlipTouch);
       clearParaparaPreviewOverlay();
       event.preventDefault();
       event.stopPropagation();
