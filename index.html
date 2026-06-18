@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver076</title>
+  <title>Conte Editor Prototype ver077</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6913,7 +6913,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver076</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver077</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7084,7 +7084,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '076';
+    const APP_DISPLAY_VERSION = '077';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -21280,7 +21280,10 @@
     }
 
     function framePercent(frames, targetFrames) {
-      const target = Math.max(1, Math.round(Number(targetFrames) || 0));
+      // No target (0) => no proportional bar. Without this guard a 0 target was floored to 1, so any
+      // segment (e.g. 間) overflowed to full width when the target seconds were unset.
+      const target = Math.round(Number(targetFrames) || 0);
+      if (target <= 0) return 0;
       return Math.max(0, Math.min(100, Math.round(Number(frames) || 0) / target * 100));
     }
 
