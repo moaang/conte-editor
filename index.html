@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver077</title>
+  <title>Conte Editor Prototype ver078</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6913,7 +6913,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver077</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver078</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7084,7 +7084,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '077';
+    const APP_DISPLAY_VERSION = '078';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -21225,12 +21225,15 @@
       const targetFrames = projectTargetFrames(state.project);
       const dialogStats = dialogTimingStats(state.project);
       const timeline = timingActualTimeline(state.project, targetFrames);
+      // Bar scale: use the target when set, otherwise the actual total 尺 — so with no target but real
+      // cuts the bar still fills proportionally, and only an empty project (both 0) shows an empty bar.
+      const scaleFrames = targetFrames > 0 ? targetFrames : Math.max(0, Math.round(Number(timeline.totalFrames) || 0));
       const dialogFrames = timeline.segments.length ? timeline.dialogFrames : dialogStats.handledFrames;
       const maFrames = timeline.segments.length ? timeline.maFrames : Math.max(0, targetFrames - dialogStats.handledFrames);
-      const pageRanges = timingPageRanges(state.project, targetFrames);
+      const pageRanges = timingPageRanges(state.project, scaleFrames);
       const selectedPosition = state.videoPlaying
-        ? timingPlaybackPosition(state.project, targetFrames)
-        : timingSelectedPosition(state.project, targetFrames);
+        ? timingPlaybackPosition(state.project, scaleFrames)
+        : timingSelectedPosition(state.project, scaleFrames);
       updateTargetTimeInputs(targetFrames);
       el.innerHTML = [
         '<div class="timing-main-row">',
@@ -21241,11 +21244,11 @@
             pageRanges.markers.map(timingPageMarkerHtml).join(''),
           '</div>',
           '<div id="timingTrack" class="timing-track">',
-            timeline.segments.map(function(segment) { return timingSegmentHtml(segment, targetFrames); }).join(''),
+            timeline.segments.map(function(segment) { return timingSegmentHtml(segment, scaleFrames); }).join(''),
             pageRanges.markers.map(timingPageMarkerHtml).join(''),
           '</div>',
           '<div class="timing-marker-band">',
-            timeline.markerLabels.map(function(marker) { return timingMarkerLabelHtml(marker, targetFrames); }).join(''),
+            timeline.markerLabels.map(function(marker) { return timingMarkerLabelHtml(marker, scaleFrames); }).join(''),
             (selectedPosition ? timingSelectedHandleHtml(selectedPosition) : ''),
           '</div>',
         '</div>',
@@ -21257,7 +21260,7 @@
         '</div>'
       ].join('');
       bindTimelinePlayControl(el);
-      bindTimingSelectionDrag(el, targetFrames);
+      bindTimingSelectionDrag(el, scaleFrames);
     }
 
     // 묶음 D: bindTimingDashboard는 한 번만 유지 (이전 두 중복 정의 제거 후).
