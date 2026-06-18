@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver069</title>
+  <title>Conte Editor Prototype ver070</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6888,7 +6888,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver069</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver070</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7059,7 +7059,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '069';
+    const APP_DISPLAY_VERSION = '070';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18162,13 +18162,18 @@
     }
 
     // Red cut-boundary lines on the camera lane (cut/group boundaries only — camera has no panel
-    // boundaries). Visual separators, no interaction.
+    // boundaries). Visual separators, no interaction. The boundary sits at each cut's ACTIVE-range
+    // start (= the previous cut's active end), so in an OL window it moves with the CUT-bar toggle:
+    // switch to cut 4 and its end boundary follows to the end of cut 4's region.
     function cameraCutBoundariesHtml(totalFrames) {
       const video = buildVideoTimelineCached(state.project);
       const total = Math.max(1, Math.round(Number(totalFrames) || 1));
       return (video.groups || []).map(function(item, gi) {
         if (gi === 0) return '';
-        const left = framePercent(item.startFrame, total);
+        const owner = item.group && item.group.cuts && item.group.cuts[0];
+        const range = owner ? olOwnerPrimaryRange(owner.id) : null;
+        const frame = range ? range.start : item.startFrame;
+        const left = framePercent(frame, total);
         return '<span class="camera-cut-boundary" style="--boundary-left:' + left.toFixed(4) + '%" aria-hidden="true"></span>';
       }).join('');
     }
