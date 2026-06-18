@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver072</title>
+  <title>Conte Editor Prototype ver073</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6918,7 +6918,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver072</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver073</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7089,7 +7089,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '072';
+    const APP_DISPLAY_VERSION = '073';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7138,8 +7138,8 @@
       frameForward: '2',
       frameBackward: '1'
     };
-    const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialogue', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
-    const DIALOGUE_AREA_TYPES = ['dialogue', 'narration', 'telop', 'monologue'];
+    const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialog', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
+    const DIALOGUE_AREA_TYPES = ['dialog', 'narration', 'telop', 'monologue'];
     const DEFAULT_TARGET_SECONDS = 20 * 60;
     const DIALOGUE_FRAMES_PER_MORA = 3;
     const DIALOGUE_HANDLE_FRAMES = 6;
@@ -9330,7 +9330,7 @@
             block.normalizedText = String(block.normalizedText || block.text || '');
             block.zone = block.zone || (BODY_BLOCK_TYPES.indexOf(block.type) >= 0 ? 'body' : 'unknown');
             block.assignableToCut = typeof block.assignableToCut === 'boolean' ? block.assignableToCut : BODY_BLOCK_TYPES.indexOf(block.type) >= 0;
-            block.assignDefault = block.assignDefault || (DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0 ? 'dialogue' : (block.assignableToCut ? 'action' : 'none'));
+            block.assignDefault = block.assignDefault || (DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0 ? 'dialog' : (block.assignableToCut ? 'action' : 'none'));
             block.assignedCutId = block.assignedCutId || '';
             block.assignedPanelId = block.assignedPanelId || '';
             block.meta = block.meta || { confidence: block.assignableToCut ? 0.7 : 0.4, evidence: [], warnings: [], alternatives: [] };
@@ -10809,7 +10809,7 @@
       if (charLength(speaker) > 24) score -= 5;
       if (!text) score -= 4;
       if (score < 4) return null;
-      return { type: 'dialogue', speaker: speaker, modifier: modifier, subtype: modifier ? 'dialogue_' + modifier.toLowerCase() : 'dialogue', text: text, fullText: line, confidence: score >= 7 ? 0.88 : 0.52, score: score };
+      return { type: 'dialog', speaker: speaker, modifier: modifier, subtype: modifier ? 'dialog_' + modifier.toLowerCase() : 'dialog', text: text, fullText: line, confidence: score >= 7 ? 0.88 : 0.52, score: score };
     }
 
 
@@ -11111,15 +11111,15 @@
         }
 
         const quoteState = scenarioDialogueQuoteState(line);
-        if (quoteState.hasQuote || bufferKind === 'dialogue') {
-          if (bufferKind && bufferKind !== 'dialogue') flush();
-          appendToBuffer(line, order, 'dialogue');
+        if (quoteState.hasQuote || bufferKind === 'dialog') {
+          if (bufferKind && bufferKind !== 'dialog') flush();
+          appendToBuffer(line, order, 'dialog');
           if (scenarioDialogueQuoteState(buffer).balanced || charLength(buffer) > 160) flush();
           return;
         }
 
-        if (bufferKind === 'dialogue') {
-          appendToBuffer(line, order, 'dialogue');
+        if (bufferKind === 'dialog') {
+          appendToBuffer(line, order, 'dialog');
           if (scenarioDialogueQuoteState(buffer).balanced || charLength(buffer) > 160) flush();
           return;
         }
@@ -11323,7 +11323,7 @@
       const cueType = scenarioCueType(speakerSource);
       const modifier = scenarioNormalizeDialogueModifier(modifiers.concat([speakerSource]).join(' '));
       const speakerInfo = scenarioNormalizeSpeakerName(speakerSource);
-      let type = cueType || 'dialogue';
+      let type = cueType || 'dialog';
       if (modifier === 'Monologue') type = 'monologue';
       if (cueType === 'telop' || cueType === 'narration') speakerInfo.name = '';
       const characterGender = speakerInfo.name ? scenarioInferCharacterGender(speakerInfo.name, context) : '';
@@ -11551,7 +11551,7 @@
         context.editorialCommentActive = false;
         dialogue.locationName = currentMeta.locationName;
         dialogue.timeOfDay = currentMeta.timeOfDay;
-        return blockClassification(dialogue.type, 'body', true, 'dialogue', dialogue.confidence, ['dialogue score'], { dialogue: dialogue.score }, dialogue);
+        return blockClassification(dialogue.type, 'body', true, 'dialog', dialogue.confidence, ['dialogue score'], { dialogue: dialogue.score }, dialogue);
       }
       if (dialogue && dialogue.score >= 4) {
         return blockClassification('unknown', 'low_confidence', false, 'none', 0.48, ['low-confidence dialogue-like line'], { dialogue: dialogue.score }, currentMeta);
@@ -29180,7 +29180,7 @@
 
     function blockTypeLabel(type) {
       if (type === 'section_marker') return 'SECTION';
-      if (type === 'dialogue') return 'DIALOG';
+      if (type === 'dialog') return 'DIALOG';
       if (type === 'narration') return 'NARR';
       if (type === 'telop') return 'TELOP';
       if (type === 'monologue') return 'MONO';
@@ -29312,7 +29312,7 @@
     }
 
     function createBoardBlock(text, fieldName, order) {
-      const type = fieldName === 'dialogueText' ? 'dialogue' : 'action';
+      const type = fieldName === 'dialogueText' ? 'dialog' : 'action';
       return {
         id: 'board-' + Date.now().toString(36) + '-' + order,
         sourceDocumentId: 'src-board',
@@ -29330,7 +29330,7 @@
         normalizedText: text,
         zone: 'body',
         assignableToCut: true,
-        assignDefault: fieldName === 'dialogueText' ? 'dialogue' : 'action',
+        assignDefault: fieldName === 'dialogueText' ? 'dialog' : 'action',
         assignedCutId: '',
         assignedPanelId: '',
         meta: {
