@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver073</title>
+  <title>Conte Editor Prototype ver074</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -19,7 +19,7 @@
       --col-cut: 5.45%;
       --col-picture: 44.6%;
       --col-action: 22.25%;
-      --col-dialogue: 22.25%;
+      --col-dialog: 22.25%;
       --col-time: 5.45%;
     }
 
@@ -1452,7 +1452,7 @@
       font-size: 10px;
     }
 
-    .block-type.dialogue { background: #6f5078; }
+    .block-type.dialog { background: #6f5078; }
     .block-type.action { background: #3d6d61; }
     .block-type.scene_heading { background: #735e35; }
     .block-type.transition { background: #8a4b36; }
@@ -5902,7 +5902,7 @@
 
     .sheet-header {
       display: grid;
-      grid-template-columns: var(--col-cut) var(--col-picture) var(--col-action) var(--col-dialogue) var(--col-time);
+      grid-template-columns: var(--col-cut) var(--col-picture) var(--col-action) var(--col-dialog) var(--col-time);
       border-bottom: 1px solid var(--line);
       font-family: Arial, Helvetica, sans-serif;
     }
@@ -5922,7 +5922,7 @@
       position: relative;
       min-height: 0;
       display: grid;
-      grid-template-columns: var(--col-cut) var(--col-picture) var(--col-action) var(--col-dialogue) var(--col-time);
+      grid-template-columns: var(--col-cut) var(--col-picture) var(--col-action) var(--col-dialog) var(--col-time);
       grid-template-rows: repeat(var(--rows-per-page), minmax(0, 1fr));
       background: #fff;
     }
@@ -6918,7 +6918,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver073</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver074</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7073,7 +7073,7 @@
     //    1. APP: CONSTANTS / STATE ......... globals, default project, settings, undo/redo commands
     //    2. IMPORT: PDF + SCENARIO PARSING . read script files into blocks
     //    3. CONTE LAYERS (data model) ...... layer/koma data, lane layout, bg bundles
-    //    4. AUDIO CLIPS (model + timing) ... dialogue/recording clips, trim, sync to cuts
+    //    4. AUDIO CLIPS (model + timing) ... dialog/recording clips, trim, sync to cuts
     //    5. VIDEO TIMELINE + OL ............ buildVideoTimeline, overlap / cross-dissolve, slots
     //    6. TIMELINE DOM ................... track / ruler / scrollbar HTML builders
     //    7. CONTE-LAYER TIMELINE ........... lane interaction: select / drag / drop / context menus
@@ -7089,7 +7089,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '073';
+    const APP_DISPLAY_VERSION = '074';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7139,12 +7139,12 @@
       frameBackward: '1'
     };
     const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialog', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
-    const DIALOGUE_AREA_TYPES = ['dialog', 'narration', 'telop', 'monologue'];
+    const DIALOG_AREA_TYPES = ['dialog', 'narration', 'telop', 'monologue'];
     const DEFAULT_TARGET_SECONDS = 20 * 60;
-    const DIALOGUE_FRAMES_PER_MORA = 3;
-    const DIALOGUE_HANDLE_FRAMES = 6;
+    const DIALOG_FRAMES_PER_MORA = 3;
+    const DIALOG_HANDLE_FRAMES = 6;
     const TIMING_UNIT_FRAMES = 6;
-    const DIALOGUE_AUDIO_SAFETY_FRAMES = 12;
+    const DIALOG_AUDIO_SAFETY_FRAMES = 12;
     const MAX_AUTO_MA_SECONDS = 6;
     const WORKSPACE_DB_NAME = 'conteEditorWorkspace.v1';
     const WORKSPACE_STORE_NAME = 'handles';
@@ -7626,7 +7626,7 @@
         audio: { clips: [] },
         timeline: { tracks: [
           { id: 'video-main', type: 'video', label: 'Video', source: 'conte-picture-slideshow', hidden: false },
-          { id: 'dialogue-main', type: 'audio', label: 'A1 Audio', locked: true, internal: true, muted: false, clipIds: [] }
+          { id: 'dialog-main', type: 'audio', label: 'A1 Audio', locked: true, internal: true, muted: false, clipIds: [] }
         ] },
         historyMeta: {
           createdAt: new Date().toISOString(),
@@ -7643,7 +7643,7 @@
         inheritedCutNoHidden: false,
         sourceBlockIds: [],
         pictureTextBlockIds: [],
-        dialogueBlockIds: [],
+        dialogBlockIds: [],
         memoBlockIds: [],
         conteLayers: [],
         rowSpan: 1,
@@ -7653,7 +7653,7 @@
         durationFrames: 0,
         durationFramesLocked: false,
         actionText: '',
-        dialogueText: '',
+        dialogText: '',
         meta: {
           confidence: 1,
           evidence: ['blank fixed paper slot'],
@@ -8347,10 +8347,10 @@
         audioDurationFrames: Math.max(0, Math.round(Number(clip && clip.audioDurationFrames) || 0)),
         manualTiming: Boolean(clip && clip.manualTiming),
         hidden: Boolean(clip && clip.hidden),
-        trackId: clip && clip.trackId || 'dialogue-main',
+        trackId: clip && clip.trackId || 'dialog-main',
         sourceCutId: String(clip && clip.sourceCutId || ''),
         syncedCutIds: Array.isArray(clip && clip.syncedCutIds) ? clip.syncedCutIds.slice() : [],
-        syncedDialogueTexts: Array.isArray(clip && clip.syncedDialogueTexts) ? clip.syncedDialogueTexts.slice() : [],
+        syncedDialogTexts: Array.isArray(clip && clip.syncedDialogTexts) ? clip.syncedDialogTexts.slice() : [],
         waveformPeaks: Array.isArray(clip && clip.waveformPeaks) ? clip.waveformPeaks.slice() : []
       };
     }
@@ -8366,10 +8366,10 @@
       clip.audioDurationFrames = Math.max(clip.audioDurationFrames || 0, Math.round(Number(data.audioDurationFrames) || 0));
       clip.manualTiming = Boolean(data.manualTiming);
       clip.hidden = Boolean(data.hidden);
-      clip.trackId = data.trackId || clip.trackId || 'dialogue-main';
+      clip.trackId = data.trackId || clip.trackId || 'dialog-main';
       clip.sourceCutId = String(data.sourceCutId || clip.sourceCutId || '');
       clip.syncedCutIds = Array.isArray(data.syncedCutIds) ? data.syncedCutIds.slice() : [];
-      clip.syncedDialogueTexts = Array.isArray(data.syncedDialogueTexts) ? data.syncedDialogueTexts.slice() : [];
+      clip.syncedDialogTexts = Array.isArray(data.syncedDialogTexts) ? data.syncedDialogTexts.slice() : [];
       clip.waveformPeaks = Array.isArray(data.waveformPeaks) ? data.waveformPeaks.slice() : waveformPeaksForClipTrim(clip);
       if (state.audioWaveformCssCache) delete state.audioWaveformCssCache[clip.id];
       // 묶음 C: clip 직접 변경 후 cycle bump
@@ -8657,7 +8657,7 @@
         return [String(clip.id || ''), String(clip.trackId || 'video-media-main')].join(':');
       }).sort().join('|');
       const audioClips = audioTimelineDisplayClips(project).map(function(clip) {
-        return [String(clip.id || ''), String(clip.trackId || 'dialogue-main')].join(':');
+        return [String(clip.id || ''), String(clip.trackId || 'dialog-main')].join(':');
       }).sort().join('|');
       return [trackSig, videoClips, audioClips].join('||');
     }
@@ -8721,7 +8721,7 @@
     }
 
     function audioTrackIdsForFastPlacement(project, preferredTrackId) {
-      const ids = new Set(['dialogue-main']);
+      const ids = new Set(['dialog-main']);
       if (preferredTrackId) ids.add(preferredTrackId);
       const tracks = project && project.timeline && Array.isArray(project.timeline.tracks) ? project.timeline.tracks : [];
       tracks.forEach(function(track) {
@@ -8745,7 +8745,7 @@
         id: trackId,
         type: 'audio',
         label: nextAudioTrackLabel(trackId),
-        external: trackId !== 'dialogue-main',
+        external: trackId !== 'dialog-main',
         muted: false,
         clipIds: []
       });
@@ -8760,7 +8760,7 @@
       const clips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
       return clips.some(function(item) {
         if (!item || item.id === clipId || !audioClipHasSource(project, item)) return false;
-        if ((item.trackId || 'dialogue-main') !== trackId) return false;
+        if ((item.trackId || 'dialog-main') !== trackId) return false;
         return audioRangesOverlap(startFrame, durationFrames, item.startFrame, item.durationFrames);
       });
     }
@@ -8768,7 +8768,7 @@
     function placeAudioClipFast(project, clip, preferredTrackId) {
       const start = Math.max(0, Math.round(Number(clip && clip.startFrame) || 0));
       const duration = Math.max(1, Math.round(Number(clip && clip.durationFrames) || 1));
-      const preferred = preferredTrackId || clip.trackId || 'dialogue-main';
+      const preferred = preferredTrackId || clip.trackId || 'dialog-main';
       const ids = [];
       const addId = function(id) {
         if (id && ids.indexOf(id) < 0) ids.push(id);
@@ -8797,7 +8797,7 @@
       }).filter(Boolean).sort(function(left, right) {
         return Math.max(0, Math.round(Number(left.startFrame) || 0)) - Math.max(0, Math.round(Number(right.startFrame) || 0));
       }).forEach(function(clip) {
-        const trackId = clip.trackId || 'dialogue-main';
+        const trackId = clip.trackId || 'dialog-main';
         if (!audioClipOverlapsTrackFast(project, clip.id, trackId, clip.startFrame, clip.durationFrames)) {
           ensureAudioTrackRecordFast(project, trackId);
           return;
@@ -8813,7 +8813,7 @@
       if (!clip) return null;
       const before = captureAudioClipEditState(clip);
       clip.startFrame = Math.max(0, Math.round(Number(nextStartFrame) || 0));
-      clip.trackId = preferredTrackId || clip.trackId || 'dialogue-main';
+      clip.trackId = preferredTrackId || clip.trackId || 'dialog-main';
       clip.manualTiming = true;
       state.project.audio.manualTimeline = true;
       const placement = placeAudioClipFast(state.project, clip, clip.trackId);
@@ -9164,7 +9164,7 @@
         cut.cutNo = String(cut.cutNo || '');
         cut.inheritedCutNoHidden = Boolean(cut.inheritedCutNoHidden);
         cut.actionText = String(cut.actionText || '');
-        cut.dialogueText = String(cut.dialogueText || '');
+        cut.dialogText = String(cut.dialogText || '');
         cut.conteLayers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
         cut.meta = cut.meta || { confidence: 1, evidence: [], warnings: [], alternatives: [] };
       });
@@ -9330,7 +9330,7 @@
             block.normalizedText = String(block.normalizedText || block.text || '');
             block.zone = block.zone || (BODY_BLOCK_TYPES.indexOf(block.type) >= 0 ? 'body' : 'unknown');
             block.assignableToCut = typeof block.assignableToCut === 'boolean' ? block.assignableToCut : BODY_BLOCK_TYPES.indexOf(block.type) >= 0;
-            block.assignDefault = block.assignDefault || (DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0 ? 'dialog' : (block.assignableToCut ? 'action' : 'none'));
+            block.assignDefault = block.assignDefault || (DIALOG_AREA_TYPES.indexOf(block.type) >= 0 ? 'dialog' : (block.assignableToCut ? 'action' : 'none'));
             block.assignedCutId = block.assignedCutId || '';
             block.assignedPanelId = block.assignedPanelId || '';
             block.meta = block.meta || { confidence: block.assignableToCut ? 0.7 : 0.4, evidence: [], warnings: [], alternatives: [] };
@@ -10214,7 +10214,7 @@
       let score = 0;
       if (stats.japanese >= 4) score += 3;
       if (/[「」『』。！？]/.test(raw)) score += 2;
-      if (scenarioIsSceneHeadingLine(raw) || scenarioParseDialogueLineScored(raw, { zone: 'body' })) score += 4;
+      if (scenarioIsSceneHeadingLine(raw) || scenarioParseDialogLineScored(raw, { zone: 'body' })) score += 4;
       if (stats.latin > stats.japanese && /[0-9:：/]/.test(raw)) score -= 4;
       if (/^※|https?:|www\.|\.com|\.jp/i.test(raw)) score -= 5;
       return score;
@@ -10526,7 +10526,7 @@
       return /(BOOK|BG|PAN|撮影|処理|色トレス|作画注意|未設定|technical|譛ｪ險倩|謦ｮ蠖ｱ|濶ｲ繝医Ξ繧ｹ)/i.test(line);
     }
 
-    function normalizeDialogueModifier(value) {
+    function normalizeDialogModifier(value) {
       const text = String(value || '').trim();
       if (/off|OFF|オフ|声のみ/i.test(text)) return 'Off';
       if (/M|モノローグ|心内/.test(text)) return 'Monologue';
@@ -10727,7 +10727,7 @@
       if (isPageCountNoteLine(line)) score += 3;
       if (lineIndex < 8 && charLength(line) <= 42) score += 2;
       if (bodyStarted) score -= 5;
-      if (dialogueScore(line, { zone: 'front_matter' }) >= 4) score -= 4;
+      if (dialogScore(line, { zone: 'front_matter' }) >= 4) score -= 4;
       if (bodyScore >= 7) score -= 4;
       return score;
     }
@@ -10754,7 +10754,7 @@
       if (len >= 2 && len <= 80) score += 1;
       if (/＝|=|別名| alias/i.test(line)) score += 1;
       if (len <= 1) score -= 6;
-      if (dialogueScore(line, context) >= 4) score -= 5;
+      if (dialogScore(line, context) >= 4) score -= 5;
       if (bodyScore >= 7) score -= 5;
       if (len > 90 && /[。.!！?？]$/.test(line)) score -= 4;
       if (pageNo > 2 && context.bodyStarted) score -= 4;
@@ -10776,12 +10776,12 @@
       return score;
     }
 
-    function dialogueScore(line, context) {
-      const parsed = parseDialogueLineScored(line, context || {});
+    function dialogScore(line, context) {
+      const parsed = parseDialogLineScored(line, context || {});
       return parsed ? parsed.score : 0;
     }
 
-    function parseDialogueLineScored(line, context) {
+    function parseDialogLineScored(line, context) {
       const cue = line.match(/^(T|Ｔ|TEL|テロップ|N|Ｎ|NA|ナレーション|M|Ｍ|モノローグ)\s*[「『縲後讃:：](.+?)[」』縲阪従]?$/i);
       if (cue) {
         const cueName = cue[1];
@@ -10799,7 +10799,7 @@
       if (!match) return null;
       const speaker = String(match[1] || '').trim();
       const text = String(match[3] || '').trim();
-      const modifier = normalizeDialogueModifier(match[2] || '');
+      const modifier = normalizeDialogModifier(match[2] || '');
       let score = 0;
       if (speaker && text) score += 6;
       if (modifier) score += 2;
@@ -10886,7 +10886,7 @@
       if (/^(SC|S#|CUT|C#)\s*\d+/i.test(folded)) return true;
       if (/^\d{1,3}\s*[○◯●◎■□△▲]/.test(folded)) return true;
       if (/^[○◯●◎■□△▲]\s*\S+/.test(folded)) return true;
-      if (/^\d{1,3}\s*(?:同・|同\b|[^\s「」『』]{1,36})/.test(folded) && scenarioHasLocationSignal(raw) && !scenarioParseDialogueLineScored(raw, { zone: 'body' })) return true;
+      if (/^\d{1,3}\s*(?:同・|同\b|[^\s「」『』]{1,36})/.test(folded) && scenarioHasLocationSignal(raw) && !scenarioParseDialogLineScored(raw, { zone: 'body' })) return true;
       return false;
     }
 
@@ -10905,7 +10905,7 @@
     function scenarioLooksLikeLongBodyAction(line) {
       const len = charLength(line);
       if (len < 14) return false;
-      if (scenarioParseDialogueLineScored(line, { zone: 'body' })) return true;
+      if (scenarioParseDialogLineScored(line, { zone: 'body' })) return true;
       return /[。！？.!?」）)]$|、|　　|^\s{2,}/.test(String(line || ''));
     }
 
@@ -10914,7 +10914,7 @@
       if (!raw || scenarioIsPageNumberLine(raw) || scenarioIsCastSectionLine(raw)) return false;
       if (/^[▼▽◆◇]\s*\S+/.test(raw)) return true;
       if (/^[○◯●◎■□△▲]\s*[^。！？「」]{1,36}(?:[（(][0-9０-９？?一二三四五六七八九十]{1,4}[）)]|男性|女性|男|女|主人公|貴族|軍人|故人|隊長|老人|若者|研究者|旅人|リーダー|セリフあり|セリフなし)/.test(raw)) return true;
-      if (charLength(raw) <= 80 && !scenarioHasLocationSignal(raw) && !scenarioParseDialogueLineScored(raw, { zone: 'body' })) return true;
+      if (charLength(raw) <= 80 && !scenarioHasLocationSignal(raw) && !scenarioParseDialogLineScored(raw, { zone: 'body' })) return true;
       return false;
     }
 
@@ -10928,7 +10928,7 @@
       if (looksLikeCastEntryLine(raw)) return true;
       if (!scenarioHasCleanJapanese(raw)) return false;
       if (len <= 1) return false;
-      if (scenarioParseDialogueLineScored(raw, { zone: 'body' })) return false;
+      if (scenarioParseDialogLineScored(raw, { zone: 'body' })) return false;
       if (len <= 120 && !/[。！？!?「」]/.test(raw)) return true;
       return false;
     }
@@ -10975,11 +10975,11 @@
 
       const bodyScore = scenarioBodyStartScore(raw, pageNo, context.zone);
       const frontScore = scenarioFrontMatterScore(raw, pageNo, lineIndex, context.bodyStarted, bodyScore);
-      const dialogue = scenarioParseDialogueLineScored(raw, context);
-      const dialogueScoreValue = dialogue ? dialogue.score : 0;
+      const dialog = scenarioParseDialogLineScored(raw, context);
+      const dialogScoreValue = dialog ? dialog.score : 0;
 
       if (context.editorialCommentActive) {
-        if (scenarioShouldContinueEditorialComment(raw, bodyScore, dialogueScoreValue)) {
+        if (scenarioShouldContinueEditorialComment(raw, bodyScore, dialogScoreValue)) {
           return blockClassification('revision_comment', 'editorial_comment', false, 'none', 0.62, ['editorial comment continuation'], { bodyStart: bodyScore });
         }
         context.editorialCommentActive = false;
@@ -10993,11 +10993,11 @@
 
       if (!context.bodyStarted && context.zone === 'cast_list') {
         const castCatalogueLine = scenarioLooksLikeCastCatalogueLine(raw);
-        if (!castCatalogueLine && (scenarioIsStrongBodyStartLine(raw) || bodyScore >= 8 || (pageNo > 2 && (dialogueScoreValue >= 7 || scenarioLooksLikeLongBodyAction(raw))))) {
+        if (!castCatalogueLine && (scenarioIsStrongBodyStartLine(raw) || bodyScore >= 8 || (pageNo > 2 && (dialogScoreValue >= 7 || scenarioLooksLikeLongBodyAction(raw))))) {
           context.zone = 'body';
           context.bodyStarted = true;
           context.castSubsectionActive = false;
-          return classifyBodyLineScored(raw, context, quality, bodyScore, dialogue);
+          return classifyBodyLineScored(raw, context, quality, bodyScore, dialog);
         }
         if (scenarioIsPageCountNoteLine(raw)) {
           return blockClassification('front_page_count_note', 'front_matter', false, 'none', 0.82, ['page-count note inside source front/cast area'], { front: frontScore, bodyStart: bodyScore });
@@ -11012,13 +11012,13 @@
         if (scenarioIsStrongBodyStartLine(raw) || bodyScore >= 8) {
           context.zone = 'body';
           context.bodyStarted = true;
-          return classifyBodyLineScored(raw, context, quality, bodyScore, dialogue);
+          return classifyBodyLineScored(raw, context, quality, bodyScore, dialog);
         }
         if (frontScore >= 6 || pageNo <= 2) return classifyFrontMatterScored(raw, frontScore, bodyScore);
-        if (dialogueScoreValue >= 7 || scenarioLooksLikeLongBodyAction(raw)) {
+        if (dialogScoreValue >= 7 || scenarioLooksLikeLongBodyAction(raw)) {
           context.zone = 'body';
           context.bodyStarted = true;
-          return classifyBodyLineScored(raw, context, quality, bodyScore, dialogue);
+          return classifyBodyLineScored(raw, context, quality, bodyScore, dialog);
         }
         return blockClassification('front_summary', 'front_matter', false, 'none', 0.55, ['front matter before body'], { front: frontScore, bodyStart: bodyScore });
       }
@@ -11027,14 +11027,14 @@
         return blockClassification('technical_note', 'appendix', false, 'none', 0.55, ['late cast/appendix marker'], { castSection: 8 });
       }
       context.zone = 'body';
-      return classifyBodyLineScored(raw, context, quality, bodyScore, dialogue);
+      return classifyBodyLineScored(raw, context, quality, bodyScore, dialog);
     }
 
-    function scenarioShouldContinueEditorialComment(line, bodyScore, dialogueScoreValue) {
+    function scenarioShouldContinueEditorialComment(line, bodyScore, dialogScoreValue) {
       const raw = String(line || '').trim();
       if (!raw) return false;
       if (scenarioIsSectionMarkerLine(raw) || scenarioIsSceneHeadingLine(raw) || scenarioIsStrongBodyStartLine(raw)) return false;
-      if (dialogueScoreValue >= 7) return false;
+      if (dialogScoreValue >= 7) return false;
       if (bodyScore >= 8) return false;
       if (/^[※▽▼▲△■□◆◇・\-]/.test(raw)) return true;
       if (scenarioCastRolePattern().test(raw) && charLength(raw) <= 140) return true;
@@ -11084,7 +11084,7 @@
         buffer += scenarioShouldJoinWithoutSpace(buffer, line) ? line : ' ' + line;
       }
 
-      scenarioExpandInlineMixedDialogueLines(rawLines).forEach(function(rawLine, index) {
+      scenarioExpandInlineMixedDialogLines(rawLines).forEach(function(rawLine, index) {
         const line = String(rawLine && rawLine.text ? rawLine.text : rawLine || '').replace(/\s+/g, ' ').trim();
         if (!line) return;
         const order = rawLine && rawLine.order ? rawLine.order : index + 1;
@@ -11095,7 +11095,7 @@
           castCatalogActive = true;
           return;
         }
-        if (castCatalogActive && (scenarioIsStrongBodyStartLine(line) || scenarioIsSceneHeadingLine(line) || scenarioDialogueQuoteState(line).hasQuote)) {
+        if (castCatalogActive && (scenarioIsStrongBodyStartLine(line) || scenarioIsSceneHeadingLine(line) || scenarioDialogQuoteState(line).hasQuote)) {
           castCatalogActive = false;
         }
         if (castCatalogActive) {
@@ -11110,17 +11110,17 @@
           return;
         }
 
-        const quoteState = scenarioDialogueQuoteState(line);
+        const quoteState = scenarioDialogQuoteState(line);
         if (quoteState.hasQuote || bufferKind === 'dialog') {
           if (bufferKind && bufferKind !== 'dialog') flush();
           appendToBuffer(line, order, 'dialog');
-          if (scenarioDialogueQuoteState(buffer).balanced || charLength(buffer) > 160) flush();
+          if (scenarioDialogQuoteState(buffer).balanced || charLength(buffer) > 160) flush();
           return;
         }
 
         if (bufferKind === 'dialog') {
           appendToBuffer(line, order, 'dialog');
-          if (scenarioDialogueQuoteState(buffer).balanced || charLength(buffer) > 160) flush();
+          if (scenarioDialogQuoteState(buffer).balanced || charLength(buffer) > 160) flush();
           return;
         }
 
@@ -11131,13 +11131,13 @@
       return logical;
     }
 
-    function scenarioExpandInlineMixedDialogueLines(rawLines) {
+    function scenarioExpandInlineMixedDialogLines(rawLines) {
       const expanded = [];
       (rawLines || []).forEach(function(rawLine, index) {
         const text = String(rawLine && rawLine.text ? rawLine.text : rawLine || '').replace(/\s+/g, ' ').trim();
         if (!text) return;
         const baseOrder = Number(rawLine && rawLine.order) || index + 1;
-        const parts = scenarioSplitInlineMixedDialogueLine(text);
+        const parts = scenarioSplitInlineMixedDialogLine(text);
         parts.forEach(function(part, partIndex) {
           expanded.push({
             text: part,
@@ -11148,22 +11148,22 @@
       return expanded;
     }
 
-    function scenarioSplitInlineMixedDialogueLine(line) {
+    function scenarioSplitInlineMixedDialogLine(line) {
       const raw = String(line || '').trim();
       if (!raw || scenarioIsStandaloneLogicalLine(raw)) return raw ? [raw] : [];
       if (raw.length < 24 && !/[\u300c\u300e]/.test(raw)) return [raw];
-      const cueMatches = scenarioFindInlineDialogueCueMatches(raw);
-      if (cueMatches.length) return scenarioSplitInlineQuotedDialogueLine(raw, cueMatches);
+      const cueMatches = scenarioFindInlineDialogCueMatches(raw);
+      if (cueMatches.length) return scenarioSplitInlineQuotedDialogLine(raw, cueMatches);
       return scenarioSplitInlineCueWithoutQuoteLine(raw);
     }
 
-    function scenarioFindInlineDialogueCueMatches(raw) {
+    function scenarioFindInlineDialogCueMatches(raw) {
       const matches = [];
       const cuePattern = /([^\s\u300c\u300d\u300e\u300f。！？!?]{1,28}(?:[\uff08(][^\uff09)]{1,12}[\uff09)])?)\s*([\u300c\u300e])/g;
       let match;
       while ((match = cuePattern.exec(raw))) {
         const speaker = String(match[1] || '').trim();
-        if (!scenarioLooksLikeInlineDialogueSpeaker(speaker)) continue;
+        if (!scenarioLooksLikeInlineDialogSpeaker(speaker)) continue;
         matches.push({
           index: match.index,
           speaker: speaker,
@@ -11174,7 +11174,7 @@
       return matches;
     }
 
-    function scenarioLooksLikeInlineDialogueSpeaker(value) {
+    function scenarioLooksLikeInlineDialogSpeaker(value) {
       const raw = String(value || '').trim();
       if (!raw) return false;
       const clean = raw.replace(/[\uff08(][^\uff09)]{1,12}[\uff09)]/g, '').trim();
@@ -11185,7 +11185,7 @@
       return /^[\u3040-\u30ff\u3400-\u9fffA-Za-z0-9①-⑳_-]{1,18}$/.test(clean);
     }
 
-    function scenarioSplitInlineQuotedDialogueLine(raw, cueMatches) {
+    function scenarioSplitInlineQuotedDialogLine(raw, cueMatches) {
       const parts = [];
       let cursor = 0;
       let preserveRaw = false;
@@ -11202,13 +11202,13 @@
           return;
         }
         const contentBeforeNext = raw.slice(openEnd, nextStart);
-        const boundary = scenarioInferUnclosedDialogueBoundary(contentBeforeNext);
+        const boundary = scenarioInferUnclosedDialogBoundary(contentBeforeNext);
         if (boundary > 0) {
           scenarioPushInlinePart(parts, raw.slice(cue.index, openEnd + boundary) + closeChar);
           cursor = openEnd + boundary;
           return;
         }
-        if (cueMatches.length === 1 && closeIndex < 0 && !scenarioShouldCloseShortDanglingDialogue(contentBeforeNext)) {
+        if (cueMatches.length === 1 && closeIndex < 0 && !scenarioShouldCloseShortDanglingDialog(contentBeforeNext)) {
           preserveRaw = true;
           cursor = raw.length;
           return;
@@ -11224,7 +11224,7 @@
       return parts.length > 1 ? parts : [raw];
     }
 
-    function scenarioShouldCloseShortDanglingDialogue(content) {
+    function scenarioShouldCloseShortDanglingDialog(content) {
       const clean = String(content || '').replace(/\s+/g, '').trim();
       if (!clean || charLength(clean) > 18) return false;
       return /(?:\u2026+|\.{2,}|[!?！？])$/.test(clean);
@@ -11235,7 +11235,7 @@
       const matches = [];
       let match;
       while ((match = cuePattern.exec(raw))) {
-        if (scenarioLooksLikeInlineDialogueSpeaker(match[1])) matches.push({ index: match.index, full: match[1] });
+        if (scenarioLooksLikeInlineDialogSpeaker(match[1])) matches.push({ index: match.index, full: match[1] });
       }
       if (matches.length < 2) return [raw];
       const parts = [];
@@ -11245,7 +11245,7 @@
         const start = cue.index + cue.full.length;
         const nextStart = matches[index + 1] ? matches[index + 1].index : raw.length;
         const content = raw.slice(start, nextStart);
-        const boundary = scenarioInferUnclosedDialogueBoundary(content) || content.length;
+        const boundary = scenarioInferUnclosedDialogBoundary(content) || content.length;
         scenarioPushInlinePart(parts, cue.full + '\u300c' + content.slice(0, boundary).trim() + '\u300d');
         cursor = start + boundary;
       });
@@ -11253,7 +11253,7 @@
       return parts.length > 1 ? parts : [raw];
     }
 
-    function scenarioInferUnclosedDialogueBoundary(content) {
+    function scenarioInferUnclosedDialogBoundary(content) {
       const text = String(content || '');
       const boundaryPattern = /(?:\u2026{2,}|\.{2,}|[。！？!?])(?=[^\u300c\u300d\u300e\u300f]{1,90}(?:は|が|を|に|へ|で|と|から|ながら|つつ|する|した|思う|見る|見える|逃げ|追い|歩いて|のんびり|必死|回想|指差し|閉じる|開ける|立つ|座る))/;
       const match = text.match(boundaryPattern);
@@ -11291,7 +11291,7 @@
       return String(value || '').normalize('NFKC').replace(/\u3000/g, ' ').trim();
     }
 
-    function scenarioDialogueQuoteState(line) {
+    function scenarioDialogQuoteState(line) {
       const raw = String(line || '');
       const opens = (raw.match(/[「『]/g) || []).length;
       const closes = (raw.match(/[」』]/g) || []).length;
@@ -11302,33 +11302,33 @@
       return /[。！？!?」』）)]$/.test(String(line || '').trim());
     }
 
-    function scenarioParseDialogueLineScored(line, context) {
+    function scenarioParseDialogLineScored(line, context) {
       const raw = String(line || '').trim();
       const quote = raw.match(/^(.{0,42}?)[「『](.*)[」』]$/);
-      if (!quote) return parseDialogueLineScored(raw, context);
+      if (!quote) return parseDialogLineScored(raw, context);
 
       let speakerSource = quote[1].trim();
-      let dialogueText = quote[2].trim();
+      let dialogText = quote[2].trim();
       if (!scenarioIsValidSpeakerSource(speakerSource)) return null;
       const modifiers = [];
       speakerSource = speakerSource.replace(/[（(]([^）)]{1,24})[）)]/g, function(_, value) {
         modifiers.push(value);
         return '';
       }).trim();
-      dialogueText = dialogueText.replace(/^[（(]([^）)]{1,24})[）)]\s*/, function(_, value) {
+      dialogText = dialogText.replace(/^[（(]([^）)]{1,24})[）)]\s*/, function(_, value) {
         modifiers.push(value);
         return '';
       }).trim();
 
       const cueType = scenarioCueType(speakerSource);
-      const modifier = scenarioNormalizeDialogueModifier(modifiers.concat([speakerSource]).join(' '));
+      const modifier = scenarioNormalizeDialogModifier(modifiers.concat([speakerSource]).join(' '));
       const speakerInfo = scenarioNormalizeSpeakerName(speakerSource);
       let type = cueType || 'dialog';
       if (modifier === 'Monologue') type = 'monologue';
       if (cueType === 'telop' || cueType === 'narration') speakerInfo.name = '';
       const characterGender = speakerInfo.name ? scenarioInferCharacterGender(speakerInfo.name, context) : '';
       let score = 8;
-      if (!dialogueText) score -= 5;
+      if (!dialogText) score -= 5;
       if (context && /front|cast|comment/.test(context.zone || '')) score -= 4;
       if (charLength(speakerSource) > 32) score -= 3;
       if (score < 4) return null;
@@ -11336,8 +11336,8 @@
         type: type,
         speaker: speakerSource,
         modifier: modifier,
-        subtype: modifier ? 'dialogue_' + modifier.toLowerCase() : type,
-        text: dialogueText,
+        subtype: modifier ? 'dialog_' + modifier.toLowerCase() : type,
+        text: dialogText,
         fullText: raw,
         characterName: speakerInfo.name,
         characterGender: characterGender,
@@ -11354,7 +11354,7 @@
       return '';
     }
 
-    function scenarioNormalizeDialogueModifier(value) {
+    function scenarioNormalizeDialogModifier(value) {
       const folded = scenarioCleanFoldText(value).toUpperCase();
       if (/OFF|ＯＦＦ|オフ|画面外|フレーム外|声のみ|声ダケ|の声/.test(folded)) return 'Off';
       if (/(^|[^A-Z])M([^A-Z]|$)|Ｍ|モノローグ|心の声|心ノ声|内心/.test(folded)) return 'Monologue';
@@ -11441,7 +11441,7 @@
     function scenarioLooksLikeCastDescriptorText(raw) {
       const clean = scenarioCleanCastLine(raw);
       if (!clean || charLength(clean) > 140) return false;
-      if (scenarioIsSectionMarkerLine(clean) || scenarioIsSceneHeadingLine(clean) || scenarioParseDialogueLineScored(clean, { zone: 'body' })) return false;
+      if (scenarioIsSectionMarkerLine(clean) || scenarioIsSceneHeadingLine(clean) || scenarioParseDialogLineScored(clean, { zone: 'body' })) return false;
       return scenarioCastRolePattern().test(clean) || /^[、。・）)]/.test(clean);
     }
 
@@ -11519,7 +11519,7 @@
       return '';
     }
 
-    function classifyBodyLineScored(line, context, quality, bodyScore, dialogue) {
+    function classifyBodyLineScored(line, context, quality, bodyScore, dialog) {
       const currentMeta = {
         locationName: context.currentLocationName || '',
         timeOfDay: context.currentTimeOfDay || ''
@@ -11547,14 +11547,14 @@
         if (sceneMeta.timeOfDay) context.currentTimeOfDay = sceneMeta.timeOfDay;
         return blockClassification('scene_heading', 'body', true, 'action', 0.84, ['scene heading score'], { bodyStart: bodyScore, scene: 8 }, sceneMeta);
       }
-      if (dialogue && dialogue.score >= 7) {
+      if (dialog && dialog.score >= 7) {
         context.editorialCommentActive = false;
-        dialogue.locationName = currentMeta.locationName;
-        dialogue.timeOfDay = currentMeta.timeOfDay;
-        return blockClassification(dialogue.type, 'body', true, 'dialog', dialogue.confidence, ['dialogue score'], { dialogue: dialogue.score }, dialogue);
+        dialog.locationName = currentMeta.locationName;
+        dialog.timeOfDay = currentMeta.timeOfDay;
+        return blockClassification(dialog.type, 'body', true, 'dialog', dialog.confidence, ['dialog score'], { dialog: dialog.score }, dialog);
       }
-      if (dialogue && dialogue.score >= 4) {
-        return blockClassification('unknown', 'low_confidence', false, 'none', 0.48, ['low-confidence dialogue-like line'], { dialogue: dialogue.score }, currentMeta);
+      if (dialog && dialog.score >= 4) {
+        return blockClassification('unknown', 'low_confidence', false, 'none', 0.48, ['low-confidence dialog-like line'], { dialog: dialog.score }, currentMeta);
       }
       if (charLength(line) <= 1) return blockClassification('unknown', 'low_confidence', false, 'none', 0.30, ['too short'], { length: charLength(line) }, currentMeta);
       context.editorialCommentActive = false;
@@ -11818,10 +11818,10 @@
       cut.inheritedCutNoHidden = false;
       cut.sourceBlockIds = [];
       cut.pictureTextBlockIds = [];
-      cut.dialogueBlockIds = [];
+      cut.dialogBlockIds = [];
       cut.memoBlockIds = [];
       cut.actionText = '';
-      cut.dialogueText = '';
+      cut.dialogText = '';
       cut.meta = cut.meta || {};
       cut.meta.autoScenarioPlacement = false;
     }
@@ -11831,17 +11831,17 @@
       target.inheritedCutNoHidden = Boolean(source && source.inheritedCutNoHidden);
       target.sourceBlockIds = (source && source.sourceBlockIds || []).slice();
       target.pictureTextBlockIds = (source && source.pictureTextBlockIds || []).slice();
-      target.dialogueBlockIds = (source && source.dialogueBlockIds || []).slice();
+      target.dialogBlockIds = (source && source.dialogBlockIds || []).slice();
       target.memoBlockIds = (source && source.memoBlockIds || []).slice();
       target.actionText = String(source && source.actionText || '');
-      target.dialogueText = String(source && source.dialogueText || '');
+      target.dialogText = String(source && source.dialogText || '');
       target.meta = Object.assign({}, target.meta || {}, source && source.meta || {}, { autoScenarioPlacement: true });
     }
 
     function reassignScenarioCandidateBlocks(project, candidate, target) {
       if (!project || !candidate || !target) return;
       const ids = [];
-      ['sourceBlockIds', 'pictureTextBlockIds', 'dialogueBlockIds', 'memoBlockIds'].forEach(function(key) {
+      ['sourceBlockIds', 'pictureTextBlockIds', 'dialogBlockIds', 'memoBlockIds'].forEach(function(key) {
         (candidate[key] || []).forEach(function(id) {
           if (id && ids.indexOf(id) < 0) ids.push(id);
         });
@@ -11850,7 +11850,7 @@
         const block = findBlockById(project, id);
         if (!block) return;
         block.assignedCutId = target.id;
-        if ((candidate.dialogueBlockIds || []).indexOf(id) >= 0) block.assignedPanelId = 'dialogueText';
+        if ((candidate.dialogBlockIds || []).indexOf(id) >= 0) block.assignedPanelId = 'dialogText';
         else if ((candidate.pictureTextBlockIds || []).indexOf(id) >= 0) block.assignedPanelId = 'actionText';
         else if ((candidate.memoBlockIds || []).indexOf(id) >= 0) block.assignedPanelId = candidate.cutNo && /^(OP|ED|CM|END)$/i.test(candidate.cutNo) ? 'cutNo' : 'actionText';
         else block.assignedPanelId = target.cutNo && /^(OP|ED|CM|END)$/i.test(target.cutNo) ? 'cutNo' : 'actionText';
@@ -11876,7 +11876,7 @@
       (project.cuts || []).forEach(function(cut) {
         cut.sourceBlockIds = [];
         cut.pictureTextBlockIds = [];
-        cut.dialogueBlockIds = [];
+        cut.dialogBlockIds = [];
         cut.memoBlockIds = [];
         cut.meta = cut.meta || {};
         cut.meta.autoScenarioPlacement = false;
@@ -12368,7 +12368,7 @@
         for (let index = 1; index < cleanGroup.length; index += 1) {
           attachBlockToCut(cut, cleanGroup[index]);
         }
-        cut.meta.evidence = mergeUnique(cut.meta.evidence || [], [reason || 'dialogue-centered grouping']);
+        cut.meta.evidence = mergeUnique(cut.meta.evidence || [], [reason || 'dialog-centered grouping']);
         cut.meta.warnings = mergeUnique(cut.meta.warnings || [], ['auto cut candidate', 'user review required']);
         refreshCutConfidence(cut, cleanGroup);
         cuts.push(cut);
@@ -12395,7 +12395,7 @@
       }
 
       blocks.forEach(function(block) {
-        const isDialogue = DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0;
+        const isDialog = DIALOG_AREA_TYPES.indexOf(block.type) >= 0;
         const isHardLead = block.type === 'section_marker' || block.type === 'scene_heading' || block.type === 'transition';
         const markerLabel = scenarioCutMarkerLabel(block);
         if (markerLabel) {
@@ -12406,8 +12406,8 @@
           createMarkerCut(block, markerLabel);
           return;
         }
-        if (isDialogue) {
-          createCutFromGroup(pendingLead.concat([block]), 'one dialogue unit per cut');
+        if (isDialog) {
+          createCutFromGroup(pendingLead.concat([block]), 'one dialog unit per cut');
           pendingLead = [];
           return;
         }
@@ -12467,7 +12467,7 @@
         inheritedCutNoHidden: false,
         sourceBlockIds: [],
         pictureTextBlockIds: [],
-        dialogueBlockIds: [],
+        dialogBlockIds: [],
         memoBlockIds: [],
         rowSpan: 1,
         pictureFrames: 0,
@@ -12476,7 +12476,7 @@
         durationFrames: 0,
         durationFramesLocked: false,
         actionText: '',
-        dialogueText: '',
+        dialogText: '',
         meta: {
           confidence: block.meta.confidence,
           evidence: ['generated from imported block #' + block.order],
@@ -12517,11 +12517,11 @@
     }
 
     function attachBlockToCut(cut, block) {
-      addCutBlockLink(cut, block, block && DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0 ? 'dialogueText' : 'actionText');
+      addCutBlockLink(cut, block, block && DIALOG_AREA_TYPES.indexOf(block.type) >= 0 ? 'dialogText' : 'actionText');
       block.assignedCutId = cut.id;
-      if (DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0) {
-        block.assignedPanelId = 'dialogueText';
-        cut.dialogueText = appendLine(cut.dialogueText, dialogueDisplayTextForBlock(block));
+      if (DIALOG_AREA_TYPES.indexOf(block.type) >= 0) {
+        block.assignedPanelId = 'dialogText';
+        cut.dialogText = appendLine(cut.dialogText, dialogDisplayTextForBlock(block));
       } else if (block.type === 'transition' || block.type === 'section_marker' || block.type === 'sound_cue' || block.type === 'music_cue') {
         block.assignedPanelId = 'actionText';
         cut.actionText = appendLine(cut.actionText, block.text);
@@ -12531,7 +12531,7 @@
       }
     }
 
-    function dialogueDisplayTextForBlock(block) {
+    function dialogDisplayTextForBlock(block) {
       if (!block) return '';
       const text = String(block.text || '').trim();
       const raw = String(block.rawText || '').trim();
@@ -12542,14 +12542,14 @@
       return text || raw;
     }
 
-    function dialogueDisplayTextForAudioClip(project, clip) {
+    function dialogDisplayTextForAudioClip(project, clip) {
       const sourceBlockId = audioClipSourceBlockId(clip);
       const block = sourceBlockId ? findBlockById(project, sourceBlockId) : null;
-      if (block) return dialogueDisplayTextForBlock(block);
-      return formatDialogueDisplayText(clip && (clip.characterName || ''), clip && clip.text || '');
+      if (block) return dialogDisplayTextForBlock(block);
+      return formatDialogDisplayText(clip && (clip.characterName || ''), clip && clip.text || '');
     }
 
-    function formatDialogueDisplayText(speaker, text) {
+    function formatDialogDisplayText(speaker, text) {
       const body = String(text || '').trim();
       const name = String(speaker || '').trim();
       if (!body) return '';
@@ -12557,10 +12557,10 @@
       return name ? name + '「' + body + '」' : body;
     }
 
-    function removeDialogueTextLine(cut, text) {
+    function removeDialogTextLine(cut, text) {
       const target = String(text || '').trim();
-      if (!cut || !target || !String(cut.dialogueText || '').trim()) return;
-      cut.dialogueText = String(cut.dialogueText || '')
+      if (!cut || !target || !String(cut.dialogText || '').trim()) return;
+      cut.dialogText = String(cut.dialogText || '')
         .split(/\n+/)
         .map(function(line) { return line.trim(); })
         .filter(function(line) { return line && line !== target; })
@@ -12569,7 +12569,7 @@
 
     function ensureCutLinkArrays(cut) {
       if (!cut) return;
-      ['sourceBlockIds', 'pictureTextBlockIds', 'dialogueBlockIds', 'memoBlockIds'].forEach(function(key) {
+      ['sourceBlockIds', 'pictureTextBlockIds', 'dialogBlockIds', 'memoBlockIds'].forEach(function(key) {
         cut[key] = Array.isArray(cut[key]) ? cut[key] : [];
       });
     }
@@ -14819,7 +14819,7 @@
     }
 
     function cutBlockLinkKeyForField(fieldName, block) {
-      if (fieldName === 'dialogueText') return 'dialogueBlockIds';
+      if (fieldName === 'dialogText') return 'dialogBlockIds';
       if (block && (block.type === 'transition' || block.type === 'section_marker' || block.type === 'sound_cue' || block.type === 'music_cue')) return 'memoBlockIds';
       return 'pictureTextBlockIds';
     }
@@ -14835,7 +14835,7 @@
     function removeCutBlockLink(cut, blockId) {
       if (!cut || !blockId) return;
       ensureCutLinkArrays(cut);
-      ['sourceBlockIds', 'pictureTextBlockIds', 'dialogueBlockIds', 'memoBlockIds'].forEach(function(key) {
+      ['sourceBlockIds', 'pictureTextBlockIds', 'dialogBlockIds', 'memoBlockIds'].forEach(function(key) {
         cut[key] = removeIdFromArray(cut[key], blockId);
       });
     }
@@ -15128,7 +15128,7 @@
         String(cut.cutNo || '').trim() ||
         cut.meta && cut.meta.videoMedia ||
         String(cut.actionText || '').trim() ||
-        String(cut.dialogueText || '').trim() ||
+        String(cut.dialogText || '').trim() ||
         isFixedPictureFrame(cut) ||
         Math.max(0, Math.round(Number(cut.pictureFramesInferred) || 0)) ||
         cut.pictureFramesManual ||
@@ -15136,7 +15136,7 @@
         Math.max(0, Math.round(Number(cut.durationFrames) || 0)) ||
         hasArrayItems(cut.sourceBlockIds) ||
         hasArrayItems(cut.pictureTextBlockIds) ||
-        hasArrayItems(cut.dialogueBlockIds) ||
+        hasArrayItems(cut.dialogBlockIds) ||
         hasArrayItems(cut.memoBlockIds) ||
         hasArrayItems(cut.conteLayers)
       ));
@@ -15568,11 +15568,11 @@
       project.audio.clips = Array.isArray(project.audio.clips) ? project.audio.clips : [];
       project.audio.clips.forEach(function(clip, index) {
         clip.id = String(clip.id || ('audio-' + index));
-        clip.type = clip.type || 'dialogue';
+        clip.type = clip.type || 'dialog';
         clip.text = String(clip.text || '');
         clip.characterName = String(clip.characterName || '');
-        clip.dialogueTags = normalizeDialogueTags(clip.dialogueTags || clip.dialogueMode || '');
-        clip.dialogueMode = clip.dialogueTags[0] || '';
+        clip.dialogTags = normalizeDialogTags(clip.dialogTags || clip.dialogMode || '');
+        clip.dialogMode = clip.dialogTags[0] || '';
         clip.sourceBlockId = String(clip.sourceBlockId || '');
         clip.audioFileName = String(clip.audioFileName || '');
         clip.audioMime = String(clip.audioMime || '');
@@ -15597,11 +15597,11 @@
         clip.ttsEffect = String(clip.ttsEffect || '');
         clip.startFrame = Math.max(0, Math.round(Number(clip.startFrame) || 0));
         normalizeAudioClipVisibleDuration(clip);
-        clip.trackId = clip.trackId || 'dialogue-main';
+        clip.trackId = clip.trackId || 'dialog-main';
         clip.manualTiming = Boolean(clip.manualTiming);
         clip.hidden = Boolean(clip.hidden);
       });
-      dedupeAutoDialogueCandidateAudioClips(project);
+      dedupeAutoDialogCandidateAudioClips(project);
       // 묶음 C: 동일 사이클 마킹 (project === state.project 인 경우에만)
       if (project === state.project) {
         state.audioNormalizedCycle = state.audioCycleId;
@@ -15616,7 +15616,7 @@
       const trackMap = new Map();
       const existingVideo = existing.find(function(track) { return track && track.id === 'video-main'; }) || {};
       const existingVideoMedia = existing.find(function(track) { return track && track.id === 'video-media-main'; }) || {};
-      const existingDialogue = existing.find(function(track) { return track && track.id === 'dialogue-main'; }) || {};
+      const existingDialog = existing.find(function(track) { return track && track.id === 'dialog-main'; }) || {};
       trackMap.set('video-main', Object.assign({ id: 'video-main', type: 'video', label: 'Video', source: 'conte-picture-slideshow', hidden: false }, existingVideo));
       trackMap.set('video-media-main', Object.assign({ id: 'video-media-main', type: 'video', label: 'V1 Media', source: 'external-video-media', hidden: false, clipIds: [] }, existingVideoMedia, { label: 'V1 Media', source: 'external-video-media', clipIds: [] }));
       existing.forEach(function(track) {
@@ -15625,10 +15625,10 @@
         if (track.source !== 'external-video-media' && !/^video-media-\d+$/.test(String(track.id || ''))) return;
         trackMap.set(track.id, Object.assign({ type: 'video', label: nextVideoMediaTrackLabel(track.id), source: 'external-video-media', hidden: false, clipIds: [] }, track, { clipIds: [] }));
       });
-      trackMap.set('dialogue-main', Object.assign({ id: 'dialogue-main', type: 'audio', label: 'A1 Audio', locked: true, internal: true, muted: false, clipIds: [] }, existingDialogue, { label: 'A1 Audio', clipIds: [] }));
+      trackMap.set('dialog-main', Object.assign({ id: 'dialog-main', type: 'audio', label: 'A1 Audio', locked: true, internal: true, muted: false, clipIds: [] }, existingDialog, { label: 'A1 Audio', clipIds: [] }));
       existing.forEach(function(track) {
         if (!track || track.type !== 'audio') return;
-        if (track.id === 'dialogue-main') return;
+        if (track.id === 'dialog-main') return;
         trackMap.set(track.id, normalizeAudioTrackRecordLabel(Object.assign({ type: 'audio', label: nextAudioTrackLabel(track.id), external: true, muted: false, clipIds: [] }, track, { clipIds: [] })));
       });
       videoClips.forEach(function(clip) {
@@ -15645,9 +15645,9 @@
         }
       });
       display.forEach(function(clip) {
-        const trackId = clip.trackId || 'dialogue-main';
+        const trackId = clip.trackId || 'dialog-main';
         if (!trackMap.has(trackId)) {
-          trackMap.set(trackId, normalizeAudioTrackRecordLabel({ id: trackId, type: 'audio', label: nextAudioTrackLabel(trackId), external: trackId !== 'dialogue-main', clipIds: [] }));
+          trackMap.set(trackId, normalizeAudioTrackRecordLabel({ id: trackId, type: 'audio', label: nextAudioTrackLabel(trackId), external: trackId !== 'dialog-main', clipIds: [] }));
         }
         const track = trackMap.get(trackId);
         if (track && track.type === 'audio') track.clipIds.push(clip.id);
@@ -15677,7 +15677,7 @@
 
     function audioTrackIsMuted(project, trackId) {
       const tracks = project && project.timeline && Array.isArray(project.timeline.tracks) ? project.timeline.tracks : [];
-      const track = tracks.find(function(item) { return item.id === (trackId || 'dialogue-main'); });
+      const track = tracks.find(function(item) { return item.id === (trackId || 'dialog-main'); });
       return Boolean(track && track.muted);
     }
 
@@ -15701,7 +15701,7 @@
     }
 
     function audioTrackSortIndex(trackId) {
-      if (trackId === 'dialogue-main') return 1;
+      if (trackId === 'dialog-main') return 1;
       const number = audioTrackDisplayNumber(trackId);
       return number ? 100 + number : 999;
     }
@@ -15720,7 +15720,7 @@
     }
 
     function nextAudioTrackLabel(trackId) {
-      if (trackId === 'dialogue-main') return 'A1 Audio';
+      if (trackId === 'dialog-main') return 'A1 Audio';
       const index = audioTrackDisplayNumber(trackId) || '?';
       return 'A' + index + ' Audio';
     }
@@ -15739,7 +15739,7 @@
     }
 
     function normalizeAudioTrackRecordLabel(track) {
-      if (!track || track.id === 'dialogue-main') return track;
+      if (!track || track.id === 'dialog-main') return track;
       if (audioTrackLabelIsAutomatic(track.label)) track.label = nextAudioTrackLabel(track.id);
       return track;
     }
@@ -15857,7 +15857,7 @@
     function audioClipOverlapsTrack(project, clipId, trackId, startFrame, durationFrames, plannedTracks) {
       return audioTimelineDisplayClips(project).some(function(item) {
         if (!item || item.id === clipId) return false;
-        const itemTrackId = plannedTracks && plannedTracks.has(item.id) ? plannedTracks.get(item.id) : (item.trackId || 'dialogue-main');
+        const itemTrackId = plannedTracks && plannedTracks.has(item.id) ? plannedTracks.get(item.id) : (item.trackId || 'dialog-main');
         if (itemTrackId !== trackId) return false;
         return audioRangesOverlap(startFrame, durationFrames, item.startFrame, item.durationFrames);
       });
@@ -15867,7 +15867,7 @@
       options = options || {};
       writeAudioTimelineTrack(project);
       const tracks = audioTimelineTracks(project);
-      const preferred = preferredTrackId || clip.trackId || 'dialogue-main';
+      const preferred = preferredTrackId || clip.trackId || 'dialog-main';
       const ordered = [];
       const addTrackId = function(id) {
         if (!id || ordered.indexOf(id) >= 0) return;
@@ -15886,7 +15886,7 @@
 
     function placeAudioClipOnNonOverlappingTrack(project, clip, preferredTrackId) {
       if (!clip) return '';
-      const trackId = firstNonOverlappingAudioTrack(project, clip, preferredTrackId || clip.trackId || 'dialogue-main', { create: true });
+      const trackId = firstNonOverlappingAudioTrack(project, clip, preferredTrackId || clip.trackId || 'dialog-main', { create: true });
       if (trackId) clip.trackId = trackId;
       return trackId;
     }
@@ -15896,14 +15896,14 @@
       const tracks = audioTimelineTracks(project);
       const index = tracks.findIndex(function(track) { return track.id === trackId; });
       if (index < 0) return { ok: false, conflicts: [], moves: [], reason: 'Track not found.' };
-      const clips = audioTimelineDisplayClips(project).filter(function(clip) { return (clip.trackId || 'dialogue-main') === trackId; });
+      const clips = audioTimelineDisplayClips(project).filter(function(clip) { return (clip.trackId || 'dialog-main') === trackId; });
       if (!clips.length) return { ok: true, conflicts: [], moves: [], empty: true };
       const upperTracks = tracks.slice(0, index).map(function(track) { return track.id; });
       if (!upperTracks.length) return { ok: false, conflicts: clips.map(function(clip) { return clip.id; }), moves: [], reason: 'No upper audio layer.' };
       const simulated = audioTimelineDisplayClips(project).filter(function(clip) {
-        return (clip.trackId || 'dialogue-main') !== trackId;
+        return (clip.trackId || 'dialog-main') !== trackId;
       }).map(function(clip) {
-        return { id: clip.id, trackId: clip.trackId || 'dialogue-main', startFrame: clip.startFrame, durationFrames: clip.durationFrames };
+        return { id: clip.id, trackId: clip.trackId || 'dialog-main', startFrame: clip.startFrame, durationFrames: clip.durationFrames };
       });
       const moves = [];
       const conflicts = [];
@@ -15973,15 +15973,15 @@
       if (!clip) return '';
       if (clip.sourceBlockId) return String(clip.sourceBlockId);
       const id = String(clip.id || '');
-      return id.indexOf('dialogue-block-') === 0 ? id.slice('dialogue-block-'.length) : '';
+      return id.indexOf('dialog-block-') === 0 ? id.slice('dialog-block-'.length) : '';
     }
 
-    function audioClipIsAutoDialogueCandidate(clip) {
-      return String(clip && clip.id || '').indexOf('dialogue-block-') === 0;
+    function audioClipIsAutoDialogCandidate(clip) {
+      return String(clip && clip.id || '').indexOf('dialog-block-') === 0;
     }
 
     function audioClipDedupScore(clip) {
-      let score = audioClipIsAutoDialogueCandidate(clip) ? 0 : 1000;
+      let score = audioClipIsAutoDialogCandidate(clip) ? 0 : 1000;
       if (clip && clip.manualTiming) score += 200;
       if (clip && clip.audioFileName) score += 100;
       if (clip && audioClipHasIndexedDbStorage(clip)) score += 90;
@@ -15993,7 +15993,7 @@
       return score;
     }
 
-    function dedupeAutoDialogueCandidateAudioClips(project) {
+    function dedupeAutoDialogCandidateAudioClips(project) {
       const clips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
       if (!clips.length) return 0;
       const bySourceBlock = new Map();
@@ -16007,11 +16007,11 @@
       bySourceBlock.forEach(function(items) {
         if (items.length < 2) return;
         const hasNonCandidate = items.some(function(item) {
-          return !audioClipIsAutoDialogueCandidate(item.clip);
+          return !audioClipIsAutoDialogCandidate(item.clip);
         });
         if (hasNonCandidate) {
           items.forEach(function(item) {
-            if (audioClipIsAutoDialogueCandidate(item.clip)) removeIndexes.add(item.index);
+            if (audioClipIsAutoDialogCandidate(item.clip)) removeIndexes.add(item.index);
           });
           return;
         }
@@ -16020,7 +16020,7 @@
           return delta || left.index - right.index;
         });
         ordered.slice(1).forEach(function(item) {
-          if (audioClipIsAutoDialogueCandidate(item.clip)) removeIndexes.add(item.index);
+          if (audioClipIsAutoDialogCandidate(item.clip)) removeIndexes.add(item.index);
         });
       });
       if (!removeIndexes.size) return 0;
@@ -16062,7 +16062,7 @@
     }
 
     function audioClipIsMuted(project, clip) {
-      return audioTrackIsMuted(project, clip && clip.trackId || 'dialogue-main');
+      return audioTrackIsMuted(project, clip && clip.trackId || 'dialog-main');
     }
 
     function audioTimelineAudibleClips(project) {
@@ -16071,11 +16071,11 @@
         return [track.id, Boolean(track.muted)];
       }));
       return audioTimelineDisplayClips(project).filter(function(clip) {
-        return !muted.get(clip.trackId || 'dialogue-main');
+        return !muted.get(clip.trackId || 'dialog-main');
       });
     }
 
-    function ensureDialogueAudioCandidateClips(project) {
+    function ensureDialogAudioCandidateClips(project) {
       normalizeAudioClips(project);
       const signature = audioTimelineSourceSignature(project);
       if (project.audio.clips.length && project.audio.sourceSignature === signature) {
@@ -16092,13 +16092,13 @@
       const characters = collectCharacterStats(getProjectBlocks(project));
       ensureVoiceProfilesForCharacters(project, characters);
       groupItems.forEach(function(item) {
-        const units = dialogueUnitsForCutGroup(project, item.group);
+        const units = dialogUnitsForCutGroup(project, item.group);
         if (!units.length) return;
         const slotFrames = Math.max(1, item.frames / units.length);
         units.forEach(function(unit, index) {
           const id = unit.id;
           const previous = oldById.get(id) || (unit.sourceBlockId ? oldBySourceBlockId.get(unit.sourceBlockId) : null);
-          const defaultDuration = Math.max(12, Math.min(Math.max(1, Math.round(slotFrames)), dialogueAutoTimingFramesForText(unit.text)));
+          const defaultDuration = Math.max(12, Math.min(Math.max(1, Math.round(slotFrames)), dialogAutoTimingFramesForText(unit.text)));
           const startFrame = previous && previous.manualTiming ? previous.startFrame : Math.round(item.startFrame + slotFrames * index);
           const profile = characterVoiceProfile(project, unit.characterName || 'Unknown', {
             gender: unit.characterGender || '',
@@ -16113,8 +16113,8 @@
             previous.characterName = unit.characterName || previous.characterName || '';
             previous.characterGender = profile.gender || unit.characterGender || previous.characterGender || '';
             previous.characterAge = profile.age || unit.characterAge || previous.characterAge || '';
-            previous.dialogueTags = normalizeDialogueTags(unit.dialogueTags || unit.dialogueMode || previous.dialogueTags || previous.dialogueMode || '');
-            previous.dialogueMode = previous.dialogueTags[0] || '';
+            previous.dialogTags = normalizeDialogTags(unit.dialogTags || unit.dialogMode || previous.dialogTags || previous.dialogMode || '');
+            previous.dialogMode = previous.dialogTags[0] || '';
             previous.text = unit.text || previous.text || '';
             if (!previous.manualTiming && !audioClipHasSource(project, previous)) {
               previous.startFrame = Math.max(0, startFrame);
@@ -16124,14 +16124,14 @@
           }
           const clip = {
             id: id,
-            type: 'dialogue',
+            type: 'dialog',
             sourceBlockId: unit.sourceBlockId || '',
             sourceCutId: item.group.cuts[0] ? item.group.cuts[0].id : '',
             characterName: unit.characterName || '',
             characterGender: profile.gender || unit.characterGender || '',
             characterAge: profile.age || unit.characterAge || '',
-            dialogueTags: normalizeDialogueTags(unit.dialogueTags || unit.dialogueMode || ''),
-            dialogueMode: normalizeDialogueTags(unit.dialogueTags || unit.dialogueMode || '')[0] || '',
+            dialogTags: normalizeDialogTags(unit.dialogTags || unit.dialogMode || ''),
+            dialogMode: normalizeDialogTags(unit.dialogTags || unit.dialogMode || '')[0] || '',
             text: unit.text,
             audioFileName: '',
             audioMime: '',
@@ -16145,7 +16145,7 @@
             ttsVersion: 0,
             startFrame: Math.max(0, startFrame),
             durationFrames: Math.max(1, Math.round(defaultDuration)),
-            trackId: 'dialogue-main',
+            trackId: 'dialog-main',
             manualTiming: false
           };
           project.audio.clips.push(clip);
@@ -16167,8 +16167,8 @@
           group.cuts.map(function(cut) {
             return [
               cut.id,
-              cut.dialogueText || '',
-              cut.dialogueBlockIds ? cut.dialogueBlockIds.join(',') : ''
+              cut.dialogText || '',
+              cut.dialogBlockIds ? cut.dialogBlockIds.join(',') : ''
             ].join(':');
           }).join(';')
         ].join('|');
@@ -16228,13 +16228,13 @@
 
     function estimatedCutGroupFallbackFrames(project, group) {
       const fps = fpsForProject(project);
-      const dialogue = cutGroupDialogueTiming(project, group);
-      const dialogueFrames = dialogue.handledFrames || (dialogue.speechFrames + dialogue.units * DIALOGUE_HANDLE_FRAMES * 2);
+      const dialog = cutGroupDialogTiming(project, group);
+      const dialogFrames = dialog.handledFrames || (dialog.speechFrames + dialog.units * DIALOG_HANDLE_FRAMES * 2);
       const rowFrames = Math.max(1, (group.cuts || []).length) * fps;
-      return Math.max(rowFrames, dialogueFrames, fps);
+      return Math.max(rowFrames, dialogFrames, fps);
     }
 
-    function normalizeDialogueTags(value) {
+    function normalizeDialogTags(value) {
       const raw = Array.isArray(value) ? value.join(' ') : String(value || '');
       const text = raw.normalize('NFKC');
       const tags = [];
@@ -16244,12 +16244,12 @@
       return Array.from(new Set(tags));
     }
 
-    function dialogueTagsFromParts(parts) {
-      return normalizeDialogueTags((parts || []).filter(Boolean).join('\n'));
+    function dialogTagsFromParts(parts) {
+      return normalizeDialogTags((parts || []).filter(Boolean).join('\n'));
     }
 
-    function dialogueTagLabel(tags) {
-      const normalized = normalizeDialogueTags(tags);
+    function dialogTagLabel(tags) {
+      const normalized = normalizeDialogTags(tags);
       return normalized.map(function(tag) {
         if (tag === 'off') return 'OFF';
         if (tag === 'monologue') return 'M';
@@ -16258,46 +16258,46 @@
       }).join(' / ');
     }
 
-    function dialogueUnitsForCutGroup(project, group) {
+    function dialogUnitsForCutGroup(project, group) {
       const units = [];
       const seen = new Set();
       const groupContext = actionTextForGroup(project, group);
       linkedBlocksForCutGroup(project, group).forEach(function(block) {
-        if (!block || DIALOGUE_AREA_TYPES.indexOf(block.type) < 0) return;
+        if (!block || DIALOG_AREA_TYPES.indexOf(block.type) < 0) return;
         if (seen.has(block.id)) return;
         seen.add(block.id);
-        const speakerName = block.characterName || scenarioNormalizeSpeakerName(block.speaker || '').name || inferDialogueSpeakerFromLine(block.rawText || block.text || '');
-        const text = cleanDialogueForSpeech(block.text || block.rawText || '', speakerName);
-        const tags = dialogueTagsFromParts([block.modifier, block.subtype, block.rawText, block.text, groupContext]);
+        const speakerName = block.characterName || scenarioNormalizeSpeakerName(block.speaker || '').name || inferDialogSpeakerFromLine(block.rawText || block.text || '');
+        const text = cleanDialogForSpeech(block.text || block.rawText || '', speakerName);
+        const tags = dialogTagsFromParts([block.modifier, block.subtype, block.rawText, block.text, groupContext]);
         if (!text) return;
         units.push({
-          id: 'dialogue-block-' + block.id,
+          id: 'dialog-block-' + block.id,
           sourceBlockId: block.id,
           characterName: speakerName,
           characterGender: block.characterGender || '',
           characterAge: block.characterAge || '',
-          dialogueTags: tags,
-          dialogueMode: tags[0] || '',
+          dialogTags: tags,
+          dialogMode: tags[0] || '',
           text: text
         });
       });
       if (units.length) return units;
       group.cuts.forEach(function(cut) {
-        String(cut.dialogueText || '').split(/\n+/).forEach(function(line, index) {
+        String(cut.dialogText || '').split(/\n+/).forEach(function(line, index) {
           const raw = line.trim();
           if (!raw) return;
-          const speakerName = inferDialogueSpeakerFromLine(raw);
-          const text = cleanDialogueForSpeech(raw, speakerName);
-          const tags = dialogueTagsFromParts([raw, groupContext]);
+          const speakerName = inferDialogSpeakerFromLine(raw);
+          const text = cleanDialogForSpeech(raw, speakerName);
+          const tags = dialogTagsFromParts([raw, groupContext]);
           if (!text) return;
           units.push({
-            id: 'dialogue-cutline-' + cut.id + '-' + index + '-' + Math.abs(hashString(raw)),
+            id: 'dialog-cutline-' + cut.id + '-' + index + '-' + Math.abs(hashString(raw)),
             sourceBlockId: '',
             characterName: speakerName,
             characterGender: '',
             characterAge: '',
-            dialogueTags: tags,
-            dialogueMode: tags[0] || '',
+            dialogTags: tags,
+            dialogMode: tags[0] || '',
             text: text
           });
         });
@@ -16305,7 +16305,7 @@
       return units;
     }
 
-    function inferDialogueSpeakerFromLine(value) {
+    function inferDialogSpeakerFromLine(value) {
       const text = String(value || '').normalize('NFKC').trim();
       const quoteMatch = text.match(/^([^「」『』:：\n]{1,24})\s*[「:：]/);
       const speaker = quoteMatch ? quoteMatch[1].trim() : '';
@@ -16314,7 +16314,7 @@
       return scenarioNormalizeSpeakerName(speaker).name || speaker;
     }
 
-    function cleanDialogueForSpeech(value, speaker) {
+    function cleanDialogForSpeech(value, speaker) {
       let text = String(value || '').normalize('NFKC').trim();
       if (speaker) {
         text = text.replace(new RegExp('^' + escapeRegExp(speaker) + '\\s*(?:[:：]\\s*|(?=[「『]))'), '');
@@ -16978,19 +16978,19 @@
       });
       project.cuts.forEach(function(cut) {
         cut.meta = cut.meta || {};
-        const linkedDialogueIds = (cut.dialogueBlockIds || []).filter(function(id) { return syncedBlockIds.has(id); });
-        linkedDialogueIds.forEach(function(id) {
+        const linkedDialogIds = (cut.dialogBlockIds || []).filter(function(id) { return syncedBlockIds.has(id); });
+        linkedDialogIds.forEach(function(id) {
           const block = blocksById.get(id);
-          if (block) removeDialogueTextLine(cut, dialogueDisplayTextForBlock(block));
+          if (block) removeDialogTextLine(cut, dialogDisplayTextForBlock(block));
           (clipTextByBlockId.get(id) || []).forEach(function(text) {
-            removeDialogueTextLine(cut, text);
+            removeDialogTextLine(cut, text);
             const blockForText = blocksById.get(id);
-            removeDialogueTextLine(cut, formatDialogueDisplayText(blockForText && (blockForText.speaker || blockForText.characterName || ''), text));
+            removeDialogTextLine(cut, formatDialogDisplayText(blockForText && (blockForText.speaker || blockForText.characterName || ''), text));
           });
         });
-        cut.dialogueBlockIds = (cut.dialogueBlockIds || []).filter(function(id) { return !syncedBlockIds.has(id); });
+        cut.dialogBlockIds = (cut.dialogBlockIds || []).filter(function(id) { return !syncedBlockIds.has(id); });
         cut.sourceBlockIds = (cut.sourceBlockIds || []).filter(function(id) { return !syncedBlockIds.has(id); });
-        cut.meta.audioSyncedDialogue = false;
+        cut.meta.audioSyncedDialog = false;
         cut.meta.audioClipIds = [];
       });
       syncClips.slice().sort(function(left, right) {
@@ -17007,35 +17007,35 @@
         const targetOverlaps = strongestRatio >= 0.75 ? [strongest] : overlaps;
         const sourceBlockId = audioClipSourceBlockId(clip);
         const sourceBlock = sourceBlockId ? blocksById.get(sourceBlockId) : null;
-        const fullDisplayText = dialogueDisplayTextForAudioClip(project, clip);
+        const fullDisplayText = dialogDisplayTextForAudioClip(project, clip);
         const textParts = strongestRatio >= 0.75
           ? [fullDisplayText]
           : splitTextByFrameRatios(clip.text, targetOverlaps).map(function(part) {
-              return formatDialogueDisplayText(sourceBlock && (sourceBlock.speaker || sourceBlock.characterName || '') || clip.characterName || '', part);
+              return formatDialogDisplayText(sourceBlock && (sourceBlock.speaker || sourceBlock.characterName || '') || clip.characterName || '', part);
             });
         targetOverlaps.forEach(function(entry, index) {
           const targetCut = project.cuts[entry.item.group.startIndex];
           if (!targetCut) return;
           const text = textParts[index] || fullDisplayText || clip.text;
-          if (!targetCut.dialogueText || targetCut.dialogueText.indexOf(text) < 0) {
-            targetCut.dialogueText = appendLine(targetCut.dialogueText, text);
+          if (!targetCut.dialogText || targetCut.dialogText.indexOf(text) < 0) {
+            targetCut.dialogText = appendLine(targetCut.dialogText, text);
           }
-          if (sourceBlockId && targetCut.dialogueBlockIds.indexOf(sourceBlockId) < 0) targetCut.dialogueBlockIds.push(sourceBlockId);
+          if (sourceBlockId && targetCut.dialogBlockIds.indexOf(sourceBlockId) < 0) targetCut.dialogBlockIds.push(sourceBlockId);
           if (sourceBlockId && targetCut.sourceBlockIds.indexOf(sourceBlockId) < 0) targetCut.sourceBlockIds.push(sourceBlockId);
-          targetCut.meta.audioSyncedDialogue = true;
+          targetCut.meta.audioSyncedDialog = true;
           targetCut.meta.audioClipIds.push(clip.id);
         });
         if (sourceBlockId && blocksById.has(sourceBlockId)) {
           const block = blocksById.get(sourceBlockId);
           const targetCut = project.cuts[strongest.item.group.startIndex];
           block.assignedCutId = targetCut ? targetCut.id : '';
-          block.assignedPanelId = targetCut ? 'dialogueText' : '';
+          block.assignedPanelId = targetCut ? 'dialogText' : '';
         }
       });
       if (state.audioPerfTrace) console.timeEnd('applyAudioTimelineToCuts');
     }
 
-    function audioClipDialogueBodyForCompare(text, speaker) {
+    function audioClipDialogBodyForCompare(text, speaker) {
       let value = String(text || '').trim();
       const name = String(speaker || '').trim();
       if (name && value.indexOf(name) === 0) value = value.slice(name.length);
@@ -17045,10 +17045,10 @@
         .replace(/\s+/g, '');
     }
 
-    function audioClipDialogueLineBelongsToClip(line, block, clip) {
+    function audioClipDialogLineBelongsToClip(line, block, clip) {
       const speaker = block && (block.speaker || block.characterName) || clip && clip.characterName || '';
-      const lineBody = audioClipDialogueBodyForCompare(line, speaker);
-      const clipBody = audioClipDialogueBodyForCompare(clip && clip.text || '', '');
+      const lineBody = audioClipDialogBodyForCompare(line, speaker);
+      const clipBody = audioClipDialogBodyForCompare(clip && clip.text || '', '');
       if (!lineBody || !clipBody) return false;
       return clipBody.indexOf(lineBody) >= 0 || lineBody.indexOf(clipBody) >= 0;
     }
@@ -17063,7 +17063,7 @@
       (project.cuts || []).forEach(function(cut) {
         const metaClipIds = cut && cut.meta && Array.isArray(cut.meta.audioClipIds) ? cut.meta.audioClipIds : [];
         if (metaClipIds.indexOf(clip.id) >= 0) ids.add(cut.id);
-        if (sourceBlockId && ((cut.dialogueBlockIds || []).indexOf(sourceBlockId) >= 0)) ids.add(cut.id);
+        if (sourceBlockId && ((cut.dialogBlockIds || []).indexOf(sourceBlockId) >= 0)) ids.add(cut.id);
       });
       return Array.from(ids);
     }
@@ -17072,32 +17072,32 @@
       if (!cut || !clip) return;
       ensureCutLinkArrays(cut);
       const textSet = new Set();
-      (Array.isArray(clip.syncedDialogueTexts) ? clip.syncedDialogueTexts : []).forEach(function(text) {
+      (Array.isArray(clip.syncedDialogTexts) ? clip.syncedDialogTexts : []).forEach(function(text) {
         if (String(text || '').trim()) textSet.add(String(text).trim());
       });
-      [dialogueDisplayTextForBlock(block), dialogueDisplayTextForAudioClip(project, clip), clip.text,
-        formatDialogueDisplayText(block && (block.speaker || block.characterName || '') || clip.characterName || '', clip.text)
+      [dialogDisplayTextForBlock(block), dialogDisplayTextForAudioClip(project, clip), clip.text,
+        formatDialogDisplayText(block && (block.speaker || block.characterName || '') || clip.characterName || '', clip.text)
       ].forEach(function(text) {
         if (String(text || '').trim()) textSet.add(String(text).trim());
       });
-      textSet.forEach(function(text) { removeDialogueTextLine(cut, text); });
+      textSet.forEach(function(text) { removeDialogTextLine(cut, text); });
       const metaClipIds = cut.meta && Array.isArray(cut.meta.audioClipIds) ? cut.meta.audioClipIds : [];
-      if (metaClipIds.indexOf(clip.id) >= 0 && String(cut.dialogueText || '').trim()) {
-        cut.dialogueText = String(cut.dialogueText || '')
+      if (metaClipIds.indexOf(clip.id) >= 0 && String(cut.dialogText || '').trim()) {
+        cut.dialogText = String(cut.dialogText || '')
           .split(/\n+/)
           .map(function(line) { return line.trim(); })
           .filter(function(line) {
-            return line && !textSet.has(line) && !audioClipDialogueLineBelongsToClip(line, block, clip);
+            return line && !textSet.has(line) && !audioClipDialogLineBelongsToClip(line, block, clip);
           })
           .join('\n');
       }
       if (sourceBlockId) {
-        cut.dialogueBlockIds = removeIdFromArray(cut.dialogueBlockIds, sourceBlockId);
+        cut.dialogBlockIds = removeIdFromArray(cut.dialogBlockIds, sourceBlockId);
         cut.sourceBlockIds = removeIdFromArray(cut.sourceBlockIds, sourceBlockId);
       }
       cut.meta = cut.meta || {};
       cut.meta.audioClipIds = removeIdFromArray(cut.meta.audioClipIds, clip.id);
-      cut.meta.audioSyncedDialogue = Boolean(cut.meta.audioClipIds && cut.meta.audioClipIds.length);
+      cut.meta.audioSyncedDialog = Boolean(cut.meta.audioClipIds && cut.meta.audioClipIds.length);
     }
 
     function syncSingleAudioClipToCuts(project, clipOrId) {
@@ -17125,7 +17125,7 @@
           block.assignedPanelId = '';
         }
         clip.syncedCutIds = [];
-        clip.syncedDialogueTexts = [];
+        clip.syncedDialogTexts = [];
         return;
       }
       let strongest = overlaps[0];
@@ -17137,39 +17137,39 @@
       }, 0) || 1;
       const strongestRatio = Math.max(0, strongest.frames) / totalOverlapFrames;
       const targetOverlaps = strongestRatio >= 0.75 ? [strongest] : overlaps;
-      const fullDisplayText = dialogueDisplayTextForAudioClip(project, clip);
+      const fullDisplayText = dialogDisplayTextForAudioClip(project, clip);
       const textParts = strongestRatio >= 0.75
         ? [fullDisplayText]
         : splitTextByFrameRatios(clip.text, targetOverlaps).map(function(part) {
-            return formatDialogueDisplayText(block && (block.speaker || block.characterName || '') || clip.characterName || '', part);
+            return formatDialogDisplayText(block && (block.speaker || block.characterName || '') || clip.characterName || '', part);
           });
       const syncedCutIds = [];
-      const syncedDialogueTexts = [];
+      const syncedDialogTexts = [];
       targetOverlaps.forEach(function(entry, index) {
         const targetCut = project.cuts[entry.item.group.startIndex];
         if (!targetCut) return;
         ensureCutLinkArrays(targetCut);
         const text = textParts[index] || fullDisplayText || clip.text;
-        if (text && (!targetCut.dialogueText || targetCut.dialogueText.indexOf(text) < 0)) {
-          targetCut.dialogueText = appendLine(targetCut.dialogueText, text);
+        if (text && (!targetCut.dialogText || targetCut.dialogText.indexOf(text) < 0)) {
+          targetCut.dialogText = appendLine(targetCut.dialogText, text);
         }
-        if (sourceBlockId && targetCut.dialogueBlockIds.indexOf(sourceBlockId) < 0) targetCut.dialogueBlockIds.push(sourceBlockId);
+        if (sourceBlockId && targetCut.dialogBlockIds.indexOf(sourceBlockId) < 0) targetCut.dialogBlockIds.push(sourceBlockId);
         if (sourceBlockId && targetCut.sourceBlockIds.indexOf(sourceBlockId) < 0) targetCut.sourceBlockIds.push(sourceBlockId);
         targetCut.meta = targetCut.meta || {};
-        targetCut.meta.audioSyncedDialogue = true;
+        targetCut.meta.audioSyncedDialog = true;
         targetCut.meta.audioClipIds = Array.isArray(targetCut.meta.audioClipIds) ? targetCut.meta.audioClipIds : [];
         addUniqueId(targetCut.meta.audioClipIds, clip.id);
         syncedCutIds.push(targetCut.id);
-        if (text) syncedDialogueTexts.push(text);
+        if (text) syncedDialogTexts.push(text);
       });
       if (block) {
         const targetCut = project.cuts[strongest.item.group.startIndex];
         block.assignedCutId = targetCut ? targetCut.id : '';
-        block.assignedPanelId = targetCut ? 'dialogueText' : '';
+        block.assignedPanelId = targetCut ? 'dialogText' : '';
         if (targetCut) clip.sourceCutId = targetCut.id;
       }
       clip.syncedCutIds = syncedCutIds;
-      clip.syncedDialogueTexts = syncedDialogueTexts;
+      clip.syncedDialogTexts = syncedDialogTexts;
       project.audio.manualTimeline = true;
     }
 
@@ -17190,7 +17190,7 @@
         block.assignedPanelId = '';
       }
       clip.syncedCutIds = [];
-      clip.syncedDialogueTexts = [];
+      clip.syncedDialogTexts = [];
       project.audio.manualTimeline = true;
     }
 
@@ -17227,7 +17227,7 @@
       const videoMediaTracks = videoMediaTimelineTracks(state.project);
       const clipsByTrack = new Map();
       audioClips.forEach(function(clip) {
-        const trackId = clip.trackId || 'dialogue-main';
+        const trackId = clip.trackId || 'dialog-main';
         if (!clipsByTrack.has(trackId)) clipsByTrack.set(trackId, []);
         clipsByTrack.get(trackId).push(clip);
       });
@@ -17696,7 +17696,7 @@
       if (!timeline) return;
       [
         { kind: 'video', button: '[data-video-group-collapse="true"]', track: '[data-video-media-track-id="video-media-main"]' },
-        { kind: 'audio', button: '[data-audio-group-collapse="true"]', track: '[data-audio-track-id="dialogue-main"]' }
+        { kind: 'audio', button: '[data-audio-group-collapse="true"]', track: '[data-audio-track-id="dialog-main"]' }
       ].forEach(function(item) {
         const button = timeline.querySelector(item.button);
         const track = timeline.querySelector(item.track);
@@ -18721,7 +18721,7 @@
     }
 
     function audioTimelineTrackHtml(track, clips, totalFrames, continuationIds) {
-      const locked = track.id === 'dialogue-main';
+      const locked = track.id === 'dialog-main';
       const classes = 'timeline-track audio-track' + (state.timelineAudioTracksCollapsed ? ' timeline-group-collapsed' : '') + (locked ? ' internal-track' : ' external-drop') + (track.muted ? ' audio-muted' : '');
       return '<div class="' + classes + '" data-audio-track-id="' + escapeAttr(track.id) + '">' +
         timelineTrackLabelHtml(track) +
@@ -18768,7 +18768,7 @@
     function timelineTrackLabelHtml(track) {
       const isVideo = track && track.type === 'video';
       const id = track && track.id || '';
-      const label = String(track && track.label || (isVideo ? 'V1' : nextAudioTrackLabel(id))).replace(/\bDialogue\b/g, 'Dialog');
+      const label = String(track && track.label || (isVideo ? 'V1' : nextAudioTrackLabel(id))).replace(/\bDialog\b/g, 'Dialog');
       const off = isVideo ? Boolean(track.hidden) : Boolean(track.muted);
       const title = isVideo ? (off ? 'Show video track' : 'Hide video track') : (off ? 'Unmute audio track' : 'Mute audio track');
       const icon = isVideo ? (off ? '◌' : '◉') : (off ? 'M' : '♪');
@@ -18776,7 +18776,7 @@
       const selected = isVideo
         ? (state.selectedVideoTrackId === id ? ' selected' : '')
         : (state.selectedAudioTrackId === id ? ' selected' : '');
-      const deleteButton = !isVideo && id !== 'dialogue-main' && state.selectedAudioTrackId === id
+      const deleteButton = !isVideo && id !== 'dialog-main' && state.selectedAudioTrackId === id
         ? '<button class="timeline-track-delete" type="button" data-track-delete="' + escapeAttr(id) + '" title="Delete audio track">×</button>'
         : '';
       const videoDeleteButton = isVideo && id !== 'video-main' && id !== 'video-media-main' && state.selectedVideoTrackId === id
@@ -18975,7 +18975,7 @@
     }
 
     function showAudioTrackContextMenu(event, trackId, root) {
-      const id = String(trackId || 'dialogue-main');
+      const id = String(trackId || 'dialog-main');
       const track = timelineTrackById(state.project, id);
       if (!track || track.type !== 'audio') return;
       state.selectedAudioTrackId = id;
@@ -19021,7 +19021,7 @@
           clickEvent.preventDefault();
           clickEvent.stopPropagation();
           hideConteLayerContextMenu();
-          runCommand('Delete dialogue audio', function(project) {
+          runCommand('Delete dialog audio', function(project) {
             deleteAudioClip(project, id);
           });
         });
@@ -19420,7 +19420,7 @@
           analysisChunks: [],
           analysisBytes: 0,
           bytesWritten: 0,
-          trackId: String(trackId || 'dialogue-main'),
+          trackId: String(trackId || 'dialog-main'),
           startFrame: Math.max(0, Math.round(Number(state.videoPlayheadFrames) || 0)),
           startedAt: performance.now(),
           mimeType: actualMime,
@@ -19708,7 +19708,7 @@
           ttsVersion: 0,
           startFrame: Math.max(0, Math.round(Number(session.startFrame) || 0)),
           durationFrames: fallbackFrames,
-          trackId: session.trackId || 'dialogue-main',
+          trackId: session.trackId || 'dialog-main',
           manualTiming: true
         };
         clip.audioDurationFrames = fallbackFrames;
@@ -19716,7 +19716,7 @@
         clip.audioTrimDurationFrames = fallbackFrames;
         clip.durationFrames = fallbackFrames;
         state.project.audio.clips.push(clip);
-        placeAudioClipOnNonOverlappingTrack(state.project, clip, session.trackId || 'dialogue-main');
+        placeAudioClipOnNonOverlappingTrack(state.project, clip, session.trackId || 'dialog-main');
         if (session.storageKind === 'workspace') {
           clip.audioStorage = {
             kind: 'workspace',
@@ -22569,7 +22569,7 @@
               window.removeEventListener('pointercancel', finishTrim);
               const deltaFrames = timelineDragFrameDelta(startX, upEvent.clientX, totalFrames, track);
               if (!deltaFrames) return;
-              runAudioClipEditCommand('Trim dialogue audio', clipId, function(targetClip, project) {
+              runAudioClipEditCommand('Trim dialog audio', clipId, function(targetClip, project) {
                 applyAudioClipTrimDelta(targetClip, trimEdge, originalClip, deltaFrames);
                 placeAudioClipOnNonOverlappingTrack(project, targetClip, targetClip.trackId || originalTrackId);
               }, { syncCuts: false });
@@ -22580,7 +22580,7 @@
             return;
           }
           const originalStart = clip.startFrame;
-          const originalTrackId = clip.trackId || track.dataset.audioTrackId || 'dialogue-main';
+          const originalTrackId = clip.trackId || track.dataset.audioTrackId || 'dialog-main';
           const maxStart = Math.max(0, totalFrames - clip.durationFrames);
           clipEl.classList.add('dragging');
           const movePreviewEl = createAudioDragPreview(track, originalStart, clip.durationFrames, totalFrames);
@@ -22629,7 +22629,7 @@
             const nextStart = clampNumber(snapped.startFrame, 0, maxStart, originalStart);
             if (nextStart === originalStart && targetTrackId === originalTrackId) return;
             // state 변경. skipRender=true로 전체 timeline 재생성 회피.
-            const result = commitAudioClipMoveFast('Move dialogue audio', clipId, nextStart, targetTrackId);
+            const result = commitAudioClipMoveFast('Move dialog audio', clipId, nextStart, targetTrackId);
             if (!result) return;
             if (result.createdTrack) {
               guardedRender('timing', renderTimingDashboard);
@@ -22876,7 +22876,7 @@
       const beforeSelection = captureTimelineSelectionState();
       normalizeAudioClips(state.project);
       const shouldCreateTrack = String(trackId || '') === '__new_audio_track__';
-      const targetTrackId = shouldCreateTrack ? addExternalAudioTrack(state.project) : (trackId || 'dialogue-main');
+      const targetTrackId = shouldCreateTrack ? addExternalAudioTrack(state.project) : (trackId || 'dialog-main');
       const clipId = 'audio-import-' + Date.now().toString(36) + '-' + Math.abs(hashString(file.name || 'audio'));
       const mime = file.type || mimeForAudioFileName(file.name);
       const clip = {
@@ -23163,7 +23163,7 @@
         if (!clip || clip.startFrame > currentFrame + lookAheadFrames) break;
         state.playbackNextClipIndex += 1;
         if (clip.startFrame + clip.durationFrames < previousFrame) continue;
-        speakDialogueClip(clip);
+        speakDialogClip(clip);
       }
     }
 
@@ -23251,7 +23251,7 @@
       }
     }
 
-    function speakDialogueClip(clip) {
+    function speakDialogClip(clip) {
       if (audioClipIsMuted(state.project, clip)) return;
       const audioUrl = clip && state.workspaceObjectUrls.audio[clip.id];
       if (audioUrl) {
@@ -23291,7 +23291,7 @@
         return;
       }
       if (!speechSynthesisAvailable()) return;
-      const utterance = new SpeechSynthesisUtterance(cleanDialogueForSpeech(clip.text, clip.characterName));
+      const utterance = new SpeechSynthesisUtterance(cleanDialogForSpeech(clip.text, clip.characterName));
       utterance.lang = 'ja-JP';
       const voice = findSpeechVoice(profile.voiceURI);
       if (voice) utterance.voice = voice;
@@ -23359,10 +23359,10 @@
       }
       el.classList.remove('video-editor-dashboard');
       const targetFrames = projectTargetFrames(state.project);
-      const dialogueStats = dialogueTimingStats(state.project);
+      const dialogStats = dialogTimingStats(state.project);
       const timeline = timingActualTimeline(state.project, targetFrames);
-      const dialogFrames = timeline.segments.length ? timeline.dialogFrames : dialogueStats.handledFrames;
-      const maFrames = timeline.segments.length ? timeline.maFrames : Math.max(0, targetFrames - dialogueStats.handledFrames);
+      const dialogFrames = timeline.segments.length ? timeline.dialogFrames : dialogStats.handledFrames;
+      const maFrames = timeline.segments.length ? timeline.maFrames : Math.max(0, targetFrames - dialogStats.handledFrames);
       const pageRanges = timingPageRanges(state.project, targetFrames);
       const selectedPosition = state.videoPlaying
         ? timingPlaybackPosition(state.project, targetFrames)
@@ -23462,12 +23462,12 @@
     }
 
     function timingDialogFramesForGroup(project, group, duration) {
-      const dialogue = cutGroupDialogueTiming(project || state.project, group);
+      const dialog = cutGroupDialogTiming(project || state.project, group);
       const owner = project && project.cuts ? project.cuts[group.startIndex] : null;
       const autoTiming = owner && owner.meta && owner.meta.autoTiming ? owner.meta.autoTiming : {};
-      const speechFrames = Math.max(0, Math.round(Number(autoTiming.dialogueFrames) || dialogue.speechFrames || 0));
-      const handledFrames = Math.max(0, Math.round(Number(autoTiming.handledFrames) || dialogue.handledFrames || 0));
-      const units = Math.max(0, Math.round(Number(autoTiming.dialogueUnits) || dialogue.units || 0));
+      const speechFrames = Math.max(0, Math.round(Number(autoTiming.dialogFrames) || dialog.speechFrames || 0));
+      const handledFrames = Math.max(0, Math.round(Number(autoTiming.handledFrames) || dialog.handledFrames || 0));
+      const units = Math.max(0, Math.round(Number(autoTiming.dialogUnits) || dialog.units || 0));
       if (!speechFrames && !units) return 0;
       const total = Math.max(0, Math.round(Number(duration) || 0));
       const explicitMaFrames = Math.max(0, Math.round(Number(autoTiming.maFrames) || 0));
@@ -23629,7 +23629,7 @@
         const start = cursor;
         const end = cursor + duration;
         const pages = uniquePageNumbers(linkedBlocksForCutGroup(project || state.project, group).filter(function(block) {
-          return DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0;
+          return DIALOG_AREA_TYPES.indexOf(block.type) >= 0;
         }));
         pages.forEach(function(pageNo) {
           const current = ranges.get(pageNo) || { pageNo: pageNo, start: start, end: end };
@@ -23669,12 +23669,12 @@
     }
 
 
-    function timingDialoguePages(project) {
+    function timingDialogPages(project) {
       const blocks = getProjectBlocks(project || state.project);
-      const dialoguePages = uniquePageNumbers(blocks.filter(function(block) {
-        return DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0;
+      const dialogPages = uniquePageNumbers(blocks.filter(function(block) {
+        return DIALOG_AREA_TYPES.indexOf(block.type) >= 0;
       }));
-      return dialoguePages.length ? dialoguePages : uniquePageNumbers(blocks);
+      return dialogPages.length ? dialogPages : uniquePageNumbers(blocks);
     }
 
     function uniquePageNumbers(blocks) {
@@ -23691,25 +23691,25 @@
     }
 
 
-    function dialogueAutoTimingFramesForText(text) {
-      const moraFrames = estimateDialogueMora(text) * DIALOGUE_FRAMES_PER_MORA + DIALOGUE_HANDLE_FRAMES * 2;
-      const voicevoxFrames = voicevoxTargetFramesForText(text) + DIALOGUE_AUDIO_SAFETY_FRAMES;
+    function dialogAutoTimingFramesForText(text) {
+      const moraFrames = estimateDialogMora(text) * DIALOG_FRAMES_PER_MORA + DIALOG_HANDLE_FRAMES * 2;
+      const voicevoxFrames = voicevoxTargetFramesForText(text) + DIALOG_AUDIO_SAFETY_FRAMES;
       const minimum = Math.max(moraFrames, voicevoxFrames);
       return roundFramesToTimingUnitAtLeast(minimum, minimum);
     }
 
-    function dialogueTimingStats(project) {
+    function dialogTimingStats(project) {
       const blocks = getProjectBlocks(project || state.project).filter(function(block) {
-        return DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0;
+        return DIALOG_AREA_TYPES.indexOf(block.type) >= 0;
       });
-      const units = blocks.length ? blocks.map(function(block) { return block.text || block.rawText || ''; }) : fallbackDialogueUnitsFromCuts(project || state.project);
+      const units = blocks.length ? blocks.map(function(block) { return block.text || block.rawText || ''; }) : fallbackDialogUnitsFromCuts(project || state.project);
       let mora = 0;
       let handledFrames = 0;
       units.forEach(function(text) {
-        mora += estimateDialogueMora(text);
-        handledFrames += dialogueAutoTimingFramesForText(text);
+        mora += estimateDialogMora(text);
+        handledFrames += dialogAutoTimingFramesForText(text);
       });
-      const speechFrames = mora * DIALOGUE_FRAMES_PER_MORA;
+      const speechFrames = mora * DIALOG_FRAMES_PER_MORA;
       return {
         units: units.length,
         mora: mora,
@@ -23718,11 +23718,11 @@
       };
     }
 
-    function fallbackDialogueUnitsFromCuts(project) {
+    function fallbackDialogUnitsFromCuts(project) {
       if (!project || !Array.isArray(project.cuts)) return [];
       const units = [];
       project.cuts.forEach(function(cut) {
-        String(cut && cut.dialogueText || '').split(/\n+/).forEach(function(line) {
+        String(cut && cut.dialogText || '').split(/\n+/).forEach(function(line) {
           const text = line.trim();
           if (text) units.push(text);
         });
@@ -23730,8 +23730,8 @@
       return units;
     }
 
-    function estimateDialogueMora(value) {
-      const text = cleanDialogueTextForTiming(value);
+    function estimateDialogMora(value) {
+      const text = cleanDialogTextForTiming(value);
       const kana = (text.match(/[ぁ-ゖァ-ヺー]/g) || []).length;
       const kanji = (text.match(/[一-龯々〆ヵヶ]/g) || []).length;
       const latinWords = (text.match(/[A-Za-z0-9]+/g) || []).reduce(function(sum, word) {
@@ -23740,7 +23740,7 @@
       return Math.max(0, kana + kanji * 2 + latinWords);
     }
 
-    function cleanDialogueTextForTiming(value) {
+    function cleanDialogTextForTiming(value) {
       return String(value || '')
         .normalize('NFKC')
         .replace(/(^|\n)[^「『\n]{1,24}[「『]/g, '$1')
@@ -23776,14 +23776,14 @@
       if (!groups.length) return;
       const targetFrames = projectTargetFrames(project);
       const timingGroups = groups.map(function(group, index) {
-        const dialogue = cutGroupDialogueTiming(project, group);
+        const dialog = cutGroupDialogTiming(project, group);
         const ma = includeMa && isMaTimingCandidate(project, group, index, groups);
         const audioMinimumFrames = audioMinimumFramesForCutGroup(project, group);
-        const baseMinimum = Math.max(dialogue.handledFrames || 0, audioMinimumFrames);
+        const baseMinimum = Math.max(dialog.handledFrames || 0, audioMinimumFrames);
         const baseFrames = roundFramesToTimingUnitAtLeast(baseMinimum, baseMinimum);
         const actionChars = actionCharLengthForGroup(project, group);
         return Object.assign({}, group, {
-          dialogue: dialogue,
+          dialog: dialog,
           baseFrames: baseFrames,
           audioMinimumFrames: audioMinimumFrames,
           actionChars: actionChars,
@@ -23803,10 +23803,10 @@
         const owner = project.cuts[group.startIndex];
         owner.meta = owner.meta || {};
         owner.meta.autoTiming = {
-          dialogueFrames: group.dialogue.speechFrames,
-          handledFrames: group.dialogue.handledFrames || 0,
+          dialogFrames: group.dialog.speechFrames,
+          handledFrames: group.dialog.handledFrames || 0,
           audioMinimumFrames: group.audioMinimumFrames || 0,
-          dialogueUnits: group.dialogue.units,
+          dialogUnits: group.dialog.units,
           maFrames: group.maFrames || 0,
           actionChars: group.actionChars || 0,
           includeMa: includeMa
@@ -23863,7 +23863,7 @@
       });
       if (!clips.length) return 0;
       return clips.reduce(function(sum, clip) {
-        return sum + audioClipMinimumVisibleFrames(clip) + DIALOGUE_AUDIO_SAFETY_FRAMES;
+        return sum + audioClipMinimumVisibleFrames(clip) + DIALOG_AUDIO_SAFETY_FRAMES;
       }, 0);
     }
 
@@ -23905,11 +23905,11 @@
       return group.cuts.some(function(cut) {
         return String(cut.cutNo || '').trim() ||
           String(cut.actionText || '').trim() ||
-          String(cut.dialogueText || '').trim() ||
+          String(cut.dialogText || '').trim() ||
           cut.meta && cut.meta.videoMedia ||
           hasArrayItems(cut.sourceBlockIds) ||
           hasArrayItems(cut.pictureTextBlockIds) ||
-          hasArrayItems(cut.dialogueBlockIds) ||
+          hasArrayItems(cut.dialogBlockIds) ||
           hasArrayItems(cut.memoBlockIds);
       });
     }
@@ -23918,26 +23918,26 @@
       return /^(OP|ED|CM|END)$/i.test(String(group && group.cutNo || '').trim());
     }
 
-    function cutGroupDialogueTiming(project, group) {
+    function cutGroupDialogTiming(project, group) {
       const units = linkedBlocksForCutGroup(project, group).filter(function(block) {
-        return DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0;
+        return DIALOG_AREA_TYPES.indexOf(block.type) >= 0;
       }).map(function(block) {
         return block.text || block.rawText || '';
       });
       if (!units.length) {
         group.cuts.forEach(function(cut) {
-          String(cut.dialogueText || '').split(/\n+/).forEach(function(line) {
+          String(cut.dialogText || '').split(/\n+/).forEach(function(line) {
             const text = line.trim();
             if (text) units.push(text);
           });
         });
       }
-      const mora = units.reduce(function(sum, text) { return sum + estimateDialogueMora(text); }, 0);
-      const handledFrames = units.reduce(function(sum, text) { return sum + dialogueAutoTimingFramesForText(text); }, 0);
+      const mora = units.reduce(function(sum, text) { return sum + estimateDialogMora(text); }, 0);
+      const handledFrames = units.reduce(function(sum, text) { return sum + dialogAutoTimingFramesForText(text); }, 0);
       return {
         units: units.length,
         mora: mora,
-        speechFrames: mora * DIALOGUE_FRAMES_PER_MORA,
+        speechFrames: mora * DIALOG_FRAMES_PER_MORA,
         handledFrames: handledFrames
       };
     }
@@ -23945,7 +23945,7 @@
     function linkedBlocksForCutGroup(project, group) {
       const ids = [];
       group.cuts.forEach(function(cut) {
-        ['sourceBlockIds', 'pictureTextBlockIds', 'dialogueBlockIds', 'memoBlockIds'].forEach(function(key) {
+        ['sourceBlockIds', 'pictureTextBlockIds', 'dialogBlockIds', 'memoBlockIds'].forEach(function(key) {
           (cut[key] || []).forEach(function(id) {
             if (ids.indexOf(id) < 0) ids.push(id);
           });
@@ -23954,11 +23954,11 @@
       return ids.map(function(id) { return findBlockById(project, id); }).filter(Boolean);
     }
 
-    function groupHasDialogue(project, group) {
-      return Boolean(group && cutGroupDialogueTiming(project, group).units);
+    function groupHasDialog(project, group) {
+      return Boolean(group && cutGroupDialogTiming(project, group).units);
     }
 
-    function dialogueSpeakersForGroup(project, group) {
+    function dialogSpeakersForGroup(project, group) {
       const speakers = [];
       const addSpeaker = function(value) {
         const name = scenarioNormalizeSpeakerName(value || '').name || String(value || '').trim();
@@ -23966,32 +23966,32 @@
         if (key && speakers.indexOf(key) < 0) speakers.push(key);
       };
       linkedBlocksForCutGroup(project, group).forEach(function(block) {
-        if (!block || DIALOGUE_AREA_TYPES.indexOf(block.type) < 0) return;
-        addSpeaker(block.characterName || block.speaker || inferDialogueSpeakerFromLine(block.rawText || block.text || ''));
+        if (!block || DIALOG_AREA_TYPES.indexOf(block.type) < 0) return;
+        addSpeaker(block.characterName || block.speaker || inferDialogSpeakerFromLine(block.rawText || block.text || ''));
       });
       if (!speakers.length) {
         group.cuts.forEach(function(cut) {
-          String(cut.dialogueText || '').split(/\n+/).forEach(function(line) {
-            addSpeaker(inferDialogueSpeakerFromLine(line));
+          String(cut.dialogText || '').split(/\n+/).forEach(function(line) {
+            addSpeaker(inferDialogSpeakerFromLine(line));
           });
         });
       }
       return speakers;
     }
 
-    function primaryDialogueSpeakerForGroup(project, group) {
-      const speakers = dialogueSpeakersForGroup(project, group);
+    function primaryDialogSpeakerForGroup(project, group) {
+      const speakers = dialogSpeakersForGroup(project, group);
       return speakers.length ? speakers[0] : '';
     }
 
-    function groupHasDialogueSpeakerChange(project, group, index, groups) {
-      const ownSpeakers = dialogueSpeakersForGroup(project, group);
+    function groupHasDialogSpeakerChange(project, group, index, groups) {
+      const ownSpeakers = dialogSpeakersForGroup(project, group);
       if (ownSpeakers.length > 1) return true;
       const current = ownSpeakers[0] || '';
       const previous = groups[index - 1];
       const next = groups[index + 1];
-      const previousSpeaker = previous ? primaryDialogueSpeakerForGroup(project, previous) : '';
-      const nextSpeaker = next ? primaryDialogueSpeakerForGroup(project, next) : '';
+      const previousSpeaker = previous ? primaryDialogSpeakerForGroup(project, previous) : '';
+      const nextSpeaker = next ? primaryDialogSpeakerForGroup(project, next) : '';
       if (current && previousSpeaker && current !== previousSpeaker) return true;
       if (current && nextSpeaker && current !== nextSpeaker) return true;
       if (!current && previousSpeaker && nextSpeaker && previousSpeaker !== nextSpeaker) return true;
@@ -24012,20 +24012,20 @@
       if (nextLocation && currentLocation && nextLocation !== currentLocation) return true;
       if (previous && previous.cutNo && /^(○|●|■|□|△|▲|#|SC|S#|CUT|C#)/i.test(action.normalize('NFKC'))) return true;
       const signals = actionContextSignals(project, group);
-      if (groupHasDialogue(project, group)) {
+      if (groupHasDialog(project, group)) {
         if (signals.overlap && !signals.emotion) return false;
         if (signals.sceneExpansion || signals.emotion) return true;
-        return !groupHasDialogueSpeakerChange(project, group, index, groups);
+        return !groupHasDialogSpeakerChange(project, group, index, groups);
       }
-      const previousDialogue = groupHasDialogue(project, previous);
-      const nextDialogue = groupHasDialogue(project, next);
-      const previousSpeaker = previous ? primaryDialogueSpeakerForGroup(project, previous) : '';
-      const nextSpeaker = next ? primaryDialogueSpeakerForGroup(project, next) : '';
-      const sameDialogueRally = previousDialogue && nextDialogue &&
+      const previousDialog = groupHasDialog(project, previous);
+      const nextDialog = groupHasDialog(project, next);
+      const previousSpeaker = previous ? primaryDialogSpeakerForGroup(project, previous) : '';
+      const nextSpeaker = next ? primaryDialogSpeakerForGroup(project, next) : '';
+      const sameDialogRally = previousDialog && nextDialog &&
         previousSpeaker && nextSpeaker && previousSpeaker !== nextSpeaker &&
         (!previousLocation || !currentLocation || previousLocation === currentLocation) &&
         (!nextLocation || !currentLocation || nextLocation === currentLocation);
-      return !sameDialogueRally;
+      return !sameDialogRally;
     }
 
     function groupLocationName(project, group) {
@@ -24500,7 +24500,7 @@
         return [
           clip.id || '',
           clip.characterName || '',
-          dialogueTagLabel(clip.dialogueTags || clip.dialogueMode || ''),
+          dialogTagLabel(clip.dialogTags || clip.dialogMode || ''),
           clip.text || ''
         ].join(':');
       }).join(',');
@@ -25415,11 +25415,11 @@
       return (activeClips || []).filter(function(clip) {
         return clip && String(clip.text || '').trim();
       }).map(function(clip) {
-        const name = clip.characterName || 'Dialogue';
+        const name = clip.characterName || 'Dialog';
         const key = scenarioMetaKey(name) || name;
         if (seen.has(key)) return '';
         seen.add(key);
-        const mode = dialogueTagLabel(clip.dialogueTags || clip.dialogueMode || '');
+        const mode = dialogTagLabel(clip.dialogTags || clip.dialogMode || '');
         return '<div class="preview-tag preview-character-tag" style="--speaker-color:' + escapeAttr(audioClipColor(name)) + '">' +
           '<span class="preview-character-swatch" aria-hidden="true"></span>' +
           '<span class="preview-tag-text">' + escapeHtml(name) + '</span>' +
@@ -25551,14 +25551,14 @@
 
     function fallbackSpeakerClipsForSlot(slot) {
       if (!slot || !slot.group) return [];
-      return dialogueUnitsForCutGroup(state.project, slot.group).slice(0, 3).map(function(unit) {
+      return dialogUnitsForCutGroup(state.project, slot.group).slice(0, 3).map(function(unit) {
         return {
           id: unit.id,
           characterName: unit.characterName || '',
           characterGender: unit.characterGender || '',
           characterAge: unit.characterAge || '',
-          dialogueTags: normalizeDialogueTags(unit.dialogueTags || unit.dialogueMode || ''),
-          dialogueMode: normalizeDialogueTags(unit.dialogueTags || unit.dialogueMode || '')[0] || '',
+          dialogTags: normalizeDialogTags(unit.dialogTags || unit.dialogMode || ''),
+          dialogMode: normalizeDialogTags(unit.dialogTags || unit.dialogMode || '')[0] || '',
           text: unit.text
         };
       });
@@ -25567,9 +25567,9 @@
     function speakerPreviewHtml(speakers, activeClips) {
       const activeIds = new Set((activeClips || []).map(function(clip) { return clip.id; }));
       return '<div class="speaker-preview-stack video-preview-camera-target">' + speakers.slice(0, 4).map(function(clip) {
-        const name = clip.characterName || 'Dialogue';
+        const name = clip.characterName || 'Dialog';
         const speaking = activeIds.has(clip.id) || state.activeSpeechClipId === clip.id;
-        const mode = dialogueTagLabel(clip.dialogueTags || clip.dialogueMode || '');
+        const mode = dialogTagLabel(clip.dialogTags || clip.dialogMode || '');
         return '<div class="speaker-orb' + (speaking ? ' speaking' : '') + '" style="--speaker-color:' + audioClipColor(name) + '">' +
           (mode ? '<span class="speaker-mode-label">' + escapeHtml(mode) + '</span>' : '') +
           '<span>' + escapeHtml(name) + '</span></div>';
@@ -26213,19 +26213,19 @@
       makeFieldDropTarget(actionCell, cut, 'actionText');
       bodyEl.appendChild(actionCell);
 
-      const dialogueCell = createCell('content-cell dialogue-cell', cut.dialogueText);
-      dialogueCell.style.gridColumn = '4';
-      dialogueCell.style.gridRow = gridRow;
-      dialogueCell.dataset.cutId = cut.id;
-      dialogueCell.dataset.field = 'dialogueText';
+      const dialogCell = createCell('content-cell dialog-cell', cut.dialogText);
+      dialogCell.style.gridColumn = '4';
+      dialogCell.style.gridRow = gridRow;
+      dialogCell.dataset.cutId = cut.id;
+      dialogCell.dataset.field = 'dialogText';
       if (cameraWorkLayout) {
-        dialogueCell.classList.add('camera-work-text-cell');
-        dialogueCell.style.setProperty('--camera-work-text-top', cameraWorkLayout.textTop);
+        dialogCell.classList.add('camera-work-text-cell');
+        dialogCell.style.setProperty('--camera-work-text-top', cameraWorkLayout.textTop);
       }
-      if (isLastRow) dialogueCell.classList.add('last-row');
-      if (selected) dialogueCell.classList.add('selected-cell');
-      makeFieldDropTarget(dialogueCell, cut, 'dialogueText');
-      bodyEl.appendChild(dialogueCell);
+      if (isLastRow) dialogCell.classList.add('last-row');
+      if (selected) dialogCell.classList.add('selected-cell');
+      makeFieldDropTarget(dialogCell, cut, 'dialogText');
+      bodyEl.appendChild(dialogCell);
 
       const durationSource = durationSourceCutForSlot(cut);
       const timeCell = createCell('time-cell', '');
@@ -26789,11 +26789,11 @@
         cut.meta && cut.meta.videoMedia ||
         cutHasVideoMedia(state.project, cut.id) ||
         String(cut.actionText || '').trim() ||
-        String(cut.dialogueText || '').trim() ||
+        String(cut.dialogText || '').trim() ||
         hasUserFixedPictureFrame(cut) ||
         hasArrayItems(cut.sourceBlockIds) ||
         hasArrayItems(cut.pictureTextBlockIds) ||
-        hasArrayItems(cut.dialogueBlockIds) ||
+        hasArrayItems(cut.dialogBlockIds) ||
         hasArrayItems(cut.memoBlockIds)
       ));
     }
@@ -26806,13 +26806,13 @@
       return Boolean(cut && !String(cut.cutNo || '').trim() && !cut.inheritedCutNoHidden && !hasMovableCutSlotContent(cut));
     }
 
-    function hasCutMoveActionDialogueContent(cut) {
+    function hasCutMoveActionDialogContent(cut) {
       return Boolean(cut && (
         String(cut.actionText || '').trim() ||
-        String(cut.dialogueText || '').trim() ||
+        String(cut.dialogText || '').trim() ||
         hasArrayItems(cut.sourceBlockIds) ||
         hasArrayItems(cut.pictureTextBlockIds) ||
-        hasArrayItems(cut.dialogueBlockIds) ||
+        hasArrayItems(cut.dialogBlockIds) ||
         hasArrayItems(cut.memoBlockIds)
       ));
     }
@@ -26820,7 +26820,7 @@
     function isClearCutMoveSlotForUp(project, index) {
       if (!project || index < 0 || index >= project.cuts.length) return false;
       const cut = project.cuts[index];
-      return Boolean(cut && !String(cut.cutNo || '').trim() && !hasCutMoveActionDialogueContent(cut));
+      return Boolean(cut && !String(cut.cutNo || '').trim() && !hasCutMoveActionDialogContent(cut));
     }
 
     function cutMoveRangeFrameSpan(project, startIndex, endIndex) {
@@ -27422,7 +27422,7 @@
     function renderCharacterView(listEl, blocks) {
       const characters = collectCharacterStats(blocks);
       if (!characters.length) {
-        listEl.innerHTML = '<div class="empty-state">No character dialogue metadata yet.</div>';
+        listEl.innerHTML = '<div class="empty-state">No character dialog metadata yet.</div>';
         return;
       }
       ensureVoiceProfilesForCharacters(state.project, characters);
@@ -27432,7 +27432,7 @@
         const gender = normalizeGenderUi(profile.gender || item.gender);
         const cacheLabel = voiceCacheLabels.get(scenarioMetaKey(item.name)) || '音声: 生成待ち 0 / 生成済 0';
         return '<details class="summary-card" ' + (index < 4 ? 'open' : '') + '>' +
-          '<summary><button type="button" class="summary-icon ' + genderIconClass(gender) + '" data-character-gender-cycle="' + escapeAttr(item.name) + '" data-current-gender="' + escapeAttr(gender) + '" title="Gender: ' + escapeAttr(genderLabel(gender)) + '">' + genderIcon(gender) + '</button><span class="summary-main"><span class="summary-name">' + escapeHtml(item.name) + '</span><span class="summary-meta"><span class="summary-count">台詞束 ' + item.dialogues + '</span><span class="summary-count">' + escapeHtml(pageListLabel(item.pages)) + '</span></span></span></summary>' +
+          '<summary><button type="button" class="summary-icon ' + genderIconClass(gender) + '" data-character-gender-cycle="' + escapeAttr(item.name) + '" data-current-gender="' + escapeAttr(gender) + '" title="Gender: ' + escapeAttr(genderLabel(gender)) + '">' + genderIcon(gender) + '</button><span class="summary-main"><span class="summary-name">' + escapeHtml(item.name) + '</span><span class="summary-meta"><span class="summary-count">台詞束 ' + item.dialogs + '</span><span class="summary-count">' + escapeHtml(pageListLabel(item.pages)) + '</span></span></span></summary>' +
           '<div class="summary-body">' +
             '<div class="voice-control-grid">' +
               '<div class="summary-control-row"><span>Gender</span><span>' + escapeHtml(genderLabel(gender)) + '</span></div>' +
@@ -27458,7 +27458,7 @@
       listEl.innerHTML = '<div class="summary-list">' + locations.map(function(item, index) {
         const time = item.timeOfDay || 'unknown';
         return '<details class="summary-card" ' + (index < 4 ? 'open' : '') + '>' +
-          '<summary><span class="summary-icon ' + timeIconClass(time) + '">' + timeIcon(time) + '</span><span class="summary-main"><span class="summary-name">' + escapeHtml(item.name) + '</span><span class="summary-meta"><span class="summary-count">シーン ' + item.scenes + '</span><span class="summary-count">台詞束 ' + item.dialogues + '</span><span class="summary-count">' + escapeHtml(pageListLabel(item.pages)) + '</span></span></span></summary>' +
+          '<summary><span class="summary-icon ' + timeIconClass(time) + '">' + timeIcon(time) + '</span><span class="summary-main"><span class="summary-name">' + escapeHtml(item.name) + '</span><span class="summary-meta"><span class="summary-count">シーン ' + item.scenes + '</span><span class="summary-count">台詞束 ' + item.dialogs + '</span><span class="summary-count">' + escapeHtml(pageListLabel(item.pages)) + '</span></span></span></summary>' +
           '<div class="summary-body">' +
             '<div class="summary-control-row"><span>Time</span><select data-location-time="' + escapeAttr(item.name) + '">' + renderTimeOptions(item.timeOfDay) + '</select></div>' +
           '</div>' +
@@ -27469,16 +27469,16 @@
     function collectCharacterStats(blocks) {
       const map = new Map();
       blocks.forEach(function(block) {
-        if (DIALOGUE_AREA_TYPES.indexOf(block.type) < 0) return;
+        if (DIALOG_AREA_TYPES.indexOf(block.type) < 0) return;
         const name = block.characterName || scenarioNormalizeSpeakerName(block.speaker || '').name;
         if (!name) return;
         if (!map.has(name)) {
-          map.set(name, { name: name, gender: '', age: '', dialogues: 0, pages: new Set() });
+          map.set(name, { name: name, gender: '', age: '', dialogs: 0, pages: new Set() });
         }
         const item = map.get(name);
         if (!item.gender) item.gender = block.characterGender || scenarioInferGenderFromText(name);
         if (!item.age) item.age = scenarioInferAgeFromText((block.rawText || block.text || '') + ' ' + name);
-        item.dialogues += 1;
+        item.dialogs += 1;
         const pageNo = Number(block.pageNo);
         item.pages.add(Number.isFinite(pageNo) ? pageNo : 1);
       });
@@ -27490,9 +27490,9 @@
         if (!item.age) item.age = scenarioInferAgeFromText((block.rawText || block.text || '') + ' ' + name);
       });
       return Array.from(map.values())
-        .filter(function(item) { return item.dialogues > 0; })
+        .filter(function(item) { return item.dialogs > 0; })
         .sort(function(left, right) {
-          return (right.dialogues - left.dialogues) || left.name.localeCompare(right.name);
+          return (right.dialogs - left.dialogs) || left.name.localeCompare(right.name);
         });
     }
 
@@ -27508,13 +27508,13 @@
         }
         if (!name || scenarioIsNonLocationMarkerLine(name)) return;
         if (!map.has(name)) {
-          map.set(name, { name: name, timeOfDay: '', scenes: 0, blocks: 0, dialogues: 0, pages: new Set() });
+          map.set(name, { name: name, timeOfDay: '', scenes: 0, blocks: 0, dialogs: 0, pages: new Set() });
         }
         const item = map.get(name);
         if (!item.timeOfDay) item.timeOfDay = timeOfDay;
         item.blocks += 1;
         if (block.type === 'scene_heading') item.scenes += 1;
-        if (DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0) item.dialogues += 1;
+        if (DIALOG_AREA_TYPES.indexOf(block.type) >= 0) item.dialogs += 1;
         const pageNo = Number(block.pageNo);
         item.pages.add(Number.isFinite(pageNo) ? pageNo : 1);
       });
@@ -27678,7 +27678,7 @@
     }
 
     function buildCharacterVoiceCacheLabels(characters) {
-      ensureDialogueAudioCandidateClips(state.project);
+      ensureDialogAudioCandidateClips(state.project);
       const statsByKey = new Map();
       (characters || []).forEach(function(item) {
         statsByKey.set(scenarioMetaKey(item.name), { cached: 0, pending: 0, empty: 0 });
@@ -28016,7 +28016,7 @@
     function characterSpeechSample(project, name) {
       const normalized = scenarioMetaKey(name);
       const block = getProjectBlocks(project).find(function(item) {
-        if (DIALOGUE_AREA_TYPES.indexOf(item.type) < 0) return false;
+        if (DIALOG_AREA_TYPES.indexOf(item.type) < 0) return false;
         const blockName = item.characterName || scenarioNormalizeSpeakerName(item.speaker || '').name;
         return scenarioMetaKey(blockName) === normalized;
       });
@@ -28056,8 +28056,8 @@
       return query;
     }
 
-    function dialogueAudioEffectSettings(clipOrTags) {
-      const tags = normalizeDialogueTags(clipOrTags && clipOrTags.dialogueTags || clipOrTags && clipOrTags.dialogueMode || clipOrTags || '');
+    function dialogAudioEffectSettings(clipOrTags) {
+      const tags = normalizeDialogTags(clipOrTags && clipOrTags.dialogTags || clipOrTags && clipOrTags.dialogMode || clipOrTags || '');
       const off = tags.indexOf('off') >= 0;
       const monologue = tags.indexOf('monologue') >= 0;
       const flashback = tags.indexOf('flashback') >= 0;
@@ -28074,9 +28074,9 @@
       };
     }
 
-    function applyVoicevoxDialogueTagEffects(query, clipOrTags) {
+    function applyVoicevoxDialogTagEffects(query, clipOrTags) {
       if (!query) return query;
-      const effect = dialogueAudioEffectSettings(clipOrTags);
+      const effect = dialogAudioEffectSettings(clipOrTags);
       if (effect.tags.indexOf('off') >= 0) {
         query.volumeScale = Math.max(0, Math.min(2, (Number(query.volumeScale) || 1) * 0.68));
         query.outputStereo = true;
@@ -28102,7 +28102,7 @@
     }
 
     function voicevoxTargetFramesForText(text) {
-      const moraFrames = estimateDialogueMora(text) * DIALOGUE_FRAMES_PER_MORA;
+      const moraFrames = estimateDialogMora(text) * DIALOG_FRAMES_PER_MORA;
       const handleFrames = 3 * 2;
       const pauseFrames = voicevoxPunctuationPauseCount(text) * 6;
       return Math.max(12, moraFrames + handleFrames + pauseFrames);
@@ -28133,15 +28133,15 @@
     }
 
     function voicevoxTargetFramesForQuery(query, text) {
-      const mora = voicevoxQueryMoraCount(query) || estimateDialogueMora(text);
-      return Math.max(12, mora * DIALOGUE_FRAMES_PER_MORA + 6 + voicevoxPunctuationPauseCount(text) * 6);
+      const mora = voicevoxQueryMoraCount(query) || estimateDialogMora(text);
+      return Math.max(12, mora * DIALOG_FRAMES_PER_MORA + 6 + voicevoxPunctuationPauseCount(text) * 6);
     }
 
     function voicevoxCharacterRateFactor(profile) {
       return Math.max(0.95, Math.min(1.05, Number(profile && profile.rate) || 1));
     }
 
-    function tuneVoicevoxQueryForDialogue(query, text, profile) {
+    function tuneVoicevoxQueryForDialog(query, text, profile) {
       if (!query) return query;
       const fps = fpsForProject(state.project);
       const pauseSeconds = 6 / fps;
@@ -28200,15 +28200,15 @@
     async function synthesizeVoicevoxBlob(text, profile, clip) {
       const endpoint = voicevoxEndpoint(state.project);
       const speakerId = encodeURIComponent(String(profile && profile.voicevoxSpeakerId || '3'));
-      const bodyText = normalizeVoicevoxSpeechText(cleanDialogueForSpeech(text || '', profile && profile.name || ''));
+      const bodyText = normalizeVoicevoxSpeechText(cleanDialogForSpeech(text || '', profile && profile.name || ''));
       if (!bodyText.trim()) throw new Error('No speech text.');
       const queryResult = await fetchVoicevox('/audio_query?text=' + encodeURIComponent(bodyText) + '&speaker=' + speakerId, {
         method: 'POST'
       });
       const queryResponse = queryResult.response;
       if (!queryResponse.ok) throw new Error('audio_query HTTP ' + queryResponse.status);
-      const query = applyVoicevoxDialogueTagEffects(
-        tuneVoicevoxQueryForDialogue(voicevoxQueryFromProfile(await queryResponse.json(), profile || {}), bodyText, profile || {}),
+      const query = applyVoicevoxDialogTagEffects(
+        tuneVoicevoxQueryForDialog(voicevoxQueryFromProfile(await queryResponse.json(), profile || {}), bodyText, profile || {}),
         clip
       );
       const synthesisResult = await fetchVoicevox('/synthesis?speaker=' + speakerId, {
@@ -28239,7 +28239,7 @@
 
     function playHtmlAudioUrlForClip(clip, audioUrl) {
       const audio = new Audio(audioUrl);
-      audio.volume = Math.max(0, Math.min(1, dialogueAudioEffectSettings(clip).volume));
+      audio.volume = Math.max(0, Math.min(1, dialogAudioEffectSettings(clip).volume));
       const fps = fpsForProject(state.project);
       const trimStart = clipAudioTrimStartSeconds(clip, fps);
       const trimDuration = clipAudioTrimDurationSeconds(clip, fps);
@@ -28370,7 +28370,7 @@
     }
 
     function connectAudioSourceForClip(source, ctx, clip) {
-      const effect = dialogueAudioEffectSettings(clip);
+      const effect = dialogAudioEffectSettings(clip);
       const gain = ctx.createGain();
       gain.gain.value = effect.volume;
       source.connect(gain);
@@ -28723,7 +28723,7 @@
           clip.meta.audioAnalysisWarning = error && error.message ? error.message : String(error);
         });
         ensureCutDurationsForAudioClips(state.project, [clip]);
-        placeAudioClipOnNonOverlappingTrack(state.project, clip, clip.trackId || 'dialogue-main');
+        placeAudioClipOnNonOverlappingTrack(state.project, clip, clip.trackId || 'dialog-main');
         sortAudioClips(state.project);
         clip.ttsProvider = 'voicevox';
         clip.ttsText = bodyText;
@@ -28732,7 +28732,7 @@
         clip.ttsRate = Number(profile.rate) || 1;
         clip.ttsPitch = Number(profile.pitch) || 1;
         clip.ttsTargetFrames = voicevoxTargetFramesForText(bodyText);
-        clip.ttsEffect = dialogueAudioEffectSettings(clip).signature;
+        clip.ttsEffect = dialogAudioEffectSettings(clip).signature;
         return state.workspaceObjectUrls.audio[clip.id] || '';
       } finally {
         state.ttsPendingClipIds.delete(clip.id);
@@ -28740,7 +28740,7 @@
     }
 
     function voicevoxClipSpeechText(clip, profile) {
-      return normalizeVoicevoxSpeechText(cleanDialogueForSpeech(clip && clip.text || '', profile && profile.name || clip && clip.characterName || '')).trim();
+      return normalizeVoicevoxSpeechText(cleanDialogForSpeech(clip && clip.text || '', profile && profile.name || clip && clip.characterName || '')).trim();
     }
 
     function voicevoxClipAudioIsStale(clip, bodyText) {
@@ -28755,7 +28755,7 @@
         String(clip.ttsSpeakerId || '') !== String(profile.voicevoxSpeakerId || '3') ||
         Math.abs((Number(clip.ttsRate) || 0) - (Number(profile.rate) || 1)) > 0.001 ||
         Math.abs((Number(clip.ttsPitch) || 0) - (Number(profile.pitch) || 1)) > 0.001 ||
-        String(clip.ttsEffect || '') !== dialogueAudioEffectSettings(clip).signature;
+        String(clip.ttsEffect || '') !== dialogAudioEffectSettings(clip).signature;
     }
 
     function voicevoxClipNeedsAudioAnalysis(clip) {
@@ -28797,7 +28797,7 @@
     }
 
     function voicevoxGenerationStats() {
-      ensureDialogueAudioCandidateClips(state.project);
+      ensureDialogAudioCandidateClips(state.project);
       const stats = { total: 0, readable: 0, generated: 0, cached: 0, pending: 0, stale: 0, empty: 0 };
       (state.project.audio && state.project.audio.clips || []).forEach(function(clip) {
         const profile = characterVoiceProfile(state.project, clip.characterName || 'Unknown', {
@@ -28863,7 +28863,7 @@
     }
 
     function clearAllVoicevoxTimelineAudio(project) {
-      ensureDialogueAudioCandidateClips(project);
+      ensureDialogAudioCandidateClips(project);
       let cleared = 0;
       (project.audio && project.audio.clips || []).forEach(function(clip) {
         const profile = characterVoiceProfile(project, clip.characterName || 'Unknown', {
@@ -28893,7 +28893,7 @@
       options = options || {};
       if (state.voicevoxGenerating) return;
       if (!await ensureWorkspaceForVoicevoxGeneration()) return;
-      ensureDialogueAudioCandidateClips(state.project);
+      ensureDialogAudioCandidateClips(state.project);
       await persistUnsavedGeneratedAudioClips(state.project);
       await hydrateWorkspaceAudioRefs(state.project);
       const stats = voicevoxGenerationStats();
@@ -28981,7 +28981,7 @@
     async function regenerateAllVoicevoxTimelineAudio() {
       if (state.voicevoxGenerating) return;
       if (!await ensureWorkspaceForVoicevoxGeneration()) return;
-      ensureDialogueAudioCandidateClips(state.project);
+      ensureDialogAudioCandidateClips(state.project);
       await hydrateWorkspaceAudioRefs(state.project);
       const stats = voicevoxGenerationStats();
       if (!confirmVoicevoxGeneration('regenerate', Object.assign({}, stats, { pending: stats.readable }))) return;
@@ -29082,7 +29082,7 @@
       const normalized = scenarioMetaKey(name);
       const nextGender = normalizeGenderUi(gender);
       getProjectBlocks(project).forEach(function(block) {
-        const blockName = block.characterName || (DIALOGUE_AREA_TYPES.indexOf(block.type) >= 0 ? scenarioNormalizeSpeakerName(block.speaker || '').name : '');
+        const blockName = block.characterName || (DIALOG_AREA_TYPES.indexOf(block.type) >= 0 ? scenarioNormalizeSpeakerName(block.speaker || '').name : '');
         if (scenarioMetaKey(blockName) !== normalized) return;
         block.characterName = blockName || name;
         block.characterGender = nextGender;
@@ -29312,7 +29312,7 @@
     }
 
     function createBoardBlock(text, fieldName, order) {
-      const type = fieldName === 'dialogueText' ? 'dialog' : 'action';
+      const type = fieldName === 'dialogText' ? 'dialog' : 'action';
       return {
         id: 'board-' + Date.now().toString(36) + '-' + order,
         sourceDocumentId: 'src-board',
@@ -29330,7 +29330,7 @@
         normalizedText: text,
         zone: 'body',
         assignableToCut: true,
-        assignDefault: fieldName === 'dialogueText' ? 'dialog' : 'action',
+        assignDefault: fieldName === 'dialogText' ? 'dialog' : 'action',
         assignedCutId: '',
         assignedPanelId: '',
         meta: {
@@ -29431,7 +29431,7 @@
         timeFieldHtml('pictureFrame', '現在パネル尺', inspectorPanelFramesForCut(cut), { className: 'inspector-panel-time' }),
         '</div>',
         '<div><label for="actionTextInput">Action</label><textarea id="actionTextInput">' + escapeHtml(cut.actionText || '') + '</textarea></div>',
-        '<div><label for="dialogueTextInput">Dialog</label><textarea id="dialogueTextInput">' + escapeHtml(cut.dialogueText || '') + '</textarea></div>',
+        '<div><label for="dialogTextInput">Dialog</label><textarea id="dialogTextInput">' + escapeHtml(cut.dialogText || '') + '</textarea></div>',
         '<div class="button-row"><button id="duplicateCutBtn" type="button">Duplicate</button><button id="deleteCutBtn" type="button">Delete</button></div>',
         renderStatus(cut, durationCut)
       ].join('');
@@ -29528,7 +29528,7 @@
         document.getElementById('durationKomaInput').addEventListener('change', updateDuration);
       }
       document.getElementById('actionTextInput').addEventListener('change', function(event) { update('actionText', event.target.value); });
-      document.getElementById('dialogueTextInput').addEventListener('change', function(event) { update('dialogueText', event.target.value); });
+      document.getElementById('dialogTextInput').addEventListener('change', function(event) { update('dialogText', event.target.value); });
       document.getElementById('duplicateCutBtn').addEventListener('click', duplicateSelectedPicturePanel);
       document.getElementById('deleteCutBtn').addEventListener('click', deletePrimarySelectedPicturePanel);
     }
@@ -29983,10 +29983,10 @@
         target.inheritedCutNoHidden = false;
         target.sourceBlockIds = mergeUnique(target.sourceBlockIds || [], cut.sourceBlockIds || []);
         target.pictureTextBlockIds = mergeUnique(target.pictureTextBlockIds || [], cut.pictureTextBlockIds || []);
-        target.dialogueBlockIds = mergeUnique(target.dialogueBlockIds || [], cut.dialogueBlockIds || []);
+        target.dialogBlockIds = mergeUnique(target.dialogBlockIds || [], cut.dialogBlockIds || []);
         target.memoBlockIds = mergeUnique(target.memoBlockIds || [], cut.memoBlockIds || []);
         target.actionText = appendText(target.actionText || '', cut.actionText || '');
-        target.dialogueText = appendText(target.dialogueText || '', cut.dialogueText || '');
+        target.dialogText = appendText(target.dialogText || '', cut.dialogText || '');
         target.durationFrames = cut.durationFrames;
         target.durationFramesLocked = cut.durationFramesLocked;
         target.conteLayers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
@@ -31337,13 +31337,13 @@
       const protectedSourceBlocks = new Set();
       project.audio.clips.forEach(function(clip) {
         const sourceBlockId = audioClipSourceBlockId(clip);
-        if (sourceBlockId && !audioClipIsAutoDialogueCandidate(clip) && clip.audioFileName) protectedSourceBlocks.add(sourceBlockId);
+        if (sourceBlockId && !audioClipIsAutoDialogCandidate(clip) && clip.audioFileName) protectedSourceBlocks.add(sourceBlockId);
       });
       const needsHeal = project.audio.clips.filter(function(clip) {
         if (!clip || clip.audioFileName) return false;
         if (audioClipHasIndexedDbStorage(clip)) return false;
         const sourceBlockId = audioClipSourceBlockId(clip);
-        return !(sourceBlockId && audioClipIsAutoDialogueCandidate(clip) && protectedSourceBlocks.has(sourceBlockId));
+        return !(sourceBlockId && audioClipIsAutoDialogCandidate(clip) && protectedSourceBlocks.has(sourceBlockId));
       });
       if (!needsHeal.length) return 0;
       let folderFiles = [];
@@ -32859,8 +32859,8 @@
         },
         examples: [
           { id: 'select-001', op: 'selectCut', pageNo: 1, row: 1 },
-          { id: 'cut-001', op: 'setCut', pageNo: 1, row: 1, fields: { cutNo: '001', actionText: '○場所（夜）', dialogueText: 'アスパル「ヒル……ダ……」' } },
-          { id: 'patch-001', op: 'jsonPatch', patch: [{ op: 'replace', path: '/cuts/0/dialogueText', value: 'アスパル「ヒル……ダ……」' }] }
+          { id: 'cut-001', op: 'setCut', pageNo: 1, row: 1, fields: { cutNo: '001', actionText: '○場所（夜）', dialogText: 'アスパル「ヒル……ダ……」' } },
+          { id: 'patch-001', op: 'jsonPatch', patch: [{ op: 'replace', path: '/cuts/0/dialogText', value: 'アスパル「ヒル……ダ……」' }] }
         ]
       };
       await writeJsonToLlmOutbox(LLM_CONTROL_PROTOCOL_FILE, payload);
@@ -32933,7 +32933,7 @@
           clips: audioClips.map(function(clip) {
             return {
               id: clip.id,
-              trackId: clip.trackId || 'dialogue-main',
+              trackId: clip.trackId || 'dialog-main',
               startFrame: Math.max(0, Math.round(Number(clip.startFrame) || 0)),
               startTime: framesToTimeInput(clip.startFrame),
               durationFrames: Math.max(1, Math.round(Number(clip.durationFrames) || 1)),
@@ -32969,14 +32969,14 @@
         cutNo: cut.cutNo || '',
         hiddenCutNo: Boolean(cut.inheritedCutNoHidden),
         actionText: compactLlmText(cut.actionText, 260),
-        dialogueText: compactLlmText(cut.dialogueText, 260),
+        dialogText: compactLlmText(cut.dialogText, 260),
         picture: Boolean(cutHasVideoMedia(state.project, cut.id)),
         pictureFrames: Math.max(0, Math.round(Number(cut.pictureFrames) || 0)),
         pictureTime: framesToTimeInput(cut.pictureFrames),
         durationFrames: Math.max(0, Math.round(Number(cut.durationFrames) || 0)),
         durationTime: framesToTimeInput(cut.durationFrames),
         sourceBlockIds: cut.sourceBlockIds || [],
-        dialogueBlockIds: cut.dialogueBlockIds || []
+        dialogBlockIds: cut.dialogBlockIds || []
       };
     }
 
@@ -38788,7 +38788,7 @@
         const timeCol = metrics.cols[4];
         drawCenteredText(ctx, cut.cutNo || '', cutCol.x, row.y + row.h * 0.04, cutCol.w, row.h * 0.18, Math.max(18, width * 0.014));
         drawWrappedText(ctx, cut.actionText || '', actionCol.x + actionCol.w * 0.035, textTop, actionCol.w * 0.93, textHeight, Math.max(17, width * 0.0115));
-        drawWrappedText(ctx, cut.dialogueText || '', dialogCol.x + dialogCol.w * 0.035, textTop, dialogCol.w * 0.93, textHeight, Math.max(17, width * 0.0115));
+        drawWrappedText(ctx, cut.dialogText || '', dialogCol.x + dialogCol.w * 0.035, textTop, dialogCol.w * 0.93, textHeight, Math.max(17, width * 0.0115));
         const pictureFrameText = framesToTime(displayPictureFramesForCut(cut));
         const cutDurationText = framesToTime(displayDurationFramesForCut(cut));
         if (pictureFrameText && cutDurationText) {
