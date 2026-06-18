@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver066</title>
+  <title>Conte Editor Prototype ver067</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6877,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver066</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver067</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7048,7 +7048,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '066';
+    const APP_DISPLAY_VERSION = '067';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16157,11 +16157,13 @@
         let olPrevFrames = 0;
         if (gi > 0) {
           const prev = items[gi - 1];
-          // Pull this group left over the previous group, clamped to min(prev length, own length):
-          // - <= prev.frames keeps this group's start >= prev start (can't bleed into the group before).
-          // - <= frames (own length) keeps the NEXT group's start >= prev end (the following cut can't
-          //   slide into the previous cut when this dissolving cut is shorter than the overlap).
-          const requested = Math.max(0, Math.min(cutGroupOlPrevFrames(group), prev.frames, frames));
+          // Clamp so overlaps stay strictly PAIRWISE (at most two cuts overlap at any instant — the
+          // CUT-bar toggle is binary, so a 3-way overlap would be an untoggleable region):
+          // - <= frames (own length): the overlap can't exceed this cut itself.
+          // - <= prev.frames - prev.olPrevFrames (the previous cut's CLEAN length — the part not already
+          //   overlapped from its left): keeps this cut from reaching back over the cut before prev.
+          const prevClean = Math.max(0, prev.frames - prev.olPrevFrames);
+          const requested = Math.max(0, Math.min(cutGroupOlPrevFrames(group), frames, prevClean));
           start = Math.max(prev.startFrame, cursor - requested);
           olPrevFrames = cursor - start;
         }
@@ -19101,10 +19103,11 @@
           const idx = layout.items.findIndex(function(it) { return it.group.cuts[0] && it.group.cuts[0].id === ownerId; });
           if (idx <= 0) return; // first group has no previous cut to overlap
           e.preventDefault();
-          // Max overlap = min(previous cut length, this cut's own length): the first keeps this cut
-          // from passing the previous cut's start, the second keeps the NEXT cut from sliding into
-          // the previous cut when this cut is shorter than the overlap.
-          const maxOl = Math.min(layout.items[idx - 1].frames, layout.items[idx].frames);
+          // Max overlap = min(this cut's own length, previous cut's CLEAN length = its length minus how
+          // much it is already overlapped from its left). This keeps overlaps strictly pairwise (never 3
+          // cuts at once), so the binary CUT-bar toggle always has exactly two cuts to switch between.
+          const prevItem = layout.items[idx - 1];
+          const maxOl = Math.max(0, Math.min(layout.items[idx].frames, prevItem.frames - (prevItem.olPrevFrames || 0)));
           const startOl = Number(clip.dataset.olPrevFrames) || 0;
           const startX = e.clientX;
           const move = function(me) {
