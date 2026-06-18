@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver071</title>
+  <title>Conte Editor Prototype ver072</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6918,7 +6918,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver071</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver072</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7089,7 +7089,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '071';
+    const APP_DISPLAY_VERSION = '072';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7135,8 +7135,8 @@
       lassoSelect: '',
       transform: '',
       perspective: '',
-      frameForward: '1',
-      frameBackward: '2'
+      frameForward: '2',
+      frameBackward: '1'
     };
     const BODY_BLOCK_TYPES = ['section_marker', 'scene_heading', 'action', 'dialogue', 'narration', 'telop', 'monologue', 'transition', 'sound_cue', 'music_cue'];
     const DIALOGUE_AREA_TYPES = ['dialogue', 'narration', 'telop', 'monologue'];
@@ -38028,11 +38028,22 @@
       if (tool !== 'transform' && tool !== 'perspective') return false;
       event.preventDefault();
       event.stopPropagation();
-      if (!commitMemoTransformPreview()) {
-        if (tool === 'transform') applyMemoTransformSelection();
-        else applyMemoPerspectiveSelection();
-      }
+      applyMemoTransformKeepingUI(tool);
       return true;
+    }
+
+    // Apply the current transform/perspective edit but KEEP the manipulation UI (box + panel) so you
+    // can immediately transform again — without toggling the tool off and back on.
+    function applyMemoTransformKeepingUI(tool) {
+      const activeTool = tool || state.memoEditTool;
+      if (!commitMemoTransformPreview()) {
+        if (activeTool === 'transform') applyMemoTransformSelection();
+        else if (activeTool === 'perspective') applyMemoPerspectiveSelection();
+      }
+      if (state.memoEditTool === 'transform' || state.memoEditTool === 'perspective') {
+        ensureMemoTransformBoxForCurrentTarget(true);
+        updateMemoUI();
+      }
     }
 
     function handleMemoKeydown(event) {
@@ -38389,11 +38400,11 @@
       const memoStampClearBtn = document.getElementById('memoStampClearBtn');
       if (memoStampClearBtn) memoStampClearBtn.addEventListener('click', exitMemoStampMode);
       document.getElementById('memoTransformApplyBtn').addEventListener('click', function() {
-        if (!commitMemoTransformPreview()) applyMemoTransformSelection();
+        applyMemoTransformKeepingUI('transform');
       });
       document.getElementById('memoTransformResetBtn').addEventListener('click', resetMemoTransformControls);
       document.getElementById('memoPerspectiveApplyBtn').addEventListener('click', function() {
-        if (!commitMemoTransformPreview()) applyMemoPerspectiveSelection();
+        applyMemoTransformKeepingUI('perspective');
       });
       document.getElementById('memoPerspectiveResetBtn').addEventListener('click', resetMemoPerspectiveControls);
       document.querySelectorAll('.memo-nudge-btn[data-memo-nudge-x][data-memo-nudge-y]').forEach(function(button) {
