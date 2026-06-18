@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver074</title>
+  <title>Conte Editor Prototype ver075</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6720,10 +6720,10 @@
           <div id="scenarioDrop" class="file-drop">
             <label for="documentInput">Scenario file</label>
             <div class="file-input-row">
-              <input id="documentInput" type="file" accept=".txt,.text,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+              <input id="documentInput" type="file" accept=".json,.txt,.text,.md,.pdf,.docx,application/json,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
               <button id="scenarioFileClearBtn" type="button">Clear</button>
             </div>
-            <div id="fileStatus" class="file-help">TXT / DOCX / PDF</div>
+            <div id="fileStatus" class="file-help">Scenario package JSON (recommended) / TXT / DOCX / PDF</div>
           </div>
           <div id="sourceTabs" class="source-tabs" role="tablist" aria-label="Scenario source views">
             <button class="source-tab active" type="button" data-source-view="blocks">Blocks</button>
@@ -6918,7 +6918,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver074</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver075</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7089,7 +7089,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '074';
+    const APP_DISPLAY_VERSION = '075';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -9349,6 +9349,8 @@
     // APP: DOCUMENT IMPORT
     async function handleDocumentFile(file) {
       if (!file) return;
+      // Scenario package (.json) is the new primary input — produced by the scenario analyzer.
+      if (String(file.name || '').toLowerCase().endsWith('.json')) return handleScenarioPackageFile(file);
       const statusEl = document.getElementById('fileStatus');
       statusEl.textContent = 'Reading ' + file.name + ' ...';
       try {
@@ -9386,6 +9388,94 @@
         statusEl.textContent = formatImportSummary(file.name, parsed.stats, 0, importWarnings.concat(['Loaded only. Press 尺自動指定 to place cuts and assign shaku.']));
       } catch (error) {
         statusEl.textContent = 'Import failed: ' + (error && error.message ? error.message : error);
+      }
+    }
+
+    // APP: SCENARIO PACKAGE IMPORT — accept the scenario analyzer's "scenario_to_conte_package" JSON
+    // and build blocks/characters/places from it (the conte side no longer parses PDFs itself; the
+    // scenario tool owns parsing/splitting). The package already uses conte vocab (type: 'dialog', etc.),
+    // so each package block maps almost 1:1 to a conte source block.
+    function scenarioPackageBlockToConteBlock(raw, index) {
+      const type = String(raw.type || 'action');
+      const text = String(raw.text != null ? raw.text : (raw.normalizedText || raw.rawText || ''));
+      const order = Number(raw.order || raw.orderOnPage || index + 1) || index + 1;
+      const block = {
+        id: String(raw.id || ('scenario-b' + (index + 1))),
+        sourceDocumentId: 'src-scenario',
+        sourceFileName: String(raw.sourceFileName || raw.sourceDocumentTitle || ''),
+        pageNo: Math.max(1, Math.round(Number(raw.pageNo) || 1)),
+        order: order,
+        orderOnPage: Number(raw.orderOnPage || order) || order,
+        globalOrder: Number(raw.globalOrder || order) || order,
+        type: type,
+        subtype: String(raw.subtype || ''),
+        speaker: String(raw.speaker || raw.characterName || ''),
+        characterName: String(raw.characterName || raw.speaker || ''),
+        modifier: String(raw.modifier || ''),
+        dialogMode: String(raw.dialogMode || ''),
+        text: text,
+        rawText: String(raw.rawText || text),
+        normalizedText: String(raw.normalizedText || text),
+        zone: String(raw.zone || 'body'),
+        currentScene: String(raw.currentScene || ''),
+        locationName: String(raw.locationName || ''),
+        timeOfDay: String(raw.timeOfDay || ''),
+        assignableToCut: raw.assignableToCut !== false,
+        assignDefault: String(raw.assignDefault || (DIALOG_AREA_TYPES.indexOf(type) >= 0 ? 'dialog' : 'action')),
+        assignedCutId: '',
+        assignedPanelId: '',
+        meta: raw.meta && typeof raw.meta === 'object'
+          ? raw.meta
+          : { confidence: Number(raw.confidence) || 0, evidence: [], warnings: [] }
+      };
+      const hint = raw.characterProfileHint || {};
+      if (hint.gender || raw.characterGender) block.characterGender = String(hint.gender || raw.characterGender || '');
+      if (hint.age || raw.characterAge) block.characterAge = String(hint.age || raw.characterAge || '');
+      return block;
+    }
+
+    function scenarioPackageToPages(pkg) {
+      const blocks = Array.isArray(pkg && pkg.blocks) ? pkg.blocks : [];
+      const byPage = new Map();
+      blocks.forEach(function(raw, index) {
+        const block = scenarioPackageBlockToConteBlock(raw, index);
+        if (!byPage.has(block.pageNo)) byPage.set(block.pageNo, []);
+        byPage.get(block.pageNo).push(block);
+      });
+      return Array.from(byPage.keys()).sort(function(a, b) { return a - b; }).map(function(pageNo) {
+        const pageBlocks = byPage.get(pageNo).sort(function(a, b) { return (a.globalOrder || 0) - (b.globalOrder || 0); });
+        return {
+          id: 'src-scenario-page-' + pageNo,
+          pageNo: pageNo,
+          text: pageBlocks.map(function(b) { return b.rawText || b.text || ''; }).join('\n'),
+          blocks: pageBlocks
+        };
+      });
+    }
+
+    async function handleScenarioPackageFile(file) {
+      if (!file) return;
+      const statusEl = document.getElementById('fileStatus');
+      if (statusEl) statusEl.textContent = 'Reading ' + file.name + ' ...';
+      try {
+        const pkg = JSON.parse(await file.text());
+        if (!pkg || !Array.isArray(pkg.blocks)) throw new Error('Not a scenario package (missing blocks[]).');
+        const pages = scenarioPackageToPages(pkg);
+        const blockCount = pages.reduce(function(sum, page) { return sum + page.blocks.length; }, 0);
+        state.sourceText = '';
+        state.sourceFileName = file.name;
+        runCommand('Import scenario package', function(project) {
+          project.sourceDocuments = [{ id: 'src-scenario', fileName: file.name, type: 'scenario-package', pages: pages }];
+          project.cuts = Array.from({ length: EMPTY_SLOT_COUNT }, function(_, index) { return createBlankCut(index + 1); });
+          project.audio = { clips: [], manualTimeline: false };
+          project.timeline = { tracks: [] };
+          getProjectBlocks(project).forEach(function(block) { block.assignedCutId = ''; block.assignedPanelId = ''; });
+          project.currentPage = 1;
+          setCurrentPicturePanelId(project.cuts[0] ? project.cuts[0].id : '');
+        });
+        if (statusEl) statusEl.textContent = 'Imported ' + blockCount + ' blocks from scenario package "' + file.name + '". Press 尺自動指定 to place cuts.';
+      } catch (error) {
+        if (statusEl) statusEl.textContent = 'Scenario package import failed: ' + (error && error.message ? error.message : error);
       }
     }
 
