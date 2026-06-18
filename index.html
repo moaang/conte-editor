@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver067</title>
+  <title>Conte Editor Prototype ver068</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6877,7 +6877,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver067</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver068</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7048,7 +7048,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '067';
+    const APP_DISPLAY_VERSION = '068';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18036,13 +18036,8 @@
       });
     }
 
-    function cameraTransformAtFrame(project, frame) {
-      const targetFrame = Math.max(0, Math.round(Number(frame) || 0));
-      const slot = cameraSlotAtFrame(project, targetFrame);
-      if (!slot || !slot.cut) return cameraDefaultTransform();
-      const localFrame = cameraLocalFrameForSlot(slot, targetFrame);
-      const keyframes = cameraKeyframesForCut(project, slot.cut.id);
-      if (!keyframes.length) return cameraDefaultTransform();
+    function cameraTransformFromKeyframes(keyframes, localFrame) {
+      if (!keyframes || !keyframes.length) return cameraDefaultTransform();
       let previous = null;
       let next = null;
       keyframes.forEach(function(item) {
@@ -18062,6 +18057,22 @@
         scale: previous.scale + (next.scale - previous.scale) * t,
         rotation: previous.rotation + (next.rotation - previous.rotation) * t
       };
+    }
+
+    function cameraTransformAtFrame(project, frame) {
+      const targetFrame = Math.max(0, Math.round(Number(frame) || 0));
+      const slot = cameraSlotAtFrame(project, targetFrame);
+      if (!slot || !slot.cut) return cameraDefaultTransform();
+      return cameraTransformFromKeyframes(cameraKeyframesForCut(project, slot.cut.id), cameraLocalFrameForSlot(slot, targetFrame));
+    }
+
+    // Camera transform for a SPECIFIC cut at an absolute frame (used by the OL dissolve so each side
+    // keeps its own camera work — without this, both composites share one camera and the non-animated
+    // cut inherits the other cut's camera move).
+    function cameraTransformForCutAtFrame(project, cutId, absoluteFrame) {
+      const slot = cameraSlotByCutId(project, cutId);
+      if (!slot || !slot.cut) return cameraDefaultTransform();
+      return cameraTransformFromKeyframes(cameraKeyframesForCut(project, slot.cut.id), cameraLocalFrameForSlot(slot, Math.max(0, Math.round(Number(absoluteFrame) || 0))));
     }
 
     function cameraHasKeyframesAtFrame(project, frame) {
@@ -24670,7 +24681,7 @@
         }
         if (onionHtml) parts.push(onionHtml);
         parts.push(videoCutLayerStackHtml(slot && slot.cut && slot.cut.id, layerEntries, fastLayerMode));
-        mediaHtml = '<div class="video-preview-layered video-preview-camera-target">' + parts.join('') + '</div>';
+        mediaHtml = '<div class="video-preview-layered video-preview-camera-target" data-camera-cut-id="' + escapeAttr(slot && slot.cut && slot.cut.id || '') + '">' + parts.join('') + '</div>';
       } else {
         const speakers = activeClips && activeClips.length ? activeClips : fallbackSpeakerClipsForSlot(slot);
         if (speakers.length) mediaHtml = speakerPreviewHtml(speakers, activeClips || []);
@@ -24736,7 +24747,7 @@
         ? videoCutLayerStackHtml(cut.id, layerDrawingEntriesForCut(state.project, cut.id), videoPreviewFastLayerImageMode())
         : '';
       const style = typeof opacity === 'number' ? ' style="opacity:' + opacity + '"' : '';
-      return '<div class="video-preview-layered video-preview-camera-target ' + className + '"' + style + '>' + layers + '</div>';
+      return '<div class="video-preview-layered video-preview-camera-target ' + className + '" data-camera-cut-id="' + escapeAttr(cut.id || '') + '"' + style + '>' + layers + '</div>';
     }
 
     function applyVideoOverlapDissolve(stageEl) {
@@ -24891,13 +24902,21 @@
       const screen = stage && stage.querySelector ? stage.querySelector('.video-preview-screen') : null;
       if (!screen) return;
       const playbackActive = Boolean(state.videoPlaying || state.videoPlaybackStarting);
-      const shouldApplyCameraOutput = Boolean(playbackActive && cameraHasKeyframesAtFrame(state.project, state.videoPlayheadFrames));
-      const transform = shouldApplyCameraOutput ? cameraTransformAtFrame(state.project, state.videoPlayheadFrames) : cameraDefaultTransform();
       const frameRect = cameraFrameBaseRect(screen);
       updateCameraPlaybackMask(screen, playbackActive, cameraDefaultTransform(), frameRect);
+      // During an OL dissolve each composite carries its own cut id, so apply that cut's own camera
+      // transform — otherwise both sides share one camera and the non-animated cut inherits the move.
+      const overlap = playbackActive ? videoOverlapAtFrame(state.project, state.videoPlayheadFrames) : null;
+      const sharedApply = Boolean(playbackActive && !overlap && cameraHasKeyframesAtFrame(state.project, state.videoPlayheadFrames));
+      const sharedTransform = sharedApply ? cameraTransformAtFrame(state.project, state.videoPlayheadFrames) : null;
       screen.querySelectorAll('.video-preview-camera-target').forEach(function(target) {
-        const rect = frameRect;
-        const css = shouldApplyCameraOutput ? cameraPreviewTransformCss(transform, rect) : '';
+        let css = '';
+        if (overlap) {
+          const cutId = target.dataset.cameraCutId || '';
+          if (cutId) css = cameraPreviewTransformCss(cameraTransformForCutAtFrame(state.project, cutId, state.videoPlayheadFrames), frameRect);
+        } else if (sharedTransform) {
+          css = cameraPreviewTransformCss(sharedTransform, frameRect);
+        }
         target.style.transformOrigin = '50% 50%';
         target.style.transform = css;
       });
