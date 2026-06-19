@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver082</title>
+  <title>Conte Editor Prototype ver083</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6924,7 +6924,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver082</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver083</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7095,7 +7095,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '082';
+    const APP_DISPLAY_VERSION = '083';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17842,6 +17842,7 @@
         '<button type="button" data-conte-layer-menu-action="add">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
         '<button type="button" data-conte-layer-menu-action="unlink">\u30ea\u30f3\u30af\u89e3\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="rename">\u30ec\u30a4\u30e4\u30fc\u540d\u5909\u66f4</button>',
+        '<button type="button" data-conte-layer-menu-action="delete-layer">\u30ec\u30a4\u30e4\u30fc\u524a\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="delete">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u524a\u9664</button>'
       ].join('');
       menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
@@ -17852,6 +17853,16 @@
           hideConteLayerContextMenu();
           if (action === 'add') {
             addConteLayerToSelection('cut');
+            return;
+          }
+          if (action === 'delete-layer') {
+            // Delete just this row's layer of the current cut (not its linked copies in other cuts).
+            const ownerCutIds = conteLayerOwnerCutIdsForLayerIds(state.project, [id]);
+            runConteLayerCutPatchCommand('Delete conte layer', ownerCutIds, function(project) {
+              const selectionContext = captureConteLayerRemovalSelectionContext(project, [id]);
+              removeConteLayersByIds(project, [id]);
+              restoreConteLayerSelectionAfterRemoval(project, selectionContext);
+            });
             return;
           }
           if (action === 'bg') {
