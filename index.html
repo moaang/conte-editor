@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver081</title>
+  <title>Conte Editor Prototype ver082</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6924,7 +6924,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver081</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver082</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7095,7 +7095,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '081';
+    const APP_DISPLAY_VERSION = '082';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16882,7 +16882,8 @@
       const reason = audioRecordingDisabledReason();
       const menu = conteLayerContextMenuEl();
       menu.innerHTML = [
-        '<button type="button" data-audio-recording-menu-action="start"' + (reason ? ' disabled title="' + escapeAttr(reason) + '"' : '') + '>録音開始</button>'
+        '<button type="button" data-audio-recording-menu-action="start"' + (reason ? ' disabled title="' + escapeAttr(reason) + '"' : '') + '>録音開始</button>',
+        '<button type="button" data-audio-recording-menu-action="delete">レイヤー削除</button>'
       ].join('');
       menu.querySelectorAll('button[data-audio-recording-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
@@ -16892,10 +16893,42 @@
           if (action === 'start') {
             hideConteLayerContextMenu();
             startAudioRecordingForTrack(id, event.clientX, event.clientY);
+          } else if (action === 'delete') {
+            hideConteLayerContextMenu();
+            const plan = audioTrackDeletionPlan(state.project, id);
+            if (!plan.ok) {
+              state.audioConflictClipIds = new Set(plan.conflicts || []);
+              state.timelineStatus = 'Track delete blocked: overlapping audio would be created.';
+              guardedRender('timing', renderTimingDashboard);
+              return;
+            }
+            runAudioTimelineCommand('Delete audio track', function(project) { deleteAudioTrack(project, id); });
           }
         });
       });
-      positionContextMenuNearPointer(menu, event, 180, 86);
+      positionContextMenuNearPointer(menu, event, 180, 110);
+      menu.hidden = false;
+    }
+
+    function showVideoMediaTrackContextMenu(event, trackId, root) {
+      const id = String(trackId || 'video-media-main');
+      const disabled = videoMediaDisabledOnThisDevice();
+      const menu = conteLayerContextMenuEl();
+      menu.innerHTML = '<button type="button" data-video-track-menu-action="delete"' + (disabled ? ' disabled title="' + escapeAttr(videoMediaDisabledReason()) + '"' : '') + '>レイヤー削除</button>';
+      menu.querySelectorAll('button[data-video-track-menu-action]').forEach(function(button) {
+        button.addEventListener('click', function(clickEvent) {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
+          hideConteLayerContextMenu();
+          if (disabled) return;
+          runTimelineStructureCommand('Delete video media track', function(project) {
+            deleteVideoMediaTrack(project, id);
+            state.activeConteSelectionType = '';
+            ensureConteLayerActiveFallback(project, currentPicturePanelId());
+          }, { deferThumbnails: true, deferThumbnailMs: 420, partialTimeline: true });
+        });
+      });
+      positionContextMenuNearPointer(menu, event, 180, 60);
       menu.hidden = false;
     }
 
@@ -17806,6 +17839,7 @@
       menu.innerHTML = [
         (expandableActive ? '' : '<button type="button" class="' + (bgActive ? 'active' : '') + '" aria-pressed="' + (bgActive ? 'true' : 'false') + '" data-conte-layer-menu-action="bg">' + bgLabel + '</button>'),
         (bgActive ? '' : '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>'),
+        '<button type="button" data-conte-layer-menu-action="add">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
         '<button type="button" data-conte-layer-menu-action="unlink">\u30ea\u30f3\u30af\u89e3\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="rename">\u30ec\u30a4\u30e4\u30fc\u540d\u5909\u66f4</button>',
         '<button type="button" data-conte-layer-menu-action="delete">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u524a\u9664</button>'
@@ -17816,6 +17850,10 @@
           clickEvent.stopPropagation();
           const action = button.dataset.conteLayerMenuAction || '';
           hideConteLayerContextMenu();
+          if (action === 'add') {
+            addConteLayerToSelection('cut');
+            return;
+          }
           if (action === 'bg') {
             if (!bgActive && !window.confirm('BGレイヤーにすると、選択レイヤーは各レイヤーの最初のコマだけを残し、CUT全体を使うBGレイヤーになります。続行しますか？')) return;
             runConteLayerCutPatchCommand(bgActive ? 'Unset BG conte layers' : 'Make BG conte layers', conteLayerOwnerCutIdsForLayerIds(state.project, targetIds), function(project) {
@@ -17943,7 +17981,8 @@
       menu.innerHTML = [
         '<button type="button" data-conte-layer-menu-action="add-koma">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u8ffd\u52a0</button>',
         '<button type="button" data-conte-layer-menu-action="add-layer-below">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="add-panel">\u30d1\u30cd\u30eb\u8ffd\u52a0</button>'
+        '<button type="button" data-conte-layer-menu-action="add-panel">\u30d1\u30cd\u30eb\u8ffd\u52a0</button>',
+        (anchorLayerId ? '<button type="button" data-conte-layer-menu-action="delete-layer">\u30ec\u30a4\u30e4\u30fc\u524a\u9664</button>' : '')
       ].join('');
       menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
@@ -17961,6 +18000,16 @@
           }
           if (action === 'add-panel') {
             addPicturePanelAfterCutPreserveLayerSelection(cutId);
+            return;
+          }
+          if (action === 'delete-layer') {
+            if (!anchorLayerId) return;
+            const ownerCutIds = conteLayerOwnerCutIdsForLayerIds(state.project, [anchorLayerId]);
+            runConteLayerCutPatchCommand('Delete conte layer', ownerCutIds, function(project) {
+              const selectionContext = captureConteLayerRemovalSelectionContext(project, [anchorLayerId]);
+              removeConteLayersByIds(project, [anchorLayerId]);
+              restoreConteLayerSelectionAfterRemoval(project, selectionContext);
+            });
           }
         });
       });
@@ -20619,6 +20668,15 @@
       if (videoMediaDisabledOnThisDevice()) return;
       root.querySelectorAll('[data-video-media-track-id]').forEach(function(track) {
         const trackId = track.dataset.videoMediaTrackId || 'video-media-main';
+        track.addEventListener('contextmenu', function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (suppressMobileNativeContextMenu(event)) return;
+          showVideoMediaTrackContextMenu(event, trackId, root);
+        });
+        bindMobileLongPressContextMenu(track, function(event) {
+          showVideoMediaTrackContextMenu(event, trackId, root);
+        });
         track.addEventListener('dragover', function(event) {
           if (!hasVideoMediaFileDrag(event)) return;
           event.preventDefault();
