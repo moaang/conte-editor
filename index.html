@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver083</title>
+  <title>Conte Editor Prototype ver084</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -3372,6 +3372,23 @@
       box-shadow: none;
       pointer-events: none;
       cursor: default;
+    }
+
+    /* Fixed black base/composition frame (does NOT move with camera work); the red .camera-frame-box
+       is the moving camera-work frame. Only shown in the view-only (toggle) overlay. */
+    .camera-frame-base-box {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform-origin: 50% 50%;
+      border: 1.5px solid #111111;
+      box-sizing: border-box;
+      pointer-events: none;
+      z-index: 0;
+      display: none;
+    }
+    .camera-frame-overlay.view-only .camera-frame-base-box {
+      display: block;
     }
 
     .camera-frame-overlay.view-only .camera-frame-path,
@@ -6924,7 +6941,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver083</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver084</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7095,7 +7112,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '083';
+    const APP_DISPLAY_VERSION = '084';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -22749,6 +22766,7 @@
     function cameraFrameOverlayHtml() {
       return [
         '<svg class="camera-frame-path" data-camera-frame-path="true" aria-hidden="true"><path></path></svg>',
+        '<div class="camera-frame-base-box" data-camera-frame-base-box="true" aria-hidden="true"></div>',
         '<div class="camera-frame-box" data-camera-frame-box="true">',
           '<span class="camera-frame-rotate-line" aria-hidden="true"></span>',
           '<button class="camera-frame-rotate-handle" type="button" data-camera-frame-rotate="true" aria-label="Rotate camera frame"></button>',
@@ -22906,6 +22924,15 @@
         box.style.width = Math.max(24, cameraCoordinateWidth() * cameraViewScaleForRect(rect) * transform.scale).toFixed(2) + 'px';
         box.style.height = Math.max(24, cameraCoordinateHeight() * cameraViewScaleForRect(rect) * transform.scale).toFixed(2) + 'px';
         box.style.transform = 'translate(-50%, -50%) rotate(' + transform.rotation.toFixed(2) + 'deg)';
+      }
+      // Black fixed base/composition frame — always at the default transform (does not move with camera work).
+      const baseBox = overlay.querySelector('[data-camera-frame-base-box]');
+      if (baseBox) {
+        baseBox.style.left = (rect.originX + rect.width / 2).toFixed(2) + 'px';
+        baseBox.style.top = (rect.originY + rect.height / 2).toFixed(2) + 'px';
+        baseBox.style.width = Math.max(24, cameraCoordinateWidth() * cameraViewScaleForRect(rect)).toFixed(2) + 'px';
+        baseBox.style.height = Math.max(24, cameraCoordinateHeight() * cameraViewScaleForRect(rect)).toFixed(2) + 'px';
+        baseBox.style.transform = 'translate(-50%, -50%)';
       }
       const slot = cameraSlotAtFrame(state.project, state.videoPlayheadFrames);
       const cutKeys = toolOverlay && slot && slot.cut ? cameraKeyframesForCut(state.project, slot.cut.id) : [];
