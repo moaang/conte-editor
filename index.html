@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver078</title>
+  <title>Conte Editor Prototype ver079</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6913,7 +6913,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver078</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver079</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7084,7 +7084,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '078';
+    const APP_DISPLAY_VERSION = '079';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -20446,21 +20446,33 @@
           const originalStart = clip.startFrame;
           const originalTrackId = clip.trackId || track.dataset.audioTrackId || 'dialog-main';
           const maxStart = Math.max(0, totalFrames - clip.durationFrames);
-          clipEl.classList.add('dragging');
-          const movePreviewEl = createAudioDragPreview(track, originalStart, clip.durationFrames, totalFrames);
-          try { clipEl.setPointerCapture(event.pointerId); } catch (error) {}
+          // Defer the move-drag until the pointer actually travels a bit, so a still long-press (the
+          // mobile context-menu / delete gesture) isn't swallowed by an instant grab. Without this the
+          // clip grabbed on touch-down and felt unstable, and long-press rarely fired.
+          const MOVE_DRAG_THRESHOLD_PX = 8;
+          let dragActive = false;
+          let movePreviewEl = null;
           let lastPreviewFrame = originalStart;
           let lastPreviewTrackId = originalTrackId;
           let lastSnapped = false;
           let movePreviewPending = false;
           let movePreviewEvent = null;
+          const activateMoveDrag = function() {
+            if (dragActive) return;
+            dragActive = true;
+            clipEl.classList.add('dragging');
+            movePreviewEl = createAudioDragPreview(track, originalStart, clip.durationFrames, totalFrames);
+            try { clipEl.setPointerCapture(event.pointerId); } catch (error) {}
+          };
           const move = function(moveEvent) {
+            if (!dragActive && Math.abs((Number(moveEvent.clientX) || 0) - startX) < MOVE_DRAG_THRESHOLD_PX) return;
+            activateMoveDrag();
             movePreviewEvent = moveEvent;
             if (movePreviewPending) return;
             movePreviewPending = true;
             requestAnimationFrame(function() {
               movePreviewPending = false;
-              if (!movePreviewEvent) return;
+              if (!movePreviewEvent || !movePreviewEl) return;
               const targetTrack = audioTrackFromPointer(root, movePreviewEvent, clip) || track;
               const targetTrackId = targetTrack.dataset.audioTrackId || originalTrackId;
               const deltaFrames = timelineDragFrameDelta(startX, movePreviewEvent.clientX, totalFrames, track);
@@ -20478,13 +20490,14 @@
             });
           };
           const finish = function(upEvent) {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', finish);
+            window.removeEventListener('pointercancel', finish);
+            if (!dragActive) return; // never crossed the threshold -> it was a tap / long-press, not a drag
             clipEl.classList.remove('dragging');
             updateTimelineSnapGuide(root, 0, 1, false);
             removeAudioDragPreview(movePreviewEl);
             try { clipEl.releasePointerCapture(event.pointerId); } catch (error) {}
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', finish);
-            window.removeEventListener('pointercancel', finish);
             const targetTrack = audioTrackFromPointer(root, upEvent, clip) || track;
             const targetTrackId = targetTrack.dataset.audioTrackId || originalTrackId;
             const deltaFrames = timelineDragFrameDelta(startX, upEvent.clientX, totalFrames, track);
@@ -20492,7 +20505,6 @@
             const snapped = snapAudioClipMove(state.project, clipId, proposedStart, clip.durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames);
             const nextStart = clampNumber(snapped.startFrame, 0, maxStart, originalStart);
             if (nextStart === originalStart && targetTrackId === originalTrackId) return;
-            // state 변경. skipRender=true로 전체 timeline 재생성 회피.
             const result = commitAudioClipMoveFast('Move dialog audio', clipId, nextStart, targetTrackId);
             if (!result) return;
             if (result.createdTrack) {
@@ -20502,7 +20514,6 @@
               return;
             }
             partialUpdateAudioClipDom(clipId, result.trackId, result.startFrame, result.durationFrames, totalFrames);
-            // DOM에서 element 하나만 새 lane으로 이동 + position 갱신.
           };
           window.addEventListener('pointermove', move);
           window.addEventListener('pointerup', finish);
@@ -20527,8 +20538,11 @@
     function bindAudioTimelineDrop(root, totalFrames) {
       root.querySelectorAll('.audio-track').forEach(function(track) {
         const trackId = track.dataset.audioTrackId || '';
+        const targetIsAudioClip = function(event) {
+          return Boolean(event && event.target && event.target.closest && event.target.closest('.audio-clip'));
+        };
         track.addEventListener('contextmenu', function(event) {
-          if (!trackId) return;
+          if (!trackId || targetIsAudioClip(event)) return; // clip has its own (delete) menu
           event.preventDefault();
           event.stopPropagation();
           showAudioTrackContextMenu(event, trackId, root);
@@ -20536,7 +20550,7 @@
         bindMobileLongPressContextMenu(track, function(event) {
           if (!trackId) return;
           showAudioTrackContextMenu(event, trackId, root);
-        });
+        }, { ignore: targetIsAudioClip });
         track.addEventListener('dragover', function(event) {
           if (!hasAudioFileDrag(event)) return;
           event.preventDefault();
