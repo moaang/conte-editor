@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver084</title>
+  <title>Conte Editor Prototype ver085</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6941,7 +6941,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver084</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver085</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7112,7 +7112,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '084';
+    const APP_DISPLAY_VERSION = '085';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -22116,6 +22116,28 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
+    function touchPairMidpoint(touches) {
+      if (!touches || touches.length < 2) return null;
+      return {
+        x: (Number(touches[0].clientX) + Number(touches[1].clientX)) / 2,
+        y: (Number(touches[0].clientY) + Number(touches[1].clientY)) / 2
+      };
+    }
+
+    // When a two-finger pan/zoom gesture starts over the drawing canvas, the first finger may have
+    // already begun a raster stroke. Discard that half-drawn stroke so the gesture takes over cleanly.
+    function discardActiveVideoMemoStrokeForGesture() {
+      if (!state.memoRasterOp) return;
+      const pointerId = state.memoPointerId;
+      cancelActiveMemoRasterStroke({
+        pointerId: pointerId,
+        type: 'gesture',
+        cancelable: false,
+        preventDefault: function() {},
+        stopPropagation: function() {}
+      });
+    }
+
     function pointInsideClientRect(x, y, rect) {
       return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
     }
@@ -22131,52 +22153,64 @@
       return screen.getBoundingClientRect ? screen.getBoundingClientRect() : null;
     }
 
-    function touchEventHitsVideoPreviewDrawable(stage, event) {
-      const rect = videoPreviewDrawableTouchRect(stage);
-      if (!rect || !event || !event.touches) return false;
-      return Array.from(event.touches).some(function(touch) {
-        return pointInsideClientRect(Number(touch.clientX), Number(touch.clientY), rect);
-      });
-    }
-
     function bindVideoPreviewTouchZoom(stage) {
       if (!stage) return;
       const surface = stage.closest && stage.closest('.paper-stage') || stage;
       if (!surface || surface.dataset.previewTouchZoomBound === 'true') return;
       surface.dataset.previewTouchZoomBound = 'true';
+      // Two-finger gesture = combined pinch-zoom + drag-pan. Works over the drawing canvas too
+      // (the first finger may have started a stroke; we discard it so the gesture takes over).
       let pinchStart = null;
-      const canStartPreviewPinch = function(event) {
-        if (!mobileOrTabletRuntime() || state.memoRasterOp || !event.touches || event.touches.length !== 2) return false;
-        if (touchEventHitsVideoPreviewDrawable(stage, event)) return false;
+      const canStartPreviewGesture = function(event) {
+        if (!mobileOrTabletRuntime() || !event.touches || event.touches.length !== 2) return false;
         const target = event.target && event.target.closest ? event.target.closest('#videoPreviewStage, .paper-stage') : null;
         return Boolean(target);
       };
       surface.addEventListener('touchstart', function(event) {
-        if (!canStartPreviewPinch(event)) return;
+        if (!canStartPreviewGesture(event)) return;
         const distance = touchPairDistance(event.touches);
-        if (!distance) return;
+        const mid = touchPairMidpoint(event.touches);
+        if (!distance || !mid) return;
+        discardActiveVideoMemoStrokeForGesture();
         pinchStart = {
           distance: distance,
-          zoom: videoPreviewZoomValue()
+          zoom: videoPreviewZoomValue(),
+          midX: mid.x,
+          midY: mid.y,
+          basePanX: Math.round(Number(state.memoViewportPanX) || 0),
+          basePanY: Math.round(Number(state.memoViewportPanY) || 0)
         };
         event.preventDefault();
         event.stopPropagation();
       }, { passive: false });
       surface.addEventListener('touchmove', function(event) {
-        if (!pinchStart || state.memoRasterOp || !event.touches || event.touches.length < 2) return;
+        if (!pinchStart || !event.touches || event.touches.length < 2) return;
         const distance = touchPairDistance(event.touches);
+        const mid = touchPairMidpoint(event.touches);
         if (distance) {
           setVideoPreviewZoom(Math.round(clampVideoPreviewZoom(pinchStart.zoom * distance / Math.max(1, pinchStart.distance), pinchStart.zoom) * 100) / 100);
+        }
+        if (mid) {
+          state.memoViewportPanX = pinchStart.basePanX + (mid.x - pinchStart.midX);
+          state.memoViewportPanY = pinchStart.basePanY + (mid.y - pinchStart.midY);
+          applyMemoViewportPan();
         }
         event.preventDefault();
         event.stopPropagation();
       }, { passive: false });
-      const endPinch = function(event) {
+      const endGesture = function(event) {
         if (!pinchStart) return;
-        if (!event.touches || event.touches.length < 2) pinchStart = null;
+        if (!event.touches || event.touches.length < 2) {
+          pinchStart = null;
+          saveEditorUiState();
+        }
       };
-      surface.addEventListener('touchend', endPinch, { passive: true });
-      surface.addEventListener('touchcancel', function() { pinchStart = null; }, { passive: true });
+      surface.addEventListener('touchend', endGesture, { passive: true });
+      surface.addEventListener('touchcancel', function() {
+        if (!pinchStart) return;
+        pinchStart = null;
+        saveEditorUiState();
+      }, { passive: true });
     }
 
     function bindVideoPreviewZoomControls(root) {
