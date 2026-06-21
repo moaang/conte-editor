@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver094</title>
+  <title>Conte Editor Prototype ver095</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver094</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver095</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '094';
+    const APP_DISPLAY_VERSION = '095';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -13000,13 +13000,9 @@
     function totalPagesForProject(project) {
       const pages = project && project.layout && Array.isArray(project.layout.pages) ? project.layout.pages : [];
       if (!pages.length) return 1; // zero cuts -> a single empty page to start drawing on
-      // Offer one extra empty page for adding cuts when the last page is already full.
-      const lastPage = pages[pages.length - 1];
-      let lastBottom = 0;
-      (lastPage && lastPage.placements || []).forEach(function(placement) {
-        lastBottom = Math.max(lastBottom, (Math.round(Number(placement.startRow) || 1)) + (Math.round(Number(placement.rowSpan) || 1)) - 1);
-      });
-      return lastBottom >= ROWS_PER_PAGE ? pages.length + 1 : pages.length;
+      // Always offer one trailing empty page so you can navigate one page past the content even when
+      // the current page isn't full (the extra page's cells skip-create panels as usual).
+      return pages.length + 1;
     }
 
     function totalPages() {
