@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver089</title>
+  <title>Conte Editor Prototype ver090</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6937,7 +6937,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver089</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver090</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7108,7 +7108,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '089';
+    const APP_DISPLAY_VERSION = '090';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -27754,10 +27754,16 @@
       for (let index = 0; index < project.cuts.length; index += 1) {
         const cut = project.cuts[index];
         if (!cut || !removeSet.has(cut.id) || !String(cut.cutNo || '').trim()) continue;
+        // Only relocate the cut's identity to a panel that is a genuine continuation row of the
+        // SAME cut group. A single-panel cut (or the last numbered cut trailed by blank padding)
+        // has no continuation, so deleting it must remove it outright — not hand its number to an
+        // unrelated trailing blank panel (which made such cuts look "undeletable").
+        const groupLast = cutGroupLastIndex(project, index);
         let targetIndex = index + 1;
         while (targetIndex < project.cuts.length && removeSet.has(project.cuts[targetIndex].id) && !String(project.cuts[targetIndex].cutNo || '').trim()) {
           targetIndex += 1;
         }
+        if (targetIndex > groupLast) continue;
         const target = project.cuts[targetIndex];
         if (!target || removeSet.has(target.id) || String(target.cutNo || '').trim()) continue;
         target.cutNo = cut.cutNo;
