@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver090</title>
+  <title>Conte Editor Prototype ver091</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6937,7 +6937,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver090</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver091</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7108,7 +7108,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '090';
+    const APP_DISPLAY_VERSION = '091';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -9197,6 +9197,7 @@
       syncCutGroupDurations(project);
       syncCutGroupFrameTimes(project);
       syncCutGroupDurations(project);
+      clearOrphanCutShaku(project);
       invalidateVideoTimelineCache();
       normalizeVideoClips(project);
       try {
@@ -11692,7 +11693,7 @@
         clip.sourceType = String(clip.sourceType || 'image');
         clip.panelCutId = panelCutId;
         clip.sourceCutId = String(clip.sourceCutId || panelCutId);
-        clip.panelLocked = clip.panelLocked !== false;
+        clip.panelLocked = clip.panelLocked === true;
         if (clip.panelLocked && slot) {
           clip.startFrame = Math.max(0, Math.round(Number(slot.startFrame) || 0));
           clip.durationFrames = Math.max(1, Math.round(Number(slot.frames) || 1));
@@ -13127,6 +13128,34 @@
         enforceCutGroupFrameSum(project, index, frameSlots, duration);
         index = lastIndex;
       }
+    }
+
+    // Single invariant (simplification): a cut's shaku belongs to its CUT GROUP, and a group only
+    // exists for a cut with a cutNo (see collectCutTimingGroups). Therefore any cut that has no cutNo
+    // AND is not a member row of some numbered group is a pure blank slot and MUST carry 尺=0. This
+    // kills the contradiction where a no-cutNo cut held shaku (visible in 用紙, distributed in timing)
+    // yet was absent from 映像編集 (which keys on cutNo). Runs in normalizeProject after group sync.
+    function clearOrphanCutShaku(project) {
+      if (!project || !Array.isArray(project.cuts)) return;
+      const covered = new Set();
+      collectCutTimingGroups(project).forEach(function(group) {
+        for (let i = group.startIndex; i <= group.lastIndex; i += 1) covered.add(i);
+      });
+      project.cuts.forEach(function(cut, index) {
+        if (!cut || covered.has(index)) return;
+        if (String(cut.cutNo || '').trim()) return; // numbered cuts are always group starts; defensive
+        const hadShaku = Math.max(0, Math.round(Number(cut.pictureFrames) || 0))
+          || Math.max(0, Math.round(Number(cut.pictureFramesInferred) || 0))
+          || Math.max(0, Math.round(Number(cut.durationFrames) || 0))
+          || cut.pictureFramesManual || cut.durationFramesLocked;
+        if (!hadShaku) return;
+        cut.pictureFrames = 0;
+        cut.pictureFramesInferred = 0;
+        cut.pictureFramesManual = false;
+        cut.durationFrames = 0;
+        cut.durationFramesLocked = false;
+        if (cut.meta) delete cut.meta.pictureFramesAutoConfirmed;
+      });
     }
 
     function assignCameraKeyframeFrame(desired, maxFrame, usedFrames) {
@@ -31235,14 +31264,13 @@
     function drawLayerDrawingFastThumbnailToCanvas(canvas, drawing, key) {
       if (!canvas || !drawing || !drawing.bitmapDataUrl) return false;
       const ctx = canvas.getContext('2d');
-      const rect = layerDrawingBitmapRect(drawing);
       const image = new Image();
       image.onload = function() {
         if (!canvas.isConnected || layerDrawingThumbnailKey(canvas, canvas.dataset.layerDrawingRef || '') !== key) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
         canvas.dataset.layerThumbnailDrawnKey = key;
         cacheTimelineLayerThumbnail(canvas, key);
         clearTimelineLayerThumbnailBackground(canvas);
