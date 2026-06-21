@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver097</title>
+  <title>Conte Editor Prototype ver098</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver097</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver098</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '097';
+    const APP_DISPLAY_VERSION = '098';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -24727,10 +24727,22 @@
       let gi = range.start;
       let moved = false;
       // UP: consume continuation panels directly above, until reaching destination or a numbered cut.
+      // The consumed panels belong to the nearest numbered cut above (the owner); shrink that owner's
+      // group duration by the panels' frames so repeated up/down never inflates the shaku.
+      let consumedFrames = 0;
+      let ownerId = '';
+      for (let k = gi - 1; k >= 0; k -= 1) {
+        if (String(project.cuts[k].cutNo || '').trim()) { ownerId = project.cuts[k].id; break; }
+      }
       while (gi > destination && gi > 0 && !String(project.cuts[gi - 1].cutNo || '').trim()) {
+        consumedFrames += Math.max(0, Math.round(Number(project.cuts[gi - 1].pictureFrames) || 0));
         project.cuts.splice(gi - 1, 1);
         gi -= 1;
         moved = true;
+      }
+      if (consumedFrames && ownerId) {
+        const owner = project.cuts.find(function(item) { return item.id === ownerId; });
+        if (owner) owner.durationFrames = Math.max(0, Math.round(Number(owner.durationFrames) || 0) - consumedFrames);
       }
       // DOWN: insert 1+0 continuation panels before the cut (need a previous cut at gi-1 to own them).
       while (gi < destination && gi > 0) {
