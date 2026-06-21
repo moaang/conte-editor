@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver095</title>
+  <title>Conte Editor Prototype ver096</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver095</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver096</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '095';
+    const APP_DISPLAY_VERSION = '096';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -24572,23 +24572,20 @@
       const sourceRange = cutGroupRange(state.project, sourceIndex);
       if (!sourceRange) return { allowed: false, insertAfter: false };
       const rect = el.getBoundingClientRect();
-      const targetBlank = isCutMoveDirectSlotTarget(state.project, sourceRange, targetIndex);
-      const insertAfter = !targetBlank && event.clientY > rect.top + rect.height * 0.62;
-      const destination = targetBlank ? targetIndex : targetIndex + (insertAfter ? 1 : 0);
+      const insertAfter = event.clientY > rect.top + rect.height * 0.5;
+      const destination = targetIndex + (insertAfter ? 1 : 0);
       return {
-        allowed: canMoveCutGroupToIndex(state.project, sourceRange, destination, targetBlank),
+        allowed: canMoveCutGroupToIndex(state.project, sourceRange, destination),
         insertAfter: insertAfter
       };
     }
 
     function moveCutMarkerDown(sourceId, targetId, insertAfter) {
-      runTimelineStructureCommand('Move cut group down', function(project) {
+      runTimelineStructureCommand('Move cut group', function(project) {
         const sourceIndex = project.cuts.findIndex(function(item) { return item.id === sourceId; });
         const targetIndex = project.cuts.findIndex(function(item) { return item.id === targetId; });
         if (sourceIndex < 0 || targetIndex < 0) return;
-        const sourceRange = cutGroupRange(project, sourceIndex);
-        const targetBlank = isCutMoveDirectSlotTarget(project, sourceRange, targetIndex);
-        const destination = targetBlank ? targetIndex : targetIndex + (insertAfter ? 1 : 0);
+        const destination = targetIndex + (insertAfter ? 1 : 0);
         if (moveCutGroupToIndex(project, sourceIndex, destination)) {
           relayoutProject(project);
           setCurrentPageToCut(project, sourceId);
@@ -24616,7 +24613,7 @@
         const sourceIndex = state.project.cuts.findIndex(function(item) { return item.id === sourceId; });
         const sourceRange = cutGroupRange(state.project, sourceIndex);
         const destination = cutInsertIndexAfterPage(state.project, state.project.currentPage);
-        if (!sourceRange || !canMoveCutGroupToIndex(state.project, sourceRange, destination, isCutMoveDirectSlotTarget(state.project, sourceRange, destination))) return;
+        if (!sourceRange || !canMoveCutGroupToIndex(state.project, sourceRange, destination)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
         setElementActiveClass(zone, 'drop-ready', true);
@@ -24631,7 +24628,7 @@
         const sourceRange = cutGroupRange(state.project, sourceIndex);
         const destination = cutInsertIndexAfterPage(state.project, state.project.currentPage);
         setElementActiveClass(zone, 'drop-ready', false);
-        if (!sourceRange || !canMoveCutGroupToIndex(state.project, sourceRange, destination, isCutMoveDirectSlotTarget(state.project, sourceRange, destination))) return;
+        if (!sourceRange || !canMoveCutGroupToIndex(state.project, sourceRange, destination)) return;
         event.preventDefault();
         moveCutMarkerToNextPage(sourceId);
       });
@@ -24672,159 +24669,30 @@
       return Boolean(cut && isFixedPictureFrame(cut) && !(cut.meta && cut.meta.pictureFramesAutoConfirmed));
     }
 
-    function isBlankCutMoveSlot(cut) {
-      return Boolean(cut && !String(cut.cutNo || '').trim() && !cut.inheritedCutNoHidden && !hasMovableCutSlotContent(cut));
-    }
-
-    function hasCutMoveActionDialogContent(cut) {
-      return Boolean(cut && (
-        String(cut.actionText || '').trim() ||
-        String(cut.dialogText || '').trim() ||
-        hasArrayItems(cut.sourceBlockIds) ||
-        hasArrayItems(cut.pictureTextBlockIds) ||
-        hasArrayItems(cut.dialogBlockIds) ||
-        hasArrayItems(cut.memoBlockIds)
-      ));
-    }
-
-    function isClearCutMoveSlotForUp(project, index) {
-      if (!project || index < 0 || index >= project.cuts.length) return false;
-      const cut = project.cuts[index];
-      return Boolean(cut && !String(cut.cutNo || '').trim() && !hasCutMoveActionDialogContent(cut));
-    }
-
-    function cutMoveRangeFrameSpan(project, startIndex, endIndex) {
-      if (!project || startIndex >= endIndex) return null;
-      const start = Math.max(0, startIndex);
-      const end = Math.min(project.cuts.length, endIndex);
-      const cutIds = new Set();
-      for (let cursor = start; cursor < end; cursor += 1) {
-        if (project.cuts[cursor] && project.cuts[cursor].id) cutIds.add(project.cuts[cursor].id);
-      }
-      if (!cutIds.size) return null;
-      const slots = buildVideoTimeline(project).slots || [];
-      let minFrame = Infinity;
-      let maxFrame = -Infinity;
-      slots.forEach(function(slot) {
-        if (!slot || !slot.cut || !cutIds.has(slot.cut.id)) return;
-        minFrame = Math.min(minFrame, Math.max(0, Math.round(Number(slot.startFrame) || 0)));
-        maxFrame = Math.max(maxFrame, Math.max(0, Math.round(Number(slot.endFrame) || 0)));
-      });
-      if (!Number.isFinite(minFrame) || !Number.isFinite(maxFrame) || maxFrame <= minFrame) return null;
-      return { startFrame: minFrame, endFrame: maxFrame };
-    }
-
-    function hasAudioClipInCutMoveRange(project, startIndex, endIndex) {
-      const span = cutMoveRangeFrameSpan(project, startIndex, endIndex);
-      if (!span) return false;
-      const duration = Math.max(1, span.endFrame - span.startFrame);
-      return audioTimelineDisplayClips(project).some(function(clip) {
-        return audioRangesOverlap(span.startFrame, duration, clip.startFrame, clip.durationFrames);
-      });
-    }
-
-    function areCutMoveSlotsBlank(project, startIndex, endIndex) {
-      const start = Math.max(0, startIndex);
-      const end = Math.min(project.cuts.length, endIndex);
-      for (let cursor = start; cursor < end; cursor += 1) {
-        if (!isBlankCutMoveSlot(project.cuts[cursor])) return false;
-      }
-      return true;
-    }
-
-    function areCutMoveSlotsClearForUp(project, startIndex, endIndex) {
-      const start = Math.max(0, startIndex);
-      const end = Math.min(project.cuts.length, endIndex);
-      for (let cursor = start; cursor < end; cursor += 1) {
-        if (!isClearCutMoveSlotForUp(project, cursor)) return false;
-      }
-      return !hasAudioClipInCutMoveRange(project, start, end);
-    }
-
-    function isCutMoveDirectSlotTarget(project, range, targetIndex) {
-      if (!project || targetIndex < 0 || targetIndex >= project.cuts.length) return false;
-      if (isBlankCutMoveSlot(project.cuts[targetIndex])) return true;
-      return Boolean(range && targetIndex < range.start && isClearCutMoveSlotForUp(project, targetIndex));
-    }
-
-    function canMoveCutGroupToIndex(project, range, destination, targetBlank) {
+    function canMoveCutGroupToIndex(project, range, destination) {
       if (!project || !range) return false;
       if (destination < 0 || destination > project.cuts.length) return false;
-      if (destination === range.start || (destination > range.start && destination < range.end)) return false;
-      if (destination < range.start) {
-        return Boolean(targetBlank) && areCutMoveSlotsClearForUp(project, destination, range.start);
-      }
-      if (destination >= project.cuts.length) return destination > range.start;
-      if (targetBlank) {
-        return areCutMoveSlotsBlank(project, range.end, destination + 1);
-      }
-      return destination > range.start;
-    }
-
-    function clearAutoTimingFromBlankMoveSlots(project) {
-      project.cuts.forEach(function(cut) {
-        if (!isBlankCutMoveSlot(cut)) return;
-        cut.pictureFramesInferred = 0;
-        if (cut.meta && cut.meta.pictureFramesAutoConfirmed) {
-          cut.pictureFrames = 0;
-          cut.pictureFramesManual = false;
-          delete cut.meta.pictureFramesAutoConfirmed;
-        }
-        cut.durationFrames = 0;
-        cut.durationFramesLocked = false;
-      });
-    }
-
-    function blankMovePicturePanelFrames(project) {
-      return fpsForProject(project);
-    }
-
-    function markBlankMoveSlotAsPicturePanel(project, cut) {
-      if (!cut) return 0;
-      const frames = blankMovePicturePanelFrames(project);
-      cut.pictureFrames = frames;
-      cut.pictureFramesManual = true;
-      cut.pictureFramesInferred = 0;
-      cut.meta = cut.meta || {};
-      cut.meta.blankMovePicturePanel = true;
-      cut.meta.userOverride = true;
-      delete cut.meta.pictureFramesAutoConfirmed;
-      return frames;
+      // No-op: dropping inside the group's own span (or exactly at either edge).
+      if (destination >= range.start && destination <= range.end) return false;
+      return true;
     }
 
     function hasArrayItems(value) {
       return Array.isArray(value) && value.length > 0;
     }
 
+    // New model: dragging a cut is a plain reorder, exactly like a timeline. The whole cut group
+    // (owner + its continuation panels) moves as a unit to `destination`, and every cut between the
+    // old and new positions shifts to fill the gap. No blank "move slots" are inserted any more.
     function moveCutGroupToIndex(project, sourceIndex, destination) {
       const range = cutGroupRange(project, sourceIndex);
-      const targetBlank = isCutMoveDirectSlotTarget(project, range, destination);
-      if (!canMoveCutGroupToIndex(project, range, destination, targetBlank)) return false;
+      if (!canMoveCutGroupToIndex(project, range, destination)) return false;
+      const groupLength = range.end - range.start;
       const group = project.cuts.slice(range.start, range.end);
-      const groupLength = group.length;
-      const sourceSlot = videoSlotForCutId(project, group[0] && group[0].id);
-      const addedBlankFrameAt = sourceSlot ? Math.max(0, Math.round(Number(sourceSlot.startFrame) || 0)) : 0;
-      if (destination < range.start) {
-        project.cuts.splice(range.start, groupLength);
-        project.cuts.splice(destination, 0, ...group);
-        clearAutoTimingFromBlankMoveSlots(project);
-        renumberCutOrders(project);
-        setCurrentPicturePanelId(group[0].id);
-        return true;
-      }
-      const insertBlankCount = Math.max(1, destination - range.start);
-      const blanks = [];
-      let addedBlankFrames = 0;
-      for (let offset = 0; offset < insertBlankCount; offset += 1) {
-        const blank = createBlankCutForSlot(project, range.start + offset);
-        addedBlankFrames += markBlankMoveSlotAsPicturePanel(project, blank);
-        blanks.push(blank);
-      }
-      project.cuts.splice(range.start, 0, ...blanks);
-      if (addedBlankFrames) {
-        shiftTimelineMediaAfterFrame(project, addedBlankFrameAt, addedBlankFrames);
-      }
-      clearAutoTimingFromBlankMoveSlots(project);
+      project.cuts.splice(range.start, groupLength);
+      // After removing the block, a destination that sat past it shifts left by the block size.
+      const insertAt = destination > range.start ? destination - groupLength : destination;
+      project.cuts.splice(insertAt, 0, ...group);
       renumberCutOrders(project);
       setCurrentPicturePanelId(group[0].id);
       return true;
@@ -24833,12 +24701,6 @@
 
 
 
-
-    function createBlankCutForSlot(project, index) {
-      const cut = createBlankCut(index + 1);
-      cut.id = 'slot-' + Date.now().toString(36) + '-' + index + '-' + Math.random().toString(36).slice(2, 7);
-      return cut;
-    }
 
     function renumberCutOrders(project) {
       project.cuts.forEach(function(cut, index) {
