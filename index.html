@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver087</title>
+  <title>Conte Editor Prototype ver088</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6783,6 +6783,11 @@
                   </label>
                   <div id="workspaceAutosaveStatus" class="stage-settings-status"></div>
                 </div>
+                <div class="stage-settings-divider"></div>
+                <div class="stage-settings-actions">
+                  <button id="cleanupEmptyPanelsBtn" type="button">空パネル整理</button>
+                </div>
+                <div id="cleanupEmptyPanelsStatus" class="stage-settings-status"></div>
               </div>
             </div>
             <div class="stage-onion-skin-wrap">
@@ -6932,7 +6937,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver087</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver088</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7103,7 +7108,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '087';
+    const APP_DISPLAY_VERSION = '088';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -27938,6 +27943,57 @@
       return deleteSelectedPicturePanels();
     }
 
+    // A cut is "empty" (safe to clean up) only when it carries NO content of any kind: zero shaku
+    // (尺=0, so no video-timeline slot), no cut number, no ACTION/DIALOG text, no assigned blocks,
+    // and no actual drawing on any of its conte layers. Numbered / drawn / texted cuts are preserved
+    // even if their shaku is still 0.
+    function cutHasMeaningfulContent(project, cut) {
+      if (!cut) return false;
+      if (String(cut.cutNo || '').trim()) return true;
+      if (String(cut.actionText || '').trim() || String(cut.dialogText || '').trim()) return true;
+      if (Math.max(0, Math.round(Number(cut.pictureFrames) || 0)) > 0) return true;
+      if (Math.max(0, Math.round(Number(cut.durationFrames) || 0)) > 0) return true;
+      const blockArrays = [cut.sourceBlockIds, cut.pictureTextBlockIds, cut.dialogBlockIds, cut.memoBlockIds];
+      if (blockArrays.some(function(arr) { return Array.isArray(arr) && arr.length; })) return true;
+      const drawings = project && project.layerDrawings && typeof project.layerDrawings === 'object' ? project.layerDrawings : {};
+      const layers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
+      if (layers.some(function(layer) {
+        const drawing = layer && layer.drawingRef ? drawings[layer.drawingRef] : null;
+        if (!drawing) return false;
+        return Boolean(String(drawing.bitmapDataUrl || '') || (drawing.bitmapStorage && drawing.bitmapStorage.fileName));
+      })) return true;
+      return false;
+    }
+
+    function collectEmptyCutIdsForCleanup(project) {
+      if (!project || !Array.isArray(project.cuts)) return [];
+      return project.cuts
+        .filter(function(cut) { return !cutHasMeaningfulContent(project, cut); })
+        .map(function(cut) { return cut.id; });
+    }
+
+    function setCleanupEmptyPanelsStatus(message) {
+      const el = document.getElementById('cleanupEmptyPanelsStatus');
+      if (el) el.textContent = String(message || '');
+    }
+
+    function cleanupEmptyPanels() {
+      const ids = collectEmptyCutIdsForCleanup(state.project);
+      if (!ids.length) {
+        setCleanupEmptyPanelsStatus('空パネルはありません。');
+        return;
+      }
+      let removed = 0;
+      runTimelineStructureCommand('Clean up empty panels', function(project) {
+        const before = project.cuts.length;
+        removePicturePanelsByIds(project, ids);
+        removed = before - project.cuts.length;
+      });
+      setCleanupEmptyPanelsStatus(removed > 0
+        ? (removed + '個の空パネルを削除しました。')
+        : '削除できる空パネルがありませんでした。');
+    }
+
 
 
     // APP: EXPORT / IMPORT
@@ -37328,6 +37384,13 @@
         event.preventDefault();
         deleteIndexedDbAutosave();
       });
+      const cleanupEmptyPanelsBtn = document.getElementById('cleanupEmptyPanelsBtn');
+      if (cleanupEmptyPanelsBtn) {
+        cleanupEmptyPanelsBtn.addEventListener('click', function(event) {
+          event.preventDefault();
+          cleanupEmptyPanels();
+        });
+      }
       document.getElementById('workspaceAutosaveToggle').addEventListener('change', function(event) {
         const settings = workspaceAutosaveSettings();
         settings.autosaveEnabled = Boolean(event.currentTarget.checked);
