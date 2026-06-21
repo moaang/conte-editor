@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver102</title>
+  <title>Conte Editor Prototype ver103</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6952,7 +6952,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver102</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver103</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7123,7 +7123,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '102';
+    const APP_DISPLAY_VERSION = '103';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17999,6 +17999,23 @@
       state.activeConteSelectionType = 'panel';
     }
 
+    // Make the absorbed cut's layer komas share the owner's layer LINES (matched by order) so the two
+    // cuts' drawings land on the SAME layer rows as separate komas, instead of spawning new rows.
+    function alignAbsorbedConteLayerLines(project, absorbedCutId, ownerCutId) {
+      const absorbed = project.cuts.find(function(c) { return c.id === absorbedCutId; });
+      const owner = project.cuts.find(function(c) { return c.id === ownerCutId; });
+      if (!absorbed || !owner) return;
+      const ownerLayers = (owner.conteLayers || []).slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      const absorbedLayers = (absorbed.conteLayers || []).slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      absorbedLayers.forEach(function(layer, i) {
+        const target = ownerLayers[i];
+        if (!target) return;
+        layer.layerLineId = target.layerLineId;
+        layer.originLayerId = target.originLayerId;
+        layer.layerLineOrder = target.layerLineOrder;
+      });
+    }
+
     function mergeCutIntoNeighbor(cutId, side) {
       const targetCutId = cutGroupOwnerIdOf(state.project, cutId);
       const info = cutMergeAllowed(state.project, targetCutId, side);
@@ -18016,6 +18033,7 @@
         const combined = live.selfFrames + live.neighborFrames;
         if (side === 'prev') {
           // this cut is absorbed as a trailing panel of the left neighbor (which survives).
+          alignAbsorbedConteLayerLines(project, targetCutId, live.neighborOwnerId);
           const sourceOwner = project.cuts.find(function(c) { return c.id === targetCutId; });
           if (sourceOwner) sourceOwner.cutNo = '';
           removeCameraKeyframesForCut(project, targetCutId);
@@ -18025,6 +18043,7 @@
         } else {
           // this cut absorbs the right neighbor: it keeps its position but takes the neighbor's
           // number (becoming the merged group's head); the neighbor's owner becomes a panel.
+          alignAbsorbedConteLayerLines(project, live.neighborOwnerId, targetCutId);
           const sourceOwner = project.cuts.find(function(c) { return c.id === targetCutId; });
           const neighborOwner = project.cuts.find(function(c) { return c.id === live.neighborOwnerId; });
           removeCameraKeyframesForCut(project, targetCutId);
