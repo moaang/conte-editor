@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver103</title>
+  <title>Conte Editor Prototype ver104</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6478,6 +6478,40 @@
         max-width: none;
       }
     }
+
+    /* Dialog blocks (inspector) */
+    .dialog-blocks-field > label { display: block; margin-bottom: 4px; }
+    .dialog-blocks { display: flex; flex-direction: column; gap: 6px; }
+    .dialog-blocks-empty { color: var(--muted); font-size: 12px; padding: 4px 2px; }
+    .dialog-block {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--panel);
+      padding: 5px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dialog-block.free { border-style: dashed; }
+    .dialog-block.dragging { opacity: 0.5; }
+    .dlgblk-head { display: flex; align-items: center; gap: 5px; }
+    .dlgblk-drag { cursor: grab; color: var(--muted); font-size: 11px; user-select: none; letter-spacing: -2px; }
+    .dlgblk-kind { font-size: 11px; color: var(--muted); }
+    .dlgblk-speaker { flex: 0 0 88px; min-width: 0; font-size: 12px; padding: 2px 4px; }
+    .dlgblk-tags { display: flex; gap: 3px; margin-left: auto; }
+    .dlgblk-tag {
+      font-size: 10px; line-height: 1; padding: 3px 5px; border: 1px solid var(--line);
+      border-radius: 3px; background: transparent; color: var(--muted); cursor: pointer;
+    }
+    .dlgblk-tag.on { background: var(--focus); border-color: var(--focus); color: #fff; }
+    .dlgblk-del {
+      margin-left: 4px; border: 0; background: transparent; color: var(--muted);
+      font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px;
+    }
+    .dlgblk-del:hover { color: #c0392b; }
+    .dlgblk-body { width: 100%; font-size: 12px; resize: vertical; min-height: 32px; }
+    .dialog-blocks-add { display: flex; gap: 6px; margin-top: 2px; }
+    .dialog-block-add-btn { font-size: 11px; padding: 3px 8px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -6952,7 +6986,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver103</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver104</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7123,7 +7157,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '103';
+    const APP_DISPLAY_VERSION = '104';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -10521,6 +10555,201 @@
       if (!body) return '';
       if (/[「『].+[」』]/.test(body)) return body;
       return name ? name + '「' + body + '」' : body;
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Dialog blocks (P0/P1): structured {speaker, suffix tags, body} units per cut.
+    // cut.dialogBlocks[] is authoritative; cut.dialogText is DERIVED from it so all
+    // existing timing / export / spreadsheet / audio-sync code keeps working unchanged.
+    // Migration is lazy: blocks are parsed from dialogText on first edit/display.
+    // ───────────────────────────────────────────────────────────────────────
+    const DIALOG_BLOCK_TAG_DEFS = [
+      { tag: 'off', label: 'OFF' },
+      { tag: 'monologue', label: 'M' },
+      { tag: 'flashback', label: '回想' }
+    ];
+
+    function newDialogBlockId(project) {
+      const used = new Set();
+      ((project || state.project || {}).cuts || []).forEach(function(c) {
+        ((c && c.dialogBlocks) || []).forEach(function(b) { if (b && b.id) used.add(b.id); });
+      });
+      let n = Math.max(state.dialogBlockSeq | 0, used.size) + 1;
+      let id = 'dlgblk-' + n.toString(36);
+      while (used.has(id)) { n += 1; id = 'dlgblk-' + n.toString(36); }
+      state.dialogBlockSeq = n;
+      return id;
+    }
+
+    function normalizeDialogBlock(raw) {
+      const b = raw && typeof raw === 'object' ? raw : {};
+      const kind = b.kind === 'free' ? 'free' : 'dialog';
+      return {
+        id: String(b.id || ''),
+        kind: kind,
+        speaker: kind === 'free' ? '' : String(b.speaker || ''),
+        tags: kind === 'free' ? [] : normalizeDialogTags(b.tags || b.dialogTags || b.dialogMode || ''),
+        body: String(b.body != null ? b.body : (b.text || '')),
+        sourceBlockId: String(b.sourceBlockId || ''),
+        audioClipId: String(b.audioClipId || '')
+      };
+    }
+
+    function parseDialogBlocksFromText(project, cut) {
+      const blocks = [];
+      const lines = String((cut && cut.dialogText) || '').split(/\n+/);
+      const blockIds = Array.isArray(cut && cut.dialogBlockIds) ? cut.dialogBlockIds.slice() : [];
+      let idx = 0;
+      lines.forEach(function(line) {
+        const rawLine = String(line || '').trim();
+        if (!rawLine) return;
+        const srcBlock = blockIds[idx] ? findBlockById(project, blockIds[idx]) : null;
+        idx += 1;
+        const speaker = inferDialogSpeakerFromLine(rawLine) || (srcBlock && (srcBlock.characterName || srcBlock.speaker) || '');
+        const tags = normalizeDialogTags([rawLine, srcBlock && srcBlock.modifier, srcBlock && srcBlock.subtype].filter(Boolean).join(' '));
+        const body = cleanDialogForSpeech(rawLine, speaker) || rawLine;
+        blocks.push(normalizeDialogBlock({
+          id: newDialogBlockId(project), kind: 'dialog',
+          speaker: speaker, tags: tags, body: body,
+          sourceBlockId: srcBlock ? srcBlock.id : ''
+        }));
+      });
+      return blocks;
+    }
+
+    function dialogBlocksForDisplay(project, cut) {
+      if (cut && Array.isArray(cut.dialogBlocks)) {
+        return cut.dialogBlocks.map(function(b) {
+          const nb = normalizeDialogBlock(b);
+          if (!nb.id) nb.id = newDialogBlockId(project);
+          return nb;
+        });
+      }
+      return parseDialogBlocksFromText(project, cut);
+    }
+
+    function materializeDialogBlocks(project, cut) {
+      if (!cut) return [];
+      if (!Array.isArray(cut.dialogBlocks)) cut.dialogBlocks = parseDialogBlocksFromText(project, cut);
+      cut.dialogBlocks = cut.dialogBlocks.map(function(b) {
+        const nb = normalizeDialogBlock(b);
+        if (!nb.id) nb.id = newDialogBlockId(project);
+        return nb;
+      });
+      return cut.dialogBlocks;
+    }
+
+    function dialogBlockToDisplayText(block) {
+      if (!block) return '';
+      if (block.kind === 'free') return String(block.body || '').trim();
+      const speaker = String(block.speaker || '').trim();
+      const body = String(block.body || '').trim();
+      if (!body) return '';
+      return speaker ? speaker + '「' + body + '」' : body;
+    }
+
+    function deriveDialogTextFromBlocks(cut) {
+      const text = ((cut && Array.isArray(cut.dialogBlocks)) ? cut.dialogBlocks : [])
+        .map(dialogBlockToDisplayText)
+        .filter(function(s) { return s; })
+        .join('\n');
+      if (cut) cut.dialogText = text;
+      return text;
+    }
+
+    function renderDialogBlockRowHtml(block) {
+      const isFree = block.kind === 'free';
+      const tags = normalizeDialogTags(block.tags || []);
+      const tagChips = DIALOG_BLOCK_TAG_DEFS.map(function(def) {
+        const on = tags.indexOf(def.tag) >= 0;
+        return '<button type="button" class="dlgblk-tag' + (on ? ' on' : '') + '" data-tag="' + def.tag + '">' + escapeHtml(def.label) + '</button>';
+      }).join('');
+      return '<div class="dialog-block' + (isFree ? ' free' : '') + '" data-dlgblk-id="' + escapeAttr(block.id) + '" draggable="true">' +
+        '<div class="dlgblk-head">' +
+          '<span class="dlgblk-drag" title="드래그로 순서 변경" aria-hidden="true">⋮⋮</span>' +
+          (isFree
+            ? '<span class="dlgblk-kind">자유</span>'
+            : '<input type="text" class="dlgblk-speaker" data-field="speaker" placeholder="화자" value="' + escapeAttr(block.speaker || '') + '" />' +
+              '<span class="dlgblk-tags">' + tagChips + '</span>') +
+          '<button type="button" class="dlgblk-del" title="삭제">×</button>' +
+        '</div>' +
+        '<textarea class="dlgblk-body" data-field="body" rows="2" placeholder="' + (isFree ? '자유 텍스트' : '대사 본문') + '">' + escapeHtml(block.body || '') + '</textarea>' +
+      '</div>';
+    }
+
+    function renderDialogBlocksHtml(project, cut) {
+      const blocks = dialogBlocksForDisplay(project, cut);
+      const rows = blocks.map(renderDialogBlockRowHtml).join('');
+      return '<div class="dialog-blocks" data-cut-id="' + escapeAttr(cut.id) + '">' +
+        (rows || '<div class="dialog-blocks-empty">대사 블록 없음</div>') +
+        '<div class="dialog-blocks-add">' +
+          '<button type="button" class="dialog-block-add-btn" data-add="dialog">+ 대사블록</button>' +
+          '<button type="button" class="dialog-block-add-btn" data-add="free">+ 자유블록</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function bindDialogBlocks(cut) {
+      const root = document.querySelector('.dialog-blocks[data-cut-id="' + cssEscapeValue(cut.id) + '"]');
+      if (!root) return;
+      const editBlocks = function(label, mutator) {
+        runCommand(label, function(project) {
+          const target = project.cuts.find(function(it) { return it.id === cut.id; });
+          if (!target) return;
+          const blocks = materializeDialogBlocks(project, target);
+          mutator(blocks, target, project);
+          deriveDialogTextFromBlocks(target);
+          target.meta = target.meta || {};
+          target.meta.userOverride = true;
+        });
+      };
+      const findBlock = function(blocks, id) { return blocks.find(function(x) { return x.id === id; }); };
+      root.querySelectorAll('.dialog-block').forEach(function(el) {
+        const id = el.dataset.dlgblkId;
+        const speaker = el.querySelector('.dlgblk-speaker');
+        if (speaker) speaker.addEventListener('change', function(e) {
+          editBlocks('Edit dialog speaker', function(blocks) { const b = findBlock(blocks, id); if (b) b.speaker = e.target.value; });
+        });
+        const body = el.querySelector('.dlgblk-body');
+        if (body) body.addEventListener('change', function(e) {
+          editBlocks('Edit dialog body', function(blocks) { const b = findBlock(blocks, id); if (b) b.body = e.target.value; });
+        });
+        el.querySelectorAll('.dlgblk-tag').forEach(function(chip) {
+          chip.addEventListener('click', function() {
+            const tag = chip.dataset.tag;
+            editBlocks('Toggle dialog tag', function(blocks) {
+              const b = findBlock(blocks, id); if (!b) return;
+              const i = b.tags.indexOf(tag); if (i >= 0) b.tags.splice(i, 1); else b.tags.push(tag);
+            });
+          });
+        });
+        const del = el.querySelector('.dlgblk-del');
+        if (del) del.addEventListener('click', function() {
+          editBlocks('Delete dialog block', function(blocks) { const i = blocks.findIndex(function(x) { return x.id === id; }); if (i >= 0) blocks.splice(i, 1); });
+        });
+        el.addEventListener('dragstart', function(e) { e.dataTransfer.setData('text/dlgblk', id); e.dataTransfer.effectAllowed = 'move'; el.classList.add('dragging'); });
+        el.addEventListener('dragend', function() { el.classList.remove('dragging'); });
+        el.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+        el.addEventListener('drop', function(e) {
+          e.preventDefault();
+          const dragId = e.dataTransfer.getData('text/dlgblk');
+          if (!dragId || dragId === id) return;
+          editBlocks('Reorder dialog blocks', function(blocks) {
+            const from = blocks.findIndex(function(x) { return x.id === dragId; });
+            const to = blocks.findIndex(function(x) { return x.id === id; });
+            if (from < 0 || to < 0) return;
+            const moved = blocks.splice(from, 1)[0]; blocks.splice(to, 0, moved);
+          });
+        });
+      });
+      root.querySelectorAll('.dialog-block-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const kind = btn.dataset.add === 'free' ? 'free' : 'dialog';
+          editBlocks('Add dialog block', function(blocks, target, project) {
+            blocks.push(normalizeDialogBlock({ id: newDialogBlockId(project), kind: kind }));
+          });
+        });
+      });
     }
 
     function removeDialogTextLine(cut, text) {
@@ -27279,7 +27508,7 @@
         timeFieldHtml('pictureFrame', '現在パネル尺', inspectorPanelFramesForCut(cut), { className: 'inspector-panel-time' }),
         '</div>',
         '<div><label for="actionTextInput">Action</label><textarea id="actionTextInput">' + escapeHtml(cut.actionText || '') + '</textarea></div>',
-        '<div><label for="dialogTextInput">Dialog</label><textarea id="dialogTextInput">' + escapeHtml(cut.dialogText || '') + '</textarea></div>',
+        '<div class="dialog-blocks-field"><label>Dialog</label>' + renderDialogBlocksHtml(state.project, cut) + '</div>',
         '<div class="button-row"><button id="duplicateCutBtn" type="button">Duplicate</button><button id="deleteCutBtn" type="button">Delete</button></div>',
         renderStatus(cut, durationCut)
       ].join('');
@@ -27376,7 +27605,7 @@
         document.getElementById('durationKomaInput').addEventListener('change', updateDuration);
       }
       document.getElementById('actionTextInput').addEventListener('change', function(event) { update('actionText', event.target.value); });
-      document.getElementById('dialogTextInput').addEventListener('change', function(event) { update('dialogText', event.target.value); });
+      bindDialogBlocks(cut);
       document.getElementById('duplicateCutBtn').addEventListener('click', duplicateSelectedPicturePanel);
       document.getElementById('deleteCutBtn').addEventListener('click', deletePrimarySelectedPicturePanel);
     }
