@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver085</title>
+  <title>Conte Editor Prototype ver087</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -833,15 +833,6 @@
     #clearBoardBtn:hover {
       background: #c22623;
       border-color: #a91f1d;
-    }
-
-    .scenario-header #autoTimingBtn {
-      width: auto;
-      min-width: 88px;
-      min-height: 26px;
-      padding: 4px 8px;
-      font-size: 11px;
-      white-space: nowrap;
     }
 
     .auto-ma-toggle {
@@ -6941,7 +6932,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver085</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver087</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7112,7 +7103,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '085';
+    const APP_DISPLAY_VERSION = '087';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8188,6 +8179,7 @@
       options = options || {};
       const historyViewport = options.historyTimelineViewport || null;
       state.project = normalizeProjectSnapshot(project);
+      invalidateProjectDataCaches();
       // 묶음 C: project 교체 시 audio cache 무효화
       bumpAudioCycle();
       if (state.project.settings && state.project.settings.shortcuts) {
@@ -9191,9 +9183,10 @@
         cut.conteLayers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
         cut.meta = cut.meta || { confidence: 1, evidence: [], warnings: [], alternatives: [] };
       });
-      while (project.cuts.length % ROWS_PER_PAGE !== 0) {
-        project.cuts.push(createBlankCut(project.cuts.length + 1));
-      }
+      // Partial pages allowed: do not pad the board up to a full ROWS_PER_PAGE page. The board
+      // keeps exactly as many cuts as exist (minimum 1), so trailing blank panels can be deleted.
+      // relayoutProject() lays out an incomplete last page naturally.
+      if (!project.cuts.length) project.cuts.push(createBlankCut(1));
       normalizeConteLayers(project);
       normalizeLayerDrawings(project);
       syncCutGroupDurations(project);
@@ -9910,6 +9903,20 @@
       }
     }
 
+    function invalidateProjectDataCaches() {
+      try { bumpAudioCycle(); } catch (error) {
+        state.audioCycleId = (state.audioCycleId | 0) + 1;
+        state.audioDisplayClipsCache = null;
+        state.audioNormalizedCycle = -1;
+        state.audioTimelineTrackWrittenCycle = -1;
+      }
+      try { invalidateVideoTimelineCache(); } catch (error) {
+        state.videoTimelineCacheKey = '';
+        state.videoTimelineCache = null;
+        state.videoTimelineCacheProject = null;
+      }
+    }
+
     function resetProjectForNewProject() {
       resetProjectTransientRuntime();
       try { clearTransientMediaObjectUrls({ pictures: true, audio: true, layers: true }); } catch (error) {
@@ -9917,6 +9924,7 @@
       }
       clearWorkspaceConnection({ forgetSavedHandle: true });
       state.project = normalizeProjectSnapshot(createInitialProject());
+      invalidateProjectDataCaches();
       state.project.settings = state.project.settings || {};
       state.project.settings.localWorkspace = normalizeWorkspaceSettings({ enabled: false });
       resetProjectRuntimeSelection();
@@ -13437,10 +13445,8 @@
 
     function audioClipMinimumVisibleFrames(clip) {
       if (!clip) return 1;
-      const trim = Math.max(0, Math.round(Number(clip.audioTrimDurationFrames) || 0));
-      const source = Math.max(0, Math.round(Number(clip.audioDurationFrames) || 0));
       const duration = Math.max(0, Math.round(Number(clip.durationFrames) || 0));
-      return Math.max(1, trim || source || duration || 1);
+      return Math.max(1, duration || 1);
     }
 
 
@@ -13456,8 +13462,6 @@
         clip.audioTrimDurationFrames = Math.max(1, clip.audioDurationFrames - clip.audioTrimStartFrames);
       }
       clip.durationFrames = Math.max(1, Math.round(Number(clip.durationFrames) || 1));
-      const minimum = audioClipMinimumVisibleFrames(clip);
-      if (clip.durationFrames < minimum) clip.durationFrames = minimum;
     }
 
     // 묶음 C: audio mutation 진입점에서 호출. cache invalidation.
@@ -14003,12 +14007,18 @@
       groupItems.forEach(function(item) {
         const units = dialogUnitsForCutGroup(project, item.group);
         if (!units.length) return;
-        const slotFrames = Math.max(1, item.frames / units.length);
+        const parallelTrackMap = simultaneousDialogUnitTrackMap(units);
+        const hasParallelDialog = parallelTrackMap.size === units.length;
+        const slotFrames = Math.max(1, hasParallelDialog ? item.frames : item.frames / units.length);
         units.forEach(function(unit, index) {
           const id = unit.id;
           const previous = oldById.get(id) || (unit.sourceBlockId ? oldBySourceBlockId.get(unit.sourceBlockId) : null);
           const defaultDuration = Math.max(12, Math.min(Math.max(1, Math.round(slotFrames)), dialogAutoTimingFramesForText(unit.text)));
-          const startFrame = previous && previous.manualTiming ? previous.startFrame : Math.round(item.startFrame + slotFrames * index);
+          const parallelTrackId = parallelTrackMap.get(id) || '';
+          const startFrame = previous && previous.manualTiming ? previous.startFrame : Math.round(item.startFrame + (parallelTrackId ? 0 : slotFrames * index));
+          const trackId = previous && previous.manualTiming
+            ? (previous.trackId || parallelTrackId || 'dialog-main')
+            : (parallelTrackId || 'dialog-main');
           const profile = characterVoiceProfile(project, unit.characterName || 'Unknown', {
             gender: unit.characterGender || '',
             age: unit.characterAge || ''
@@ -14025,7 +14035,8 @@
             previous.dialogTags = normalizeDialogTags(unit.dialogTags || unit.dialogMode || previous.dialogTags || previous.dialogMode || '');
             previous.dialogMode = previous.dialogTags[0] || '';
             previous.text = unit.text || previous.text || '';
-            if (!previous.manualTiming && !audioClipHasSource(project, previous)) {
+            if (!previous.manualTiming) {
+              previous.trackId = trackId;
               previous.startFrame = Math.max(0, startFrame);
               previous.durationFrames = Math.max(1, Math.round(defaultDuration));
             }
@@ -14054,7 +14065,7 @@
             ttsVersion: 0,
             startFrame: Math.max(0, startFrame),
             durationFrames: Math.max(1, Math.round(defaultDuration)),
-            trackId: 'dialog-main',
+            trackId: trackId,
             manualTiming: false
           };
           project.audio.clips.push(clip);
@@ -14212,6 +14223,31 @@
         });
       });
       return units;
+    }
+
+    function isParallelReactionDialogUnit(unit) {
+      const text = String(unit && unit.text || '').normalize('NFKC').trim();
+      if (!text) return false;
+      if (estimateDialogMora(text) > 10) return false;
+      if (/[!?！？]/.test(text)) return true;
+      return /^(?:[-－‐‑‒–—―]+)$/.test(text);
+    }
+
+    function simultaneousDialogUnitTrackMap(units) {
+      const dialogUnits = (units || []).filter(function(unit) {
+        return unit && unit.text;
+      });
+      const map = new Map();
+      if (dialogUnits.length < 2) return map;
+      const speakers = new Set(dialogUnits.map(function(unit) {
+        return String(unit.characterName || '').trim();
+      }).filter(Boolean));
+      if (speakers.size < 2) return map;
+      if (!dialogUnits.every(isParallelReactionDialogUnit)) return map;
+      dialogUnits.forEach(function(unit, index) {
+        map.set(unit.id, index === 0 ? 'dialog-main' : 'audio-' + (index + 1));
+      });
+      return map;
     }
 
     function inferDialogSpeakerFromLine(value) {
@@ -24962,46 +24998,15 @@
     }
 
     async function placeImageFileIntoCut(file, cutId) {
-      try {
-        const stored = await preparePictureFileForStorage(file);
-        const clipId = newVideoClipId('video-clip');
-        let mediaDataUrl = '';
-        let mediaFileName = '';
-        let mediaStorage = imageStorageMeta(stored, state.workspaceHandle ? 'workspace' : 'embedded');
-        if (state.workspaceHandle) {
-          mediaFileName = await writeVideoMediaBlobToWorkspace(stored.blob, videoClipObjectKey({ id: clipId }), stored.mime);
-          mediaDataUrl = replaceWorkspaceObjectUrl('pictures', videoClipObjectKey({ id: clipId }), stored.blob);
-          mediaStorage.fileName = mediaFileName;
-          mediaStorage.dir = state.project.settings.localWorkspace.videoDir;
-        } else {
-          mediaDataUrl = await blobToDataUrl(stored.blob);
-        }
-        runTimelineStructureCommand('Drop picture image', function(project) {
-          const clips = ensureVideoClipList(project);
-          const clip = createVideoMediaClip({
-            id: clipId,
-            sourceType: 'image',
-            sourceCutId: cutId,
-            panelCutId: cutId,
-            mediaDataUrl: mediaDataUrl,
-            mediaFileName: mediaFileName,
-            mediaMime: stored.mime,
-            mediaStorage: mediaStorage
-          });
-          clips.push(clip);
-          const target = project.cuts.find(function(item) { return item.id === cutId; });
-          if (target) {
-            target.meta = target.meta || {};
-            target.meta.userOverride = true;
-            target.meta.videoMedia = true;
-          }
-          setCurrentPicturePanelId(cutId);
-          clearConteLayerSelection();
-        }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
-        if (state.workspaceHandle) await saveProjectToWorkspace();
-      } catch (error) {
-        alert('Picture load failed: ' + (error && error.message ? error.message : error));
+      const targetCutId = String(cutId || '');
+      const entry = selectedConteLayerDrawingEntryForCut(state.project, targetCutId, { ignoreSelectedPanel: true })
+        || createConteLayerKomaForSelectedRow(state.project, targetCutId)
+        || topDrawableConteLayerForOwner(state.project, targetCutId);
+      if (!entry || !entry.layer || !entry.layer.id) {
+        alert('Picture load failed: no conte layer target.');
+        return;
       }
+      await placeImageFileIntoConteLayer(file, entry.layer.id);
     }
 
     async function placeImageFileIntoConteLayer(file, layerId) {
@@ -27851,7 +27856,10 @@
       }).sort(function(left, right) {
         return left.startFrame - right.startFrame;
       });
-      if (!slots.length) return false;
+      // Blank / zero-duration panels have no video-timeline slot, but they must still be deletable.
+      // Only abort if none of the requested cuts actually exist in the project; otherwise fall
+      // through and remove them (the slot-based timeline shifting below simply runs zero times).
+      if (!project.cuts.some(function(cut) { return removeSet.has(cut.id); })) return false;
       let shifted = 0;
       const removeFramesByOwner = new Map();
       slots.forEach(function(slot) {
@@ -27869,9 +27877,9 @@
         if (owner) setCutGroupDurationByCutId(project, targetOwnerId, Math.max(1, Math.round(Number(owner.durationFrames) || oneSecondFrames(project)) - frames));
       });
       project.cuts = project.cuts.filter(function(cut) { return !removeSet.has(cut.id); });
-      while (project.cuts.length < EMPTY_SLOT_COUNT) {
-        project.cuts.push(createBlankCut(project.cuts.length + 1));
-      }
+      // Partial pages allowed: keep at least one cut (never an empty project), but do not refill
+      // up to a full page — trailing blank panels stay deleted.
+      if (!project.cuts.length) project.cuts.push(createBlankCut(1));
       resetCutOrders(project);
       syncVideoMediaFlags(project);
       const next = project.cuts[Math.min(project.cuts.length - 1, Math.max(0, slots[0] ? slots[0].group.startIndex : 0))] || project.cuts[0];
@@ -28640,6 +28648,7 @@
       ));
       state.project = normalizeProjectSnapshot(project);
       state.project.settings.localWorkspace = workspaceSettings;
+      invalidateProjectDataCaches();
       if (state.project.settings && state.project.settings.shortcuts) {
         state.shortcuts = normalizedShortcutSettings(state.project.settings.shortcuts);
         saveShortcutSettings();
@@ -30384,6 +30393,7 @@
       });
       if (projectChanged) {
         normalizeProject(state.project);
+        invalidateProjectDataCaches();
         await hydrateWorkspaceMediaRefs();
         clampCurrentPage();
         if (!state.project.cuts.some(function(cut) { return cut.id === currentPicturePanelId(); })) {
@@ -30432,6 +30442,7 @@
         const nextProject = command.project || command.value;
         if (!nextProject || typeof nextProject !== 'object') throw new Error('replaceProject requires project/value object.');
         state.project = normalizeProjectSnapshot(fastClone(nextProject));
+        invalidateProjectDataCaches();
         record.message = 'Project replaced.';
         return Object.assign(record, { projectChanged: true, uiChanged: true });
       }
@@ -31174,13 +31185,14 @@
     function drawLayerDrawingFastThumbnailToCanvas(canvas, drawing, key) {
       if (!canvas || !drawing || !drawing.bitmapDataUrl) return false;
       const ctx = canvas.getContext('2d');
+      const rect = layerDrawingBitmapRect(drawing);
       const image = new Image();
       image.onload = function() {
         if (!canvas.isConnected || layerDrawingThumbnailKey(canvas, canvas.dataset.layerDrawingRef || '') !== key) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
         canvas.dataset.layerThumbnailDrawnKey = key;
         cacheTimelineLayerThumbnail(canvas, key);
         clearTimelineLayerThumbnailBackground(canvas);
@@ -34921,7 +34933,7 @@
     function beginScenarioWindowDrag(event) {
       if (event.button !== 0) return;
       const handle = event.target && event.target.closest ? event.target.closest('[data-scenario-window-drag="true"]') : null;
-      if (!handle || event.target.closest('#scenarioBoardCollapseBtn, #scenarioBoardCloseBtn, #clearBoardBtn, #autoTimingBtn, input, button, label, select, textarea')) return;
+      if (!handle || event.target.closest('#scenarioBoardCollapseBtn, #scenarioBoardCloseBtn, #clearBoardBtn, input, button, label, select, textarea')) return;
       const win = document.getElementById('scenarioBoardWindow');
       if (!win) return;
       const rect = win.getBoundingClientRect();
