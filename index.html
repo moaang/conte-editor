@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver101</title>
+  <title>Conte Editor Prototype ver102</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5254,11 +5254,6 @@
       outline-offset: -1px;
     }
 
-    .conte-cut-number-segment.cut-merge-drop-ready {
-      background: rgba(34, 180, 90, 0.22);
-      outline: 2px solid rgba(34, 180, 90, 0.85);
-      outline-offset: -2px;
-    }
 
     .conte-trim-handle {
       position: absolute;
@@ -6957,7 +6952,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver101</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver102</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7128,7 +7123,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '101';
+    const APP_DISPLAY_VERSION = '102';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18004,19 +17999,6 @@
       state.activeConteSelectionType = 'panel';
     }
 
-    // For drag-and-drop: which side to merge when dropping source cut onto target cut. Returns
-    // 'prev'/'next' only when target is the source's immediate neighbor; null otherwise.
-    function cutMergeSideForDrop(project, sourceCutId, targetCutId) {
-      const srcOwner = cutGroupOwnerIdOf(project, sourceCutId);
-      const tgtOwner = cutGroupOwnerIdOf(project, targetCutId);
-      if (!srcOwner || !tgtOwner || srcOwner === tgtOwner) return null;
-      const prev = adjacentCutGroupMergeInfo(project, srcOwner, 'prev');
-      if (prev && prev.neighborOwnerId === tgtOwner) return 'prev';
-      const next = adjacentCutGroupMergeInfo(project, srcOwner, 'next');
-      if (next && next.neighborOwnerId === tgtOwner) return 'next';
-      return null;
-    }
-
     function mergeCutIntoNeighbor(cutId, side) {
       const targetCutId = cutGroupOwnerIdOf(state.project, cutId);
       const info = cutMergeAllowed(state.project, targetCutId, side);
@@ -18315,45 +18297,6 @@
             selectCutFromTimeline(cutId);
           }
         });
-        // Drag a CUT segment onto an immediate neighbor cut to merge (結合) into it.
-        if (slotEl.classList.contains('conte-cut-number-segment')) {
-          slotEl.setAttribute('draggable', 'true');
-          slotEl.addEventListener('dragstart', function(event) {
-            const cutId = slotEl.dataset.videoSlotCutId || '';
-            if (!cutId) return;
-            state.cutMergeDragId = cutId;
-            slotEl.classList.add('dragging');
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('conte/cut-merge', cutId);
-          });
-          slotEl.addEventListener('dragend', function() {
-            state.cutMergeDragId = '';
-            slotEl.classList.remove('dragging');
-          });
-          slotEl.addEventListener('dragover', function(event) {
-            if (!hasDragType(event, 'conte/cut-merge')) return;
-            const sourceId = event.dataTransfer.getData('conte/cut-merge') || state.cutMergeDragId;
-            const targetId = slotEl.dataset.videoSlotCutId || '';
-            const side = cutMergeSideForDrop(state.project, sourceId, targetId);
-            if (!side || !cutMergeAllowed(state.project, sourceId, side)) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-            slotEl.classList.add('cut-merge-drop-ready');
-          });
-          slotEl.addEventListener('dragleave', function() {
-            slotEl.classList.remove('cut-merge-drop-ready');
-          });
-          slotEl.addEventListener('drop', function(event) {
-            if (!hasDragType(event, 'conte/cut-merge')) return;
-            slotEl.classList.remove('cut-merge-drop-ready');
-            const sourceId = event.dataTransfer.getData('conte/cut-merge') || state.cutMergeDragId;
-            const targetId = slotEl.dataset.videoSlotCutId || '';
-            const side = cutMergeSideForDrop(state.project, sourceId, targetId);
-            if (!side) return;
-            event.preventDefault();
-            mergeCutIntoNeighbor(sourceId, side);
-          });
-        }
       });
       root.querySelectorAll('.conte-layer-bar').forEach(function(layerEl) {
         layerEl.dataset.timelineTotalFrames = String(totalFrames);
@@ -27749,13 +27692,20 @@
     function addConteCutAfterSelection() {
       runTimelineStructureCommand('Add cut after selection', function(project) {
         const selectedIndex = selectedCutIndexForEdit(project);
-        if (selectedIndex < 0) return;
-        const groupLast = cutGroupLastIndex(project, selectedIndex);
-        const insertIndex = Math.min(project.cuts.length, groupLast + 1);
-        const video = buildVideoTimeline(project);
-        const anchorCut = project.cuts[groupLast] || project.cuts[selectedIndex];
-        const anchorSlot = video.slots.find(function(slot) { return slot.cut && anchorCut && slot.cut.id === anchorCut.id; }) || null;
-        const insertFrame = anchorSlot ? anchorSlot.endFrame : video.totalFrames;
+        let insertIndex;
+        let insertFrame;
+        if (selectedIndex < 0) {
+          // No selection (e.g. an empty project) — create the first cut at the top.
+          insertIndex = project.cuts.length;
+          insertFrame = buildVideoTimeline(project).totalFrames;
+        } else {
+          const groupLast = cutGroupLastIndex(project, selectedIndex);
+          insertIndex = Math.min(project.cuts.length, groupLast + 1);
+          const video = buildVideoTimeline(project);
+          const anchorCut = project.cuts[groupLast] || project.cuts[selectedIndex];
+          const anchorSlot = video.slots.find(function(slot) { return slot.cut && anchorCut && slot.cut.id === anchorCut.id; }) || null;
+          insertFrame = anchorSlot ? anchorSlot.endFrame : video.totalFrames;
+        }
         const cut = createBlankCut(project.cuts.length + 1);
         cut.id = 'cut-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
         cut.cutNo = cutNumberSuggestionForSlot(project, insertIndex).value;
