@@ -23976,19 +23976,39 @@
         el.style.gridColumn = column.col;
         el.style.gridRow = String(row);
         if (isLastRow) el.classList.add('last-row');
+        const targetRow = row;
         el.addEventListener('click', function(event) {
           event.preventDefault();
-          createNextConteCut();
+          createCutAtGridRow(state.project.currentPage, targetRow);
         });
         bodyEl.appendChild(el);
       });
     }
 
-    // Append a brand-new cut at the next contiguous position (always packed from the top, so the
-    // first cut lands in the first cell and no leading/gap blanks are possible). Auto-numbered + timed
-    // so it is a real cut that survives normalization.
-    function createNextConteCut() {
+    // Click an empty grid cell to create a cut there. Cuts pack from the top, so:
+    //  - first cut (zero cuts) always lands in cell 1, wherever you click;
+    //  - clicking the immediate next empty row appends one numbered cut;
+    //  - clicking a row further down (skipping empty rows) fills the skipped rows with 1+0 continuation
+    //    panels that join the PREVIOUS cut's group (multi-panel cut), then creates the numbered cut at
+    //    the clicked row. Reuses markCutAsOneSecondPicturePanel (the existing panel mechanism) — no
+    //    duplicated panel logic. Group membership / durations are resolved by normalizeProject.
+    function createCutAtGridRow(pageNo, row) {
       runTimelineStructureCommand('Create cut', function(project) {
+        const targetAbsRow = (Math.max(1, Math.round(Number(pageNo) || 1)) - 1) * ROWS_PER_PAGE + Math.max(1, Math.round(Number(row) || 1));
+        let gap = 0;
+        if (project.cuts.length) {
+          const last = project.cuts[project.cuts.length - 1];
+          const span = clampNumber(last.rowSpan, 1, ROWS_PER_PAGE, 1);
+          const lastBottomAbs = (Math.max(1, Math.round(Number(last.pageNo) || 1)) - 1) * ROWS_PER_PAGE
+            + Math.max(1, Math.round(Number(last.startRow) || 1)) + span - 1;
+          gap = Math.max(0, targetAbsRow - lastBottomAbs - 1);
+        }
+        for (let offset = 0; offset < gap; offset += 1) {
+          const panel = createBlankCut(project.cuts.length + 1);
+          panel.id = 'panel-' + Date.now().toString(36) + '-' + offset + '-' + Math.random().toString(36).slice(2, 5);
+          markCutAsOneSecondPicturePanel(project, panel); // 1+0, no cutNo -> joins the previous cut's group
+          project.cuts.push(panel);
+        }
         const cut = createBlankCut(project.cuts.length + 1);
         cut.id = 'cut-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
         cut.cutNo = cutNumberSuggestionForSlot(project, project.cuts.length).value;
