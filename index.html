@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver098</title>
+  <title>Conte Editor Prototype ver099</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver098</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver099</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '098';
+    const APP_DISPLAY_VERSION = '099';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -9502,16 +9502,6 @@
 
 
 
-    function pdfFontObjectFallback(objectMap, objectId, seen) {
-      if (!objectId || seen[objectId]) return '';
-      seen[objectId] = true;
-      const body = objectMap[objectId] || '';
-      if (/Ordering\s*\(\s*Japan1\s*\)|Adobe[-_]Japan1|Japan1/i.test(body)) return 'japan1';
-      if (/Ordering\s*\(\s*Korea1\s*\)|Adobe[-_]Korea1|Korea1/i.test(body)) return 'korea1';
-      const descendant = body.match(/\/DescendantFonts\s*\[\s*(\d+)\s+\d+\s+R/);
-      if (descendant) return pdfFontObjectFallback(objectMap, descendant[1], seen);
-      return '';
-    }
 
 
 
@@ -14196,30 +14186,6 @@
       return units;
     }
 
-    function isParallelReactionDialogUnit(unit) {
-      const text = String(unit && unit.text || '').normalize('NFKC').trim();
-      if (!text) return false;
-      if (estimateDialogMora(text) > 10) return false;
-      if (/[!?！？]/.test(text)) return true;
-      return /^(?:[-－‐‑‒–—―]+)$/.test(text);
-    }
-
-    function simultaneousDialogUnitTrackMap(units) {
-      const dialogUnits = (units || []).filter(function(unit) {
-        return unit && unit.text;
-      });
-      const map = new Map();
-      if (dialogUnits.length < 2) return map;
-      const speakers = new Set(dialogUnits.map(function(unit) {
-        return String(unit.characterName || '').trim();
-      }).filter(Boolean));
-      if (speakers.size < 2) return map;
-      if (!dialogUnits.every(isParallelReactionDialogUnit)) return map;
-      dialogUnits.forEach(function(unit, index) {
-        map.set(unit.id, index === 0 ? 'dialog-main' : 'audio-' + (index + 1));
-      });
-      return map;
-    }
 
     function inferDialogSpeakerFromLine(value) {
       const text = String(value || '').normalize('NFKC').trim();
@@ -24879,15 +24845,6 @@
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-    }
-
-    function imageStorageMeta(stored, mode) {
-      return {
-        kind: mode || 'embedded',
-        maxWidth: stored.width,
-        maxHeight: stored.height,
-        savedAt: new Date().toISOString()
-      };
     }
 
     function imageContainRect(image, canvasWidth, canvasHeight) {
