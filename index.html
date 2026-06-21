@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver091</title>
+  <title>Conte Editor Prototype ver092</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6937,7 +6937,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver091</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver092</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7108,7 +7108,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '091';
+    const APP_DISPLAY_VERSION = '092';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -9173,6 +9173,7 @@
         project.cuts = Array.from({ length: EMPTY_SLOT_COUNT }, function(_, index) { return createBlankCut(index + 1); });
       }
       project.cuts.sort(function(a, b) { return a.order - b.order; });
+      trimLeadingEmptyCuts(project);
       project.cuts.forEach(function(cut, index) {
         cut.order = index + 1;
         cut.rowSpan = 1;
@@ -13156,6 +13157,34 @@
         cut.durationFramesLocked = false;
         if (cut.meta) delete cut.meta.pictureFramesAutoConfirmed;
       });
+    }
+
+    // A cut that holds nothing at all: no cutNo, no shaku, no text, no assigned blocks, no drawing.
+    function cutIsCompletelyEmpty(project, cut) {
+      if (!cut) return false;
+      if (String(cut.cutNo || '').trim()) return false;
+      if (String(cut.actionText || '').trim() || String(cut.dialogText || '').trim()) return false;
+      if (Math.max(0, Math.round(Number(cut.pictureFrames) || 0)) || Math.max(0, Math.round(Number(cut.durationFrames) || 0))) return false;
+      const blockArrays = [cut.sourceBlockIds, cut.pictureTextBlockIds, cut.dialogBlockIds, cut.memoBlockIds];
+      if (blockArrays.some(function(arr) { return Array.isArray(arr) && arr.length; })) return false;
+      const drawings = project && project.layerDrawings && typeof project.layerDrawings === 'object' ? project.layerDrawings : {};
+      const layers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
+      if (layers.some(function(layer) {
+        const drawing = layer && layer.drawingRef ? drawings[layer.drawingRef] : null;
+        return drawing && Boolean(String(drawing.bitmapDataUrl || '') || (drawing.bitmapStorage && drawing.bitmapStorage.fileName));
+      })) return false;
+      return true;
+    }
+
+    // Drop completely-empty cells at the very FRONT of the board. A leading blank serves no purpose
+    // (cut 1 should sit at the top), and because deletion keeps a minimum of one cut, a front blank
+    // would otherwise survive as the "last man standing" when cuts are deleted from the back. Trailing
+    // blanks are left alone (they are usable workspace; use 空パネル整理 to remove them).
+    function trimLeadingEmptyCuts(project) {
+      if (!project || !Array.isArray(project.cuts)) return;
+      while (project.cuts.length > 1 && cutIsCompletelyEmpty(project, project.cuts[0])) {
+        project.cuts.shift();
+      }
     }
 
     function assignCameraKeyframeFrame(desired, maxFrame, usedFrames) {
