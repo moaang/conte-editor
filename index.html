@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver088</title>
+  <title>Conte Editor Prototype ver089</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6937,7 +6937,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver088</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver089</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7108,7 +7108,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '088';
+    const APP_DISPLAY_VERSION = '089';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -27943,32 +27943,20 @@
       return deleteSelectedPicturePanels();
     }
 
-    // A cut is "empty" (safe to clean up) only when it carries NO content of any kind: zero shaku
-    // (尺=0, so no video-timeline slot), no cut number, no ACTION/DIALOG text, no assigned blocks,
-    // and no actual drawing on any of its conte layers. Numbered / drawn / texted cuts are preserved
-    // even if their shaku is still 0.
-    function cutHasMeaningfulContent(project, cut) {
+    // Cleanup target: ANY cut whose shaku is 0 (both パネル尺 and カット尺 == 0). Such a cut has no
+    // video-timeline slot, so it is invisible in 映像編集 but lingers as a blank cell in 用紙. Per the
+    // user's explicit request these are deleted outright even if they carry a cut number, text, or a
+    // drawing — the deletion goes through the normal undo history, so it is fully reversible.
+    function cutShakuIsZero(cut) {
       if (!cut) return false;
-      if (String(cut.cutNo || '').trim()) return true;
-      if (String(cut.actionText || '').trim() || String(cut.dialogText || '').trim()) return true;
-      if (Math.max(0, Math.round(Number(cut.pictureFrames) || 0)) > 0) return true;
-      if (Math.max(0, Math.round(Number(cut.durationFrames) || 0)) > 0) return true;
-      const blockArrays = [cut.sourceBlockIds, cut.pictureTextBlockIds, cut.dialogBlockIds, cut.memoBlockIds];
-      if (blockArrays.some(function(arr) { return Array.isArray(arr) && arr.length; })) return true;
-      const drawings = project && project.layerDrawings && typeof project.layerDrawings === 'object' ? project.layerDrawings : {};
-      const layers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
-      if (layers.some(function(layer) {
-        const drawing = layer && layer.drawingRef ? drawings[layer.drawingRef] : null;
-        if (!drawing) return false;
-        return Boolean(String(drawing.bitmapDataUrl || '') || (drawing.bitmapStorage && drawing.bitmapStorage.fileName));
-      })) return true;
-      return false;
+      return Math.max(0, Math.round(Number(cut.pictureFrames) || 0)) === 0
+        && Math.max(0, Math.round(Number(cut.durationFrames) || 0)) === 0;
     }
 
     function collectEmptyCutIdsForCleanup(project) {
       if (!project || !Array.isArray(project.cuts)) return [];
       return project.cuts
-        .filter(function(cut) { return !cutHasMeaningfulContent(project, cut); })
+        .filter(function(cut) { return cutShakuIsZero(cut); })
         .map(function(cut) { return cut.id; });
     }
 
