@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver099</title>
+  <title>Conte Editor Prototype ver100</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver099</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver100</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '099';
+    const APP_DISPLAY_VERSION = '100';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17928,6 +17928,121 @@
       return true;
     }
 
+    // ── CUT merge (結合): absorb a cut into its immediate left/right neighbor cut ──────────────
+    // The merged cut becomes a continuation panel of the neighbor. Total shaku is unchanged (frames
+    // are summed); the surviving (target) cut's camera work is stretched proportionally to the longer
+    // duration. Only immediate neighbors qualify, and OL boundaries are disallowed.
+    function cutGroupOwnerIdOf(project, cutId) {
+      const index = cutIndexById(project, cutId);
+      if (index < 0) return '';
+      const start = cutGroupStartIndex(project, index);
+      const owner = start >= 0 ? project.cuts[start] : null;
+      return owner && owner.id ? owner.id : '';
+    }
+
+    function adjacentCutGroupMergeInfo(project, cutId, side) {
+      const ownerId = cutGroupOwnerIdOf(project, cutId);
+      if (!ownerId) return null;
+      const items = cutGroupTimelineItems(project);
+      let idx = -1;
+      for (let i = 0; i < items.length; i += 1) {
+        const owner = items[i].group.cuts[0];
+        if (owner && owner.id === ownerId) { idx = i; break; }
+      }
+      if (idx < 0) return null;
+      const nIdx = side === 'prev' ? idx - 1 : idx + 1;
+      if (nIdx < 0 || nIdx >= items.length) return null;
+      const neighborOwner = items[nIdx].group.cuts[0];
+      if (!neighborOwner) return null;
+      return {
+        ownerId: ownerId,
+        selfFrames: Math.max(1, Math.round(Number(items[idx].frames) || 1)),
+        neighborOwnerId: neighborOwner.id,
+        neighborCutNo: String(neighborOwner.cutNo || '').trim(),
+        neighborFrames: Math.max(1, Math.round(Number(items[nIdx].frames) || 1))
+      };
+    }
+
+    // Returns the merge info when allowed, or null (no adjacent cut, or OL on either side).
+    function cutMergeAllowed(project, cutId, side) {
+      const info = adjacentCutGroupMergeInfo(project, cutId, side);
+      if (!info) return null;
+      if (cutGroupHasOl(project, info.ownerId) || cutGroupHasOl(project, info.neighborOwnerId)) return null;
+      return info;
+    }
+
+    function removeCameraKeyframesForCut(project, cutId) {
+      if (!project || !project.camera || !Array.isArray(project.camera.keyframes)) return;
+      const id = String(cutId || '');
+      project.camera.keyframes = project.camera.keyframes.filter(function(kf) {
+        return String(kf && (kf.cutId || kf.panelCutId) || '') !== id;
+      });
+    }
+
+    function reassignCameraKeyframesCut(project, fromId, toId) {
+      if (!project || !project.camera || !Array.isArray(project.camera.keyframes)) return;
+      const from = String(fromId || '');
+      project.camera.keyframes.forEach(function(kf) {
+        if (String(kf && (kf.cutId || kf.panelCutId) || '') === from) {
+          if (Object.prototype.hasOwnProperty.call(kf, 'cutId')) kf.cutId = toId;
+          if (kf.panelCutId) kf.panelCutId = toId;
+        }
+      });
+    }
+
+    function selectMergedCut(ownerId) {
+      setCurrentPicturePanelId(ownerId);
+      const selectedPanels = selectedPicturePanelSet();
+      selectedPanels.clear();
+      selectedPanels.add(ownerId);
+      state.activeConteSelectionType = 'panel';
+    }
+
+    function mergeCutIntoNeighbor(cutId, side) {
+      const targetCutId = cutGroupOwnerIdOf(state.project, cutId);
+      const info = cutMergeAllowed(state.project, targetCutId, side);
+      if (!info) {
+        if (adjacentCutGroupMergeInfo(state.project, targetCutId, side)) {
+          state.timelineStatus = 'OL があるカットは結合できません。';
+          guardedRender('timing', renderTimingDashboard);
+          guardedRender('chrome', refreshChromeControls);
+        }
+        return false;
+      }
+      runTimelineStructureCommand('Merge cut', function(project) {
+        const live = adjacentCutGroupMergeInfo(project, targetCutId, side);
+        if (!live) return;
+        const combined = live.selfFrames + live.neighborFrames;
+        if (side === 'prev') {
+          // this cut is absorbed as a trailing panel of the left neighbor (which survives).
+          const sourceOwner = project.cuts.find(function(c) { return c.id === targetCutId; });
+          if (sourceOwner) sourceOwner.cutNo = '';
+          removeCameraKeyframesForCut(project, targetCutId);
+          // sets duration across the merged group AND auto-rescales the neighbor's camera work.
+          setCutGroupDurationByCutId(project, live.neighborOwnerId, combined);
+          selectMergedCut(live.neighborOwnerId);
+        } else {
+          // this cut absorbs the right neighbor: it keeps its position but takes the neighbor's
+          // number (becoming the merged group's head); the neighbor's owner becomes a panel.
+          const sourceOwner = project.cuts.find(function(c) { return c.id === targetCutId; });
+          const neighborOwner = project.cuts.find(function(c) { return c.id === live.neighborOwnerId; });
+          removeCameraKeyframesForCut(project, targetCutId);
+          if (sourceOwner) sourceOwner.cutNo = live.neighborCutNo;
+          if (neighborOwner) neighborOwner.cutNo = '';
+          reassignCameraKeyframesCut(project, live.neighborOwnerId, targetCutId);
+          const startIndex = cutIndexById(project, targetCutId);
+          const lastIndex = cutGroupLastIndex(project, startIndex);
+          for (let c = startIndex; c <= lastIndex; c += 1) {
+            project.cuts[c].durationFrames = combined;
+            project.cuts[c].durationFramesLocked = true;
+          }
+          rescaleCameraKeyframesForCutDuration(project, targetCutId, live.neighborFrames, combined);
+          selectMergedCut(targetCutId);
+        }
+      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
+      return true;
+    }
+
     function showTimelineCutAddContextMenu(event, cutId, root) {
       const targetCutId = String(cutId || currentPicturePanelId() || '');
       if (!targetCutId || cutIndexById(state.project, targetCutId) < 0) return;
@@ -17935,9 +18050,13 @@
       const menu = conteLayerContextMenuEl();
       const canDelete = state.project.cuts.length > 1;
       const hasOl = cutGroupHasOl(state.project, targetCutId);
+      const prevMerge = cutMergeAllowed(state.project, targetCutId, 'prev');
+      const nextMerge = cutMergeAllowed(state.project, targetCutId, 'next');
       menu.innerHTML = [
         '<button type="button" data-conte-layer-menu-action="add-cut">\u30ab\u30c3\u30c8\u8ffd\u52a0</button>',
         '<button type="button" data-conte-layer-menu-action="delete-cut"' + (canDelete ? '' : ' disabled') + '>\u30ab\u30c3\u30c8\u524a\u9664</button>',
+        (prevMerge ? '<button type="button" data-conte-layer-menu-action="merge-prev">\u2190 \u30ab\u30c3\u30c8' + escapeAttr(prevMerge.neighborCutNo) + '\u306b\u7d50\u5408</button>' : ''),
+        (nextMerge ? '<button type="button" data-conte-layer-menu-action="merge-next">\u30ab\u30c3\u30c8' + escapeAttr(nextMerge.neighborCutNo) + '\u306b\u7d50\u5408 \u2192</button>' : ''),
         '<button type="button" data-conte-layer-menu-action="ol-window">OL \u4f5c\u6210</button>',
         (hasOl ? '<button type="button" data-conte-layer-menu-action="ol-release">OL \u89e3\u9664</button>' : '')
       ].join('');
@@ -17951,6 +18070,10 @@
             addConteCutAfterSelection();
           } else if (action === 'delete-cut') {
             deletePrimarySelectedPicturePanel();
+          } else if (action === 'merge-prev') {
+            mergeCutIntoNeighbor(targetCutId, 'prev');
+          } else if (action === 'merge-next') {
+            mergeCutIntoNeighbor(targetCutId, 'next');
           } else if (action === 'ol-window') {
             openOlWindowForCut(targetCutId);
           } else if (action === 'ol-release') {
