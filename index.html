@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver092</title>
+  <title>Conte Editor Prototype ver093</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5960,6 +5960,20 @@
     .cell.last-row { border-bottom: 0; }
     .cell.time-cell { border-right: 0; }
 
+    /* Empty grid cells (no cut yet) — clicking creates the next cut. Subtle hover so they read as
+       drawable/clickable slots without competing with real cut cells. */
+    .cell.empty-grid-cell { background: rgba(255, 255, 255, 0.94); }
+    .cell.empty-grid-cell:hover { background: rgba(45, 110, 163, 0.08); }
+    .cell.cut-cell.empty-grid-cell:hover::after {
+      content: '+';
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font-size: 12px;
+      line-height: 1;
+      color: rgba(45, 110, 163, 0.55);
+    }
+
     .cut-cell {
       user-select: none;
     }
@@ -6937,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver092</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver093</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7108,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '092';
+    const APP_DISPLAY_VERSION = '093';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7635,9 +7649,9 @@
         layerDrawings: {},
         sourceDocuments: [],
         camera: { keyframes: [] },
-        cuts: Array.from({ length: EMPTY_SLOT_COUNT }, function(_, index) {
-          return createBlankCut(index + 1);
-        }),
+        // New model: cuts[] holds only real cuts (content). Empty grid cells are rendered by the
+        // paper independently of cuts, so a fresh project starts with zero cuts.
+        cuts: [],
         layout: {
           templateId: 'hanyou_fixed_5_column',
           pages: []
@@ -9169,11 +9183,8 @@
       project.sourceDocuments = Array.isArray(project.sourceDocuments) ? project.sourceDocuments : [];
       normalizeSourceDocuments(project.sourceDocuments);
       project.cuts = Array.isArray(project.cuts) ? project.cuts : [];
-      if (!project.cuts.length) {
-        project.cuts = Array.from({ length: EMPTY_SLOT_COUNT }, function(_, index) { return createBlankCut(index + 1); });
-      }
+      // New model: an empty project simply has zero cuts (no forced blank slots).
       project.cuts.sort(function(a, b) { return a.order - b.order; });
-      trimLeadingEmptyCuts(project);
       project.cuts.forEach(function(cut, index) {
         cut.order = index + 1;
         cut.rowSpan = 1;
@@ -9189,16 +9200,17 @@
         cut.conteLayers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
         cut.meta = cut.meta || { confidence: 1, evidence: [], warnings: [], alternatives: [] };
       });
-      // Partial pages allowed: do not pad the board up to a full ROWS_PER_PAGE page. The board
-      // keeps exactly as many cuts as exist (minimum 1), so trailing blank panels can be deleted.
-      // relayoutProject() lays out an incomplete last page naturally.
-      if (!project.cuts.length) project.cuts.push(createBlankCut(1));
       normalizeConteLayers(project);
       normalizeLayerDrawings(project);
       syncCutGroupDurations(project);
       syncCutGroupFrameTimes(project);
       syncCutGroupDurations(project);
       clearOrphanCutShaku(project);
+      // New model invariant: cuts[] holds only real cuts. A cut that ends up completely empty
+      // (no cutNo/shaku/text/blocks/drawing — e.g. a blank slot from an old file, or a cut whose
+      // content was cleared) is removed from the data; the paper renders its position as an empty
+      // grid cell instead. This is what allows zero leading/trailing blank cuts and a 0-cut project.
+      removeAllCompletelyEmptyCuts(project);
       invalidateVideoTimelineCache();
       normalizeVideoClips(project);
       try {
@@ -12986,7 +12998,15 @@
     }
 
     function totalPagesForProject(project) {
-      return Math.max(1, project && project.layout && Array.isArray(project.layout.pages) ? project.layout.pages.length : 1);
+      const pages = project && project.layout && Array.isArray(project.layout.pages) ? project.layout.pages : [];
+      if (!pages.length) return 1; // zero cuts -> a single empty page to start drawing on
+      // Offer one extra empty page for adding cuts when the last page is already full.
+      const lastPage = pages[pages.length - 1];
+      let lastBottom = 0;
+      (lastPage && lastPage.placements || []).forEach(function(placement) {
+        lastBottom = Math.max(lastBottom, (Math.round(Number(placement.startRow) || 1)) + (Math.round(Number(placement.rowSpan) || 1)) - 1);
+      });
+      return lastBottom >= ROWS_PER_PAGE ? pages.length + 1 : pages.length;
     }
 
     function totalPages() {
@@ -13008,14 +13028,6 @@
       });
     }
 
-    function appendBlankContePage(project) {
-      const start = project.cuts.length;
-      for (let offset = 0; offset < ROWS_PER_PAGE; offset += 1) {
-        project.cuts.push(createBlankCut(start + offset + 1));
-      }
-      resetCutOrders(project);
-      relayoutProject(project);
-    }
 
     function cutIndexById(project, cutId) {
       return project.cuts.findIndex(function(item) { return item.id === cutId; });
@@ -13176,15 +13188,14 @@
       return true;
     }
 
-    // Drop completely-empty cells at the very FRONT of the board. A leading blank serves no purpose
-    // (cut 1 should sit at the top), and because deletion keeps a minimum of one cut, a front blank
-    // would otherwise survive as the "last man standing" when cuts are deleted from the back. Trailing
-    // blanks are left alone (they are usable workspace; use 空パネル整理 to remove them).
-    function trimLeadingEmptyCuts(project) {
+    // New model: cuts[] holds only real cuts. Remove EVERY completely-empty cut (anywhere — leading,
+    // middle, trailing). Their grid positions are drawn by the paper as empty clickable cells. This
+    // makes leading/trailing blank cuts, the min-1 floor, and the no-cutNo-with-shaku contradiction
+    // all impossible by construction, and lets a project legitimately have zero cuts.
+    function removeAllCompletelyEmptyCuts(project) {
       if (!project || !Array.isArray(project.cuts)) return;
-      while (project.cuts.length > 1 && cutIsCompletelyEmpty(project, project.cuts[0])) {
-        project.cuts.shift();
-      }
+      project.cuts = project.cuts.filter(function(cut) { return !cutIsCompletelyEmpty(project, cut); });
+      resetCutOrders(project);
     }
 
     function assignCameraKeyframeFrame(desired, maxFrame, usedFrames) {
@@ -24030,7 +24041,65 @@
       visibleCuts().forEach(function(cut) {
         renderCut(cut, bodyEl);
       });
+      renderEmptyGridCells(bodyEl);
       drawPaperPictureLayerCanvases(pageEl);
+    }
+
+    // New model: the paper is a fixed ROWS_PER_PAGE grid. Rows of the current page not occupied by a
+    // real cut are drawn as empty, clickable placeholder cells. Clicking one creates the next cut.
+    function renderEmptyGridCells(bodyEl) {
+      const occupied = new Set();
+      visibleCuts().forEach(function(cut) {
+        const row = Math.max(1, Math.round(Number(cut.startRow) || 1));
+        const span = clampNumber(cut.rowSpan, 1, ROWS_PER_PAGE, 1);
+        for (let r = row; r <= row + span - 1; r += 1) occupied.add(r);
+      });
+      for (let row = 1; row <= ROWS_PER_PAGE; row += 1) {
+        if (occupied.has(row)) continue;
+        appendEmptyGridRow(bodyEl, row);
+      }
+    }
+
+    function appendEmptyGridRow(bodyEl, row) {
+      const isLastRow = row >= ROWS_PER_PAGE;
+      const columns = [
+        { cls: 'cut-cell', col: '1' },
+        { cls: 'picture-cell', col: '2' },
+        { cls: 'content-cell action-cell', col: '3' },
+        { cls: 'content-cell dialog-cell', col: '4' },
+        { cls: 'time-cell', col: '5' }
+      ];
+      columns.forEach(function(column) {
+        const el = document.createElement('div');
+        el.className = 'cell ' + column.cls + ' empty-grid-cell';
+        el.style.gridColumn = column.col;
+        el.style.gridRow = String(row);
+        if (isLastRow) el.classList.add('last-row');
+        el.addEventListener('click', function(event) {
+          event.preventDefault();
+          createNextConteCut();
+        });
+        bodyEl.appendChild(el);
+      });
+    }
+
+    // Append a brand-new cut at the next contiguous position (always packed from the top, so the
+    // first cut lands in the first cell and no leading/gap blanks are possible). Auto-numbered + timed
+    // so it is a real cut that survives normalization.
+    function createNextConteCut() {
+      runTimelineStructureCommand('Create cut', function(project) {
+        const cut = createBlankCut(project.cuts.length + 1);
+        cut.id = 'cut-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+        cut.cutNo = cutNumberSuggestionForSlot(project, project.cuts.length).value;
+        initializeAddedConteCutTiming(project, cut);
+        project.cuts.push(cut);
+        resetCutOrders(project);
+        setCurrentPicturePanelId(cut.id);
+        const selectedPanels = selectedPicturePanelSet();
+        selectedPanels.clear();
+        selectedPanels.add(cut.id);
+        state.activeConteSelectionType = 'panel';
+      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
     }
 
     function renderCut(cut, bodyEl) {
@@ -27918,7 +27987,7 @@
     // ##################################################################################
     function removePicturePanelsByIds(project, ids) {
       const removeSet = new Set((ids || []).filter(Boolean));
-      if (!removeSet.size || project.cuts.length <= 1) return false;
+      if (!removeSet.size) return false; // new model: deleting down to zero cuts is allowed
       const video = buildVideoTimeline(project);
       const slots = video.slots.filter(function(slot) {
         return slot.cut && removeSet.has(slot.cut.id);
@@ -27946,9 +28015,7 @@
         if (owner) setCutGroupDurationByCutId(project, targetOwnerId, Math.max(1, Math.round(Number(owner.durationFrames) || oneSecondFrames(project)) - frames));
       });
       project.cuts = project.cuts.filter(function(cut) { return !removeSet.has(cut.id); });
-      // Partial pages allowed: keep at least one cut (never an empty project), but do not refill
-      // up to a full page — trailing blank panels stay deleted.
-      if (!project.cuts.length) project.cuts.push(createBlankCut(1));
+      // New model: zero cuts is a valid state (empty project / empty grid). No min-1 backfill.
       resetCutOrders(project);
       syncVideoMediaFlags(project);
       const next = project.cuts[Math.min(project.cuts.length - 1, Math.max(0, slots[0] ? slots[0].group.startIndex : 0))] || project.cuts[0];
@@ -27966,7 +28033,7 @@
         return deleteSelectedConteLayers();
       }
       const ids = selectedPicturePanelIdArray(true);
-      if (!ids.length || state.project.cuts.length <= 1) return false;
+      if (!ids.length) return false; // new model: deleting the last cut (down to zero) is allowed
       runTimelineStructureCommand('Delete picture panel', function(project) {
         removePicturePanelsByIds(project, ids);
       });
@@ -37473,15 +37540,9 @@
         refresh({ skipSource: true });
       });
       document.getElementById('nextPageBtn').addEventListener('click', function() {
-        if (!pageHasConteInformation(state.project, state.project.currentPage)) return;
-        if (state.project.currentPage >= totalPages()) {
-          runTimelineStructureCommand('Add blank page', function(project) {
-            appendBlankContePage(project);
-            project.currentPage = Math.max(1, project.layout && project.layout.pages ? project.layout.pages.length : 1);
-            state.project.currentPage = project.currentPage;
-          });
-          return;
-        }
+        // New model: totalPages() already exposes one extra empty page once the last page is full,
+        // so navigation just advances within range — no blank-cut page is created.
+        if (state.project.currentPage >= totalPages()) return;
         state.project.currentPage += 1;
         // 묶음 A: 페이지 이동 — source 영역 무관
         refresh({ skipSource: true });
