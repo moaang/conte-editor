@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver093</title>
+  <title>Conte Editor Prototype ver094</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver093</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver094</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '093';
+    const APP_DISPLAY_VERSION = '094';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -14063,110 +14063,11 @@
     }
 
     function ensureDialogAudioCandidateClips(project) {
+      // 자동 대사 배치 비활성화(B): 시나리오에서 대사 클립을 자동 생성하지도, 기존 클립을 재배치하지도 않는다.
+      // 대사 클립의 위치/길이는 프로젝트 파일이 진실이며, 음성 자동생성은 이미 배치된 클립을 그대로 사용한다.
       normalizeAudioClips(project);
-      const signature = audioTimelineSourceSignature(project);
-      if (project.audio.clips.length && project.audio.sourceSignature === signature) {
-        ensureAudioTimelineTrackFresh(project);
-        return project.audio.clips;
-      }
-      const oldById = new Map(project.audio.clips.map(function(clip) { return [clip.id, clip]; }));
-      const oldBySourceBlockId = new Map();
-      project.audio.clips.forEach(function(clip) {
-        const sourceBlockId = audioClipSourceBlockId(clip);
-        if (sourceBlockId && !oldBySourceBlockId.has(sourceBlockId)) oldBySourceBlockId.set(sourceBlockId, clip);
-      });
-      const groupItems = cutGroupTimelineItems(project);
-      const characters = collectCharacterStats(getProjectBlocks(project));
-      ensureVoiceProfilesForCharacters(project, characters);
-      groupItems.forEach(function(item) {
-        const units = dialogUnitsForCutGroup(project, item.group);
-        if (!units.length) return;
-        const parallelTrackMap = simultaneousDialogUnitTrackMap(units);
-        const hasParallelDialog = parallelTrackMap.size === units.length;
-        const slotFrames = Math.max(1, hasParallelDialog ? item.frames : item.frames / units.length);
-        units.forEach(function(unit, index) {
-          const id = unit.id;
-          const previous = oldById.get(id) || (unit.sourceBlockId ? oldBySourceBlockId.get(unit.sourceBlockId) : null);
-          const defaultDuration = Math.max(12, Math.min(Math.max(1, Math.round(slotFrames)), dialogAutoTimingFramesForText(unit.text)));
-          const parallelTrackId = parallelTrackMap.get(id) || '';
-          const startFrame = previous && previous.manualTiming ? previous.startFrame : Math.round(item.startFrame + (parallelTrackId ? 0 : slotFrames * index));
-          const trackId = previous && previous.manualTiming
-            ? (previous.trackId || parallelTrackId || 'dialog-main')
-            : (parallelTrackId || 'dialog-main');
-          const profile = characterVoiceProfile(project, unit.characterName || 'Unknown', {
-            gender: unit.characterGender || '',
-            age: unit.characterAge || ''
-          });
-          const linkedCutId = item.group.cuts[0] ? item.group.cuts[0].id : '';
-          if (previous) {
-            oldById.set(id, previous);
-            if (unit.sourceBlockId && !oldBySourceBlockId.has(unit.sourceBlockId)) oldBySourceBlockId.set(unit.sourceBlockId, previous);
-            previous.sourceBlockId = previous.sourceBlockId || unit.sourceBlockId || '';
-            previous.sourceCutId = linkedCutId || previous.sourceCutId || '';
-            previous.characterName = unit.characterName || previous.characterName || '';
-            previous.characterGender = profile.gender || unit.characterGender || previous.characterGender || '';
-            previous.characterAge = profile.age || unit.characterAge || previous.characterAge || '';
-            previous.dialogTags = normalizeDialogTags(unit.dialogTags || unit.dialogMode || previous.dialogTags || previous.dialogMode || '');
-            previous.dialogMode = previous.dialogTags[0] || '';
-            previous.text = unit.text || previous.text || '';
-            if (!previous.manualTiming) {
-              previous.trackId = trackId;
-              previous.startFrame = Math.max(0, startFrame);
-              previous.durationFrames = Math.max(1, Math.round(defaultDuration));
-            }
-            return;
-          }
-          const clip = {
-            id: id,
-            type: 'dialog',
-            sourceBlockId: unit.sourceBlockId || '',
-            sourceCutId: item.group.cuts[0] ? item.group.cuts[0].id : '',
-            characterName: unit.characterName || '',
-            characterGender: profile.gender || unit.characterGender || '',
-            characterAge: profile.age || unit.characterAge || '',
-            dialogTags: normalizeDialogTags(unit.dialogTags || unit.dialogMode || ''),
-            dialogMode: normalizeDialogTags(unit.dialogTags || unit.dialogMode || '')[0] || '',
-            text: unit.text,
-            audioFileName: '',
-            audioMime: '',
-            audioDurationFrames: 0,
-            audioTrimStartFrames: 0,
-            audioTrimDurationFrames: 0,
-            waveformPeaks: [],
-            audioSourceWaveformPeaks: [],
-            ttsProvider: '',
-            ttsText: '',
-            ttsVersion: 0,
-            startFrame: Math.max(0, startFrame),
-            durationFrames: Math.max(1, Math.round(defaultDuration)),
-            trackId: trackId,
-            manualTiming: false
-          };
-          project.audio.clips.push(clip);
-          oldById.set(id, clip);
-          if (unit.sourceBlockId && !oldBySourceBlockId.has(unit.sourceBlockId)) oldBySourceBlockId.set(unit.sourceBlockId, clip);
-        });
-      });
-      sortAudioClips(project);
-      writeAudioTimelineTrack(project);
-      project.audio.sourceSignature = signature;
+      ensureAudioTimelineTrackFresh(project);
       return project.audio.clips;
-    }
-
-    function audioTimelineSourceSignature(project) {
-      return collectCutTimingGroups(project).map(function(group) {
-        return [
-          group.cutNo,
-          group.durationFrames,
-          group.cuts.map(function(cut) {
-            return [
-              cut.id,
-              cut.dialogText || '',
-              cut.dialogBlockIds ? cut.dialogBlockIds.join(',') : ''
-            ].join(':');
-          }).join(';')
-        ].join('|');
-      }).join('||');
     }
 
     // OL (overlap / cross-dissolve): how many frames this cut group is pulled back over the
