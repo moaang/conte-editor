@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver106</title>
+  <title>Conte Editor Prototype ver107</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6995,7 +6995,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver106</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver107</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7166,7 +7166,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '106';
+    const APP_DISPLAY_VERSION = '107';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -10734,15 +10734,53 @@
       return blocks;
     }
 
+    // Match an existing audio clip to a dialog block (for linking migrated/existing data):
+    // first by shared sourceBlockId (scenario block), then by cut + speaker + body text.
+    function findClipForDialogBlock(project, cutId, block, claimed) {
+      if (!block || block.kind === 'free') return null;
+      const clips = (project.audio && project.audio.clips) || [];
+      const norm = function(s) { return String(s || '').replace(/[「」『』\s]/g, '').replace(/[…・。、，,.]+$/, ''); };
+      const free = function(c) { return c && !c.hidden && (!claimed || !claimed.has(c.id)); };
+      if (block.sourceBlockId) {
+        const m = clips.find(function(c) { return free(c) && audioClipSourceBlockId(c) === block.sourceBlockId; });
+        if (m) return m;
+      }
+      const m2 = clips.find(function(c) {
+        return free(c) && c.sourceCutId === cutId && norm(c.text) === norm(block.body) &&
+          (!block.speaker || !c.characterName || scenarioMetaKey(c.characterName) === scenarioMetaKey(block.speaker));
+      });
+      return m2 || null;
+    }
+
+    function fillDialogBlockClipLinks(project, cutId, blocks, persist) {
+      const claimed = new Set(blocks.map(function(b) { return b.audioClipId; }).filter(Boolean));
+      // drop stale links (clip no longer exists)
+      const clipIds = new Set(((project.audio && project.audio.clips) || []).map(function(c) { return c.id; }));
+      blocks.forEach(function(b) {
+        if (b.audioClipId && !clipIds.has(b.audioClipId)) b.audioClipId = '';
+        if (b.kind === 'free' || b.audioClipId) return;
+        const clip = findClipForDialogBlock(project, cutId, b, claimed);
+        if (clip) {
+          b.audioClipId = clip.id;
+          claimed.add(clip.id);
+          if (persist) clip.dialogBlockId = b.id;
+        }
+      });
+      return blocks;
+    }
+
     function dialogBlocksForDisplay(project, cut) {
+      let blocks;
       if (cut && Array.isArray(cut.dialogBlocks)) {
-        return cut.dialogBlocks.map(function(b) {
+        blocks = cut.dialogBlocks.map(function(b) {
           const nb = normalizeDialogBlock(b);
           if (!nb.id) nb.id = newDialogBlockId(project);
           return nb;
         });
+      } else {
+        blocks = parseDialogBlocksFromText(project, cut);
       }
-      return parseDialogBlocksFromText(project, cut);
+      return fillDialogBlockClipLinks(project, cut.id, blocks, false);
     }
 
     function materializeDialogBlocks(project, cut) {
@@ -10753,6 +10791,7 @@
         if (!nb.id) nb.id = newDialogBlockId(project);
         return nb;
       });
+      fillDialogBlockClipLinks(project, cut.id, cut.dialogBlocks, true);
       return cut.dialogBlocks;
     }
 
