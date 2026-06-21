@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver096</title>
+  <title>Conte Editor Prototype ver097</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6951,7 +6951,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver096</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver097</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7122,7 +7122,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '096';
+    const APP_DISPLAY_VERSION = '097';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23977,7 +23977,39 @@
           event.preventDefault();
           createCutAtGridRow(state.project.currentPage, targetRow);
         });
+        makeEmptyCellCutDropTarget(el, targetRow);
         bodyEl.appendChild(el);
+      });
+    }
+
+    // Empty grid cells accept a dragged cut marker too: dropping a cut onto an empty row below it
+    // moves it down (inserts continuation panels) so the cut lands on that row.
+    function makeEmptyCellCutDropTarget(el, targetRow) {
+      const targetIndex = (Math.max(1, state.project.currentPage) - 1) * ROWS_PER_PAGE + Math.max(1, targetRow) - 1;
+      el.addEventListener('dragover', function(event) {
+        if (!hasDragType(event, 'conte/cut-marker')) return;
+        const sourceId = event.dataTransfer.getData('conte/cut-marker') || state.cutDragSourceId;
+        const sourceIndex = state.project.cuts.findIndex(function(item) { return item.id === sourceId; });
+        const range = cutGroupRange(state.project, sourceIndex);
+        if (!range || !canMoveCutGroupToIndex(state.project, range, targetIndex)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        el.classList.add('cut-drop-ready');
+      });
+      el.addEventListener('dragleave', function() { el.classList.remove('cut-drop-ready'); });
+      el.addEventListener('drop', function(event) {
+        if (!hasDragType(event, 'conte/cut-marker')) return;
+        el.classList.remove('cut-drop-ready');
+        const sourceId = event.dataTransfer.getData('conte/cut-marker') || state.cutDragSourceId;
+        event.preventDefault();
+        runTimelineStructureCommand('Move cut group', function(project) {
+          const sourceIndex = project.cuts.findIndex(function(item) { return item.id === sourceId; });
+          if (sourceIndex < 0) return;
+          if (moveCutGroupToIndex(project, sourceIndex, targetIndex)) {
+            relayoutProject(project);
+            setCurrentPageToCut(project, sourceId);
+          }
+        }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
       });
     }
 
@@ -24669,32 +24701,49 @@
       return Boolean(cut && isFixedPictureFrame(cut) && !(cut.meta && cut.meta.pictureFramesAutoConfirmed));
     }
 
+    // A cut's vertical position == how many continuation panels sit in the gap ABOVE it (those panels
+    // belong to the PREVIOUS cut). So moving is purely gap adjustment, never a reorder/swap:
+    //   - UP  : only if the row directly above is a continuation panel -> consume it (previous group
+    //           shrinks). Forbidden once a numbered cut is directly above.
+    //   - DOWN: insert a 1+0 continuation panel before the cut (previous group grows). Always allowed
+    //           as long as the cut isn't the very first one (which has no previous cut to own a panel).
+    // The cut and everything after it shift as a block.
     function canMoveCutGroupToIndex(project, range, destination) {
       if (!project || !range) return false;
-      if (destination < 0 || destination > project.cuts.length) return false;
-      // No-op: dropping inside the group's own span (or exactly at either edge).
-      if (destination >= range.start && destination <= range.end) return false;
-      return true;
+      const gi = range.start;
+      if (destination === gi) return false;
+      if (destination < gi) return gi > 0 && !String(project.cuts[gi - 1] && project.cuts[gi - 1].cutNo || '').trim();
+      return gi > 0; // down move needs a previous cut to own the inserted panel
     }
 
     function hasArrayItems(value) {
       return Array.isArray(value) && value.length > 0;
     }
 
-    // New model: dragging a cut is a plain reorder, exactly like a timeline. The whole cut group
-    // (owner + its continuation panels) moves as a unit to `destination`, and every cut between the
-    // old and new positions shifts to fill the gap. No blank "move slots" are inserted any more.
     function moveCutGroupToIndex(project, sourceIndex, destination) {
       const range = cutGroupRange(project, sourceIndex);
-      if (!canMoveCutGroupToIndex(project, range, destination)) return false;
-      const groupLength = range.end - range.start;
-      const group = project.cuts.slice(range.start, range.end);
-      project.cuts.splice(range.start, groupLength);
-      // After removing the block, a destination that sat past it shifts left by the block size.
-      const insertAt = destination > range.start ? destination - groupLength : destination;
-      project.cuts.splice(insertAt, 0, ...group);
+      if (!range) return false;
+      const sourceId = project.cuts[range.start].id;
+      let gi = range.start;
+      let moved = false;
+      // UP: consume continuation panels directly above, until reaching destination or a numbered cut.
+      while (gi > destination && gi > 0 && !String(project.cuts[gi - 1].cutNo || '').trim()) {
+        project.cuts.splice(gi - 1, 1);
+        gi -= 1;
+        moved = true;
+      }
+      // DOWN: insert 1+0 continuation panels before the cut (need a previous cut at gi-1 to own them).
+      while (gi < destination && gi > 0) {
+        const panel = createBlankCut(project.cuts.length + 1);
+        panel.id = 'panel-' + Date.now().toString(36) + '-' + gi + '-' + Math.random().toString(36).slice(2, 5);
+        markCutAsOneSecondPicturePanel(project, panel);
+        project.cuts.splice(gi, 0, panel);
+        gi += 1;
+        moved = true;
+      }
+      if (!moved) return false;
       renumberCutOrders(project);
-      setCurrentPicturePanelId(group[0].id);
+      setCurrentPicturePanelId(sourceId);
       return true;
     }
 
