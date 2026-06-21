@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver107</title>
+  <title>Conte Editor Prototype ver108</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6995,7 +6995,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver107</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver108</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7166,7 +7166,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '107';
+    const APP_DISPLAY_VERSION = '108';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -11002,6 +11002,21 @@
       menu.hidden = false;
     }
 
+    // Size a generated dialog clip's visible box to its actual audio length + a small margin
+    // (DIALOG_HANDLE_FRAMES = 6 koma), so there is no large trailing empty space after the waveform.
+    // Auto clips are sized to audio+margin; manually-placed clips are only shrunk (never extended).
+    function fitDialogClipBoxToAudio(clip) {
+      if (!clip) return;
+      const audio = Math.max(0, Math.round(Number(clip.audioTrimDurationFrames || clip.audioDurationFrames) || 0));
+      if (!audio) return;
+      const tight = audio + DIALOG_HANDLE_FRAMES;
+      if (clip.manualTiming) {
+        if (Math.round(Number(clip.durationFrames) || 0) > tight) clip.durationFrames = tight;
+      } else {
+        clip.durationFrames = tight;
+      }
+    }
+
     // Per-block VoiceVox generation: create/link an audio clip for this dialog block,
     // place it at the cut's (OL-aware) start frame, synthesize, and link block<->clip.
     async function generateVoiceForDialogBlock(cutId, blockId) {
@@ -11044,7 +11059,7 @@
         state.voicevoxAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const url = await ensureVoicevoxAudioForClip(clip, { skipProjectSave: true });
         state.voicevoxAbortController = null;
-        if (url && clip.audioDurationFrames) clip.durationFrames = clip.audioDurationFrames;
+        if (url) fitDialogClipBoxToAudio(clip);
         clip.startFrame = startFrame;
         sortAudioClips(project);
         await hydrateWorkspaceAudioRefs(project);
@@ -27127,6 +27142,7 @@
         clip.ttsPitch = Number(profile.pitch) || 1;
         clip.ttsTargetFrames = voicevoxTargetFramesForText(bodyText);
         clip.ttsEffect = dialogAudioEffectSettings(clip).signature;
+        fitDialogClipBoxToAudio(clip);
         return state.workspaceObjectUrls.audio[clip.id] || '';
       } finally {
         state.ttsPendingClipIds.delete(clip.id);
