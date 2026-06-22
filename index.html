@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver110</title>
+  <title>Conte Editor Prototype ver111</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7036,7 +7036,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver110</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver111</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7207,7 +7207,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '110';
+    const APP_DISPLAY_VERSION = '111';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -15578,6 +15578,85 @@
       cut.meta.audioSyncedDialog = Boolean(cut.meta.audioClipIds && cut.meta.audioClipIds.length);
     }
 
+    // New dialog-block model: when an audio clip linked via clip.dialogBlockId moves, its dialog
+    // block follows the clip to the cut it most overlaps; if the clip straddles cuts, the text is
+    // split by frame ratio and the minor parts become sibling dialog blocks on the other cuts.
+    // Returns true if it handled the clip (so the old sourceBlockId-based path below is skipped).
+    function syncDialogBlockClipToCuts(project, clip) {
+      const blockId = String(clip && clip.dialogBlockId || '');
+      if (!blockId) return false;
+      let block = null;
+      let ownerCut = null;
+      for (let i = 0; i < project.cuts.length; i += 1) {
+        const arr = project.cuts[i].dialogBlocks;
+        if (!Array.isArray(arr)) continue;
+        const found = arr.find(function(b) { return b && b.id === blockId; });
+        if (found) { block = found; ownerCut = project.cuts[i]; break; }
+      }
+      if (!block) return true;
+      // Drop split siblings created by a previous sync so straddles never accumulate.
+      (Array.isArray(clip.syncedDialogBlockIds) ? clip.syncedDialogBlockIds.slice() : []).forEach(function(id) {
+        if (!id || id === blockId) return;
+        project.cuts.forEach(function(cut) {
+          if (!Array.isArray(cut.dialogBlocks)) return;
+          const i = cut.dialogBlocks.findIndex(function(b) { return b && b.id === id; });
+          if (i >= 0) { cut.dialogBlocks.splice(i, 1); deriveDialogTextFromBlocks(cut); }
+        });
+      });
+      clip.syncedDialogBlockIds = [];
+      if (clip.hidden) return true;
+      const overlaps = clipOverlapGroups(project, clip);
+      const fullText = String(clip.text || block.body || '');
+      if (!overlaps.length) {
+        block.body = fullText;
+        deriveDialogTextFromBlocks(ownerCut);
+        clip.syncedDialogBlockIds = [blockId];
+        return true;
+      }
+      let strongest = overlaps[0];
+      overlaps.forEach(function(e) { if (e.frames > strongest.frames) strongest = e; });
+      const total = overlaps.reduce(function(s, e) { return s + Math.max(0, e.frames); }, 0) || 1;
+      const ratio = Math.max(0, strongest.frames) / total;
+      const domIdx = overlaps.indexOf(strongest);
+      const dominantCut = project.cuts[strongest.item.group.startIndex] || ownerCut;
+      // Main block follows the clip to the dominant cut.
+      if (dominantCut && dominantCut !== ownerCut) {
+        const i = ownerCut.dialogBlocks.findIndex(function(b) { return b && b.id === blockId; });
+        if (i >= 0) ownerCut.dialogBlocks.splice(i, 1);
+        if (!Array.isArray(dominantCut.dialogBlocks)) dominantCut.dialogBlocks = [];
+        dominantCut.dialogBlocks.push(block);
+        deriveDialogTextFromBlocks(ownerCut);
+        ownerCut = dominantCut;
+      }
+      if (dominantCut) clip.sourceCutId = dominantCut.id;
+      const synced = [blockId];
+      if (ratio < 0.75 && overlaps.length > 1) {
+        // Straddle: split the text by frame ratio; minor parts become sibling blocks on their cuts.
+        const parts = splitTextByFrameRatios(fullText, overlaps);
+        overlaps.forEach(function(entry, idx) {
+          const cut = project.cuts[entry.item.group.startIndex];
+          if (!cut) return;
+          if (idx === domIdx) { block.body = parts[idx] || fullText; return; }
+          const part = parts[idx] || '';
+          if (!part) return;
+          if (!Array.isArray(cut.dialogBlocks)) cut.dialogBlocks = [];
+          const sibling = normalizeDialogBlock({
+            id: newDialogBlockId(project), kind: block.kind, speaker: block.speaker,
+            suffix: block.suffix, body: part, audioClipId: ''
+          });
+          cut.dialogBlocks.push(sibling);
+          deriveDialogTextFromBlocks(cut);
+          synced.push(sibling.id);
+        });
+      } else {
+        block.body = fullText;
+      }
+      deriveDialogTextFromBlocks(dominantCut || ownerCut);
+      clip.syncedDialogBlockIds = synced;
+      project.audio.manualTimeline = true;
+      return true;
+    }
+
     function syncSingleAudioClipToCuts(project, clipOrId) {
       if (!project || !project.audio) return;
       normalizeAudioClips(project);
@@ -15585,6 +15664,7 @@
         ? project.audio.clips.find(function(item) { return item.id === clipOrId; })
         : clipOrId;
       if (!clip) return;
+      if (syncDialogBlockClipToCuts(project, clip)) return;
       const sourceBlockId = audioClipSourceBlockId(clip);
       if (!sourceBlockId) return;
       const block = findBlockById(project, sourceBlockId);
