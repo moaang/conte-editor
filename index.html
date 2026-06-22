@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver109</title>
+  <title>Conte Editor Prototype ver110</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7036,7 +7036,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver109</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver110</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7207,7 +7207,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '109';
+    const APP_DISPLAY_VERSION = '110';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -26746,7 +26746,7 @@
     function voicevoxFetchErrorMessage(endpoint, error) {
       const message = error && error.message ? error.message : String(error || 'Failed to fetch');
       const fileHint = (window.location.protocol || '') === 'file:'
-        ? ' Current page is file://, so direct VOICEVOX fetch is often blocked by CORS. Run start_conte_editor_voicevox.bat and open http://127.0.0.1:8787/conte_editor_hanyou_prototype_ver002.html.'
+        ? ' Current page is file://, so direct VOICEVOX fetch is often blocked by CORS. Run start_conte_editor_voicevox.bat and open http://127.0.0.1:8787/conte_editor_hanyou_prototype_ver003.html.'
         : '';
       return message + ' / VOICEVOX Engine is unreachable at ' + endpoint + '. Start VOICEVOX Engine, check port 50021, and if the browser blocks CORS use the conte local server proxy.' + fileHint;
     }
