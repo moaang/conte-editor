@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver111</title>
+  <title>Conte Editor Prototype ver112</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7036,7 +7036,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver111</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver112</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7207,7 +7207,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '111';
+    const APP_DISPLAY_VERSION = '112';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8464,7 +8464,6 @@
         audioTrimStartFrames: Math.max(0, Math.round(Number(clip && clip.audioTrimStartFrames) || 0)),
         audioTrimDurationFrames: Math.max(0, Math.round(Number(clip && clip.audioTrimDurationFrames) || 0)),
         audioDurationFrames: Math.max(0, Math.round(Number(clip && clip.audioDurationFrames) || 0)),
-        manualTiming: Boolean(clip && clip.manualTiming),
         hidden: Boolean(clip && clip.hidden),
         trackId: clip && clip.trackId || 'dialog-main',
         sourceCutId: String(clip && clip.sourceCutId || ''),
@@ -8483,7 +8482,6 @@
       clip.audioTrimStartFrames = Math.max(0, Math.round(Number(data.audioTrimStartFrames) || 0));
       clip.audioTrimDurationFrames = Math.max(0, Math.round(Number(data.audioTrimDurationFrames) || clip.durationFrames));
       clip.audioDurationFrames = Math.max(clip.audioDurationFrames || 0, Math.round(Number(data.audioDurationFrames) || 0));
-      clip.manualTiming = Boolean(data.manualTiming);
       clip.hidden = Boolean(data.hidden);
       clip.trackId = data.trackId || clip.trackId || 'dialog-main';
       clip.sourceCutId = String(data.sourceCutId || clip.sourceCutId || '');
@@ -8933,8 +8931,6 @@
       const before = captureAudioClipEditState(clip);
       clip.startFrame = Math.max(0, Math.round(Number(nextStartFrame) || 0));
       clip.trackId = preferredTrackId || clip.trackId || 'dialog-main';
-      clip.manualTiming = true;
-      state.project.audio.manualTimeline = true;
       const placement = placeAudioClipFast(state.project, clip, clip.trackId);
       syncSingleAudioClipToCuts(state.project, clip);
       bumpAudioCycle();
@@ -8979,8 +8975,6 @@
       const before = captureAudioClipEditState(clip);
       unsyncSingleAudioClipFromCuts(state.project, clip);
       clip.hidden = true;
-      clip.manualTiming = true;
-      state.project.audio.manualTimeline = true;
       state.selectedAudioClipId = '';
       bumpAudioCycle();
       const after = captureAudioClipEditState(clip);
@@ -9019,13 +9013,11 @@
       if (trace) trace('audioEdit:mutator');
       // 묶음 C: clip 직접 변경 후 cycle bump (캐시 무효화)
       bumpAudioCycle();
-      clip.manualTiming = true;
       if (!clip.audioTrimDurationFrames) clip.audioTrimDurationFrames = clip.durationFrames;
       if (!options.skipWaveform) {
         clip.waveformPeaks = waveformPeaksForClipTrim(clip);
         if (state.audioWaveformCssCache) delete state.audioWaveformCssCache[clip.id];
       }
-      state.project.audio.manualTimeline = true;
       if (traceStart) traceStart('audioEdit:sortAndWrite');
       sortAudioClips(state.project);
       // writeAudioTimelineTrack는 refreshAudioTimelineEdit에서도 호출되므로 여기서는 생략 (중복 제거).
@@ -9259,7 +9251,6 @@
       project.layerDrawings = project.layerDrawings && typeof project.layerDrawings === 'object' ? project.layerDrawings : {};
       project.audio = project.audio && typeof project.audio === 'object' ? project.audio : { clips: [] };
       project.audio.clips = Array.isArray(project.audio.clips) ? project.audio.clips : [];
-      project.audio.manualTimeline = Boolean(project.audio.manualTimeline);
       project.video = project.video && typeof project.video === 'object' ? project.video : { clips: [] };
       project.video.clips = Array.isArray(project.video.clips) ? project.video.clips : [];
       normalizeCameraTrack(project);
@@ -9304,7 +9295,6 @@
       } catch (error) {
         project.audio = project.audio && typeof project.audio === 'object' ? project.audio : { clips: [] };
         project.audio.clips = Array.isArray(project.audio.clips) ? project.audio.clips : [];
-        project.audio.manualTimeline = Boolean(project.audio.manualTimeline);
         console.error('Audio timeline normalize failed', error);
       }
       project.layout = project.layout || { templateId: 'hanyou_fixed_5_column', pages: [] };
@@ -9552,7 +9542,7 @@
         runCommand('Import scenario package', function(project) {
           project.sourceDocuments = [{ id: 'src-scenario', fileName: file.name, type: 'scenario-package', pages: pages }];
           project.cuts = Array.from({ length: EMPTY_SLOT_COUNT }, function(_, index) { return createBlankCut(index + 1); });
-          project.audio = { clips: [], manualTimeline: false };
+          project.audio = { clips: [] };
           project.timeline = { tracks: [] };
           getProjectBlocks(project).forEach(function(block) { block.assignedCutId = ''; block.assignedPanelId = ''; });
           project.currentPage = 1;
@@ -11045,17 +11035,12 @@
 
     // Size a generated dialog clip's visible box to its actual audio length + a small margin
     // (DIALOG_HANDLE_FRAMES = 6 koma), so there is no large trailing empty space after the waveform.
-    // Auto clips are sized to audio+margin; manually-placed clips are only shrunk (never extended).
     function fitDialogClipBoxToAudio(clip) {
       if (!clip) return;
       const audio = Math.max(0, Math.round(Number(clip.audioTrimDurationFrames || clip.audioDurationFrames) || 0));
       if (!audio) return;
       const tight = audio + DIALOG_HANDLE_FRAMES;
-      if (clip.manualTiming) {
-        if (Math.round(Number(clip.durationFrames) || 0) > tight) clip.durationFrames = tight;
-      } else {
-        clip.durationFrames = tight;
-      }
+      if (Math.round(Number(clip.durationFrames) || 0) > tight) clip.durationFrames = tight;
     }
 
     // Per-block VoiceVox generation: create/link an audio clip for this dialog block,
@@ -11078,7 +11063,7 @@
       let clip = block.audioClipId ? clips.find(function(c) { return c.id === block.audioClipId; }) : null;
       if (!clip) clip = clips.find(function(c) { return c.dialogBlockId === blockId; });
       if (!clip) {
-        clip = { id: 'audio-' + blockId, type: 'dialog', startFrame: startFrame, durationFrames: slotFrames, trackId: 'dialog-main', manualTiming: true };
+        clip = { id: 'audio-' + blockId, type: 'dialog', startFrame: startFrame, durationFrames: slotFrames, trackId: 'dialog-main' };
         clips.push(clip);
       }
       clip.text = block.body;
@@ -13168,7 +13153,6 @@
           const start = Math.max(0, Math.round(Number(clip.startFrame) || 0));
           if (start >= boundary) {
             clip.startFrame = Math.max(0, start + delta);
-            clip.manualTiming = true;
             if (clip.id) shiftedAudioClipIds.push(clip.id);
           }
         });
@@ -14166,7 +14150,6 @@
         clip.startFrame = Math.max(0, Math.round(Number(clip.startFrame) || 0));
         normalizeAudioClipVisibleDuration(clip);
         clip.trackId = clip.trackId || 'dialog-main';
-        clip.manualTiming = Boolean(clip.manualTiming);
         clip.hidden = Boolean(clip.hidden);
         clip.volume = clampAudioClipVolume(clip.volume);
       });
@@ -14510,7 +14493,6 @@
         const clip = project.audio.clips.find(function(item) { return item.id === move.clipId; });
         if (clip) {
           clip.trackId = move.trackId;
-          clip.manualTiming = true;
         }
       });
       removeAudioTrackRecord(project, trackId);
@@ -14551,7 +14533,6 @@
 
     function audioClipDedupScore(clip) {
       let score = audioClipIsAutoDialogCandidate(clip) ? 0 : 1000;
-      if (clip && clip.manualTiming) score += 200;
       if (clip && clip.audioFileName) score += 100;
       if (clip && audioClipHasIndexedDbStorage(clip)) score += 90;
       if (clip && clip.ttsProvider) score += 30;
@@ -14644,13 +14625,6 @@
       });
     }
 
-    function ensureDialogAudioCandidateClips(project) {
-      // 자동 대사 배치 비활성화(B): 시나리오에서 대사 클립을 자동 생성하지도, 기존 클립을 재배치하지도 않는다.
-      // 대사 클립의 위치/길이는 프로젝트 파일이 진실이며, 음성 자동생성은 이미 배치된 클립을 그대로 사용한다.
-      normalizeAudioClips(project);
-      ensureAudioTimelineTrackFresh(project);
-      return project.audio.clips;
-    }
 
     // OL (overlap / cross-dissolve): how many frames this cut group is pulled back over the
     // previous group. Stored on the group-owner cut (the cutNo / group-start cut). 0 = no OL.
@@ -15366,9 +15340,7 @@
       if (!clip) return;
       unsyncSingleAudioClipFromCuts(project, clip);
       clip.hidden = true;
-      clip.manualTiming = true;
       if (state.selectedAudioClipId === clipId) state.selectedAudioClipId = '';
-      project.audio.manualTimeline = true;
       bumpAudioCycle();
       writeAudioTimelineTrack(project);
     }
@@ -15653,7 +15625,6 @@
       }
       deriveDialogTextFromBlocks(dominantCut || ownerCut);
       clip.syncedDialogBlockIds = synced;
-      project.audio.manualTimeline = true;
       return true;
     }
 
@@ -15728,7 +15699,6 @@
       }
       clip.syncedCutIds = syncedCutIds;
       clip.syncedDialogTexts = syncedDialogTexts;
-      project.audio.manualTimeline = true;
     }
 
     function unsyncSingleAudioClipFromCuts(project, clipOrId, knownSourceBlockId, knownBlock) {
@@ -15749,7 +15719,6 @@
       }
       clip.syncedCutIds = [];
       clip.syncedDialogTexts = [];
-      project.audio.manualTimeline = true;
     }
 
     function renderTimelinePlayButton() {
@@ -17839,9 +17808,8 @@
       if (project.audio && Array.isArray(project.audio.clips)) {
         project.audio.clips.forEach(function(c) {
           const d = deltaForFrame(c.startFrame);
-          if (d) { c.startFrame = Math.max(0, Math.round((Number(c.startFrame) || 0) - d)); c.manualTiming = true; }
+          if (d) { c.startFrame = Math.max(0, Math.round((Number(c.startFrame) || 0) - d)); }
         });
-        project.audio.manualTimeline = true;
       }
       if (project.video && Array.isArray(project.video.clips)) {
         project.video.clips.forEach(function(c) {
@@ -18301,8 +18269,7 @@
           ttsVersion: 0,
           startFrame: Math.max(0, Math.round(Number(session.startFrame) || 0)),
           durationFrames: fallbackFrames,
-          trackId: session.trackId || 'dialog-main',
-          manualTiming: true
+          trackId: session.trackId || 'dialog-main'
         };
         clip.audioDurationFrames = fallbackFrames;
         clip.audioTrimStartFrames = 0;
@@ -18322,7 +18289,6 @@
         } else {
           await saveAudioBlobInline(clip, recordedFile, mime);
         }
-        state.project.audio.manualTimeline = true;
         sortAudioClips(state.project);
         writeAudioTimelineTrack(state.project);
         bumpAudioCycle();
@@ -21089,7 +21055,6 @@
       clip.startFrame = preview.startFrame;
       clip.durationFrames = preview.durationFrames;
       clip.panelLocked = false;
-      clip.manualTiming = true;
     }
 
     function commitVideoMediaClipMove(clipId, nextStartFrame, trackId) {
@@ -21105,7 +21070,6 @@
         clip.startFrame = Math.max(0, Math.round(Number(nextStartFrame) || 0));
         clip.trackId = String(trackId || clip.trackId || 'video-media-main');
         clip.panelLocked = false;
-        clip.manualTiming = true;
         state.selectedVideoClipId = clip.id;
         state.selectedVideoTrackId = '';
         state.selectedAudioClipId = '';
@@ -21673,8 +21637,7 @@
         ttsVersion: 0,
         startFrame: Math.max(0, Math.round(Number(startFrame) || 0)),
         durationFrames: Math.max(1, fpsForProject(state.project)),
-        trackId: targetTrackId,
-        manualTiming: true
+        trackId: targetTrackId
       };
       state.project.audio.clips.push(clip);
       try {
@@ -21685,7 +21648,6 @@
         }
         placeAudioClipOnNonOverlappingTrack(state.project, clip, targetTrackId);
         await saveExternalAudioBlobToWorkspace(clip, file, mime);
-        state.project.audio.manualTimeline = true;
         sortAudioClips(state.project);
         applyAudioTimelineToCuts(state.project);
         writeAudioTimelineTrack(state.project);
@@ -26215,7 +26177,7 @@
     }
 
     function buildCharacterVoiceCacheLabels(characters) {
-      ensureDialogAudioCandidateClips(state.project);
+      normalizeAudioClips(state.project); ensureAudioTimelineTrackFresh(state.project);
       const statsByKey = new Map();
       (characters || []).forEach(function(item) {
         statsByKey.set(scenarioMetaKey(item.name), { cached: 0, pending: 0, empty: 0 });
@@ -27175,7 +27137,7 @@
       const previousDuration = Math.max(0, Math.round(Number(clip.durationFrames) || 0));
       const previousTrimStart = Math.max(0, Math.round(Number(clip.audioTrimStartFrames) || 0));
       const previousTrimDuration = Math.max(0, Math.round(Number(clip.audioTrimDurationFrames) || 0));
-      const preserveExistingTrim = Boolean(clip.manualTiming && (previousDuration || previousTrimStart || previousTrimDuration));
+      const preserveExistingTrim = Boolean(previousDuration || previousTrimStart || previousTrimDuration);
       clip.audioDurationFrames = totalFrames;
       if (preserveExistingTrim) {
         const trimStart = clampNumber(previousTrimStart, 0, Math.max(0, totalFrames - 1), 0);
@@ -27400,7 +27362,7 @@
     }
 
     function voicevoxGenerationStats() {
-      ensureDialogAudioCandidateClips(state.project);
+      normalizeAudioClips(state.project); ensureAudioTimelineTrackFresh(state.project);
       const stats = { total: 0, readable: 0, generated: 0, cached: 0, pending: 0, stale: 0, empty: 0 };
       (state.project.audio && state.project.audio.clips || []).forEach(function(clip) {
         const profile = characterVoiceProfile(state.project, clip.characterName || 'Unknown', {
@@ -27466,7 +27428,7 @@
     }
 
     function clearAllVoicevoxTimelineAudio(project) {
-      ensureDialogAudioCandidateClips(project);
+      normalizeAudioClips(project); ensureAudioTimelineTrackFresh(project);
       let cleared = 0;
       (project.audio && project.audio.clips || []).forEach(function(clip) {
         const profile = characterVoiceProfile(project, clip.characterName || 'Unknown', {
@@ -27496,7 +27458,7 @@
       options = options || {};
       if (state.voicevoxGenerating) return;
       if (!await ensureWorkspaceForVoicevoxGeneration()) return;
-      ensureDialogAudioCandidateClips(state.project);
+      normalizeAudioClips(state.project); ensureAudioTimelineTrackFresh(state.project);
       await persistUnsavedGeneratedAudioClips(state.project);
       await hydrateWorkspaceAudioRefs(state.project);
       const stats = voicevoxGenerationStats();
@@ -27584,7 +27546,7 @@
     async function regenerateAllVoicevoxTimelineAudio() {
       if (state.voicevoxGenerating) return;
       if (!await ensureWorkspaceForVoicevoxGeneration()) return;
-      ensureDialogAudioCandidateClips(state.project);
+      normalizeAudioClips(state.project); ensureAudioTimelineTrackFresh(state.project);
       await hydrateWorkspaceAudioRefs(state.project);
       const stats = voicevoxGenerationStats();
       if (!confirmVoicevoxGeneration('regenerate', Object.assign({}, stats, { pending: stats.readable }))) return;
@@ -31352,7 +31314,6 @@
         if (!clip) throw new Error('setAudioClip target not found.');
         const fields = command.fields || command.value || {};
         Object.keys(fields).forEach(function(key) { clip[key] = fields[key]; });
-        state.project.audio.manualTimeline = true;
         record.audioClipId = clip.id;
         record.message = 'Audio clip updated.';
         return Object.assign(record, { projectChanged: true, uiChanged: false });
