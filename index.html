@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver117</title>
+  <title>Conte Editor Prototype ver118</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7069,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver117</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver118</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '117';
+    const APP_DISPLAY_VERSION = '118';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31607,6 +31607,10 @@
       const tracks = audioTimelineTracks(project);
       const videoClips = videoTimelineDisplayClips(project);
       const currentVideoClip = videoMediaClipAtFrame(project, state.videoPlayheadFrames, selectedCut && selectedCut.id);
+      const cameraKeyframes = (project.camera && Array.isArray(project.camera.keyframes)) ? project.camera.keyframes : [];
+      const camByCut = {};
+      cameraKeyframes.forEach(function(kf) { if (kf && kf.cutId) camByCut[kf.cutId] = (camByCut[kf.cutId] || 0) + 1; });
+      const cutSnap = function(cut) { return llmCutSnapshot(cut, camByCut); };
       return {
         protocol: 'conte-llm-control/v1',
         event: event || 'snapshot',
@@ -31638,11 +31642,14 @@
           totalFrames: totalConteFrames(project),
           totalTime: framesToTimeInput(totalConteFrames(project)),
           targetFrames: projectTargetFrames(project),
-          targetTime: framesToTimeInput(projectTargetFrames(project))
+          targetTime: framesToTimeInput(projectTargetFrames(project)),
+          cameraKeyframes: cameraKeyframes.length,
+          layerDrawings: project.layerDrawings ? Object.keys(project.layerDrawings).length : 0,
+          memoPages: Array.isArray(project.memoPages) ? project.memoPages.length : (project.memoPages ? Object.keys(project.memoPages).length : 0)
         },
-        selectedCut: selectedCut ? llmCutSnapshot(selectedCut) : null,
-        visiblePage: visibleCuts().map(llmCutSnapshot),
-        cuts: project.cuts.map(llmCutSnapshot),
+        selectedCut: selectedCut ? cutSnap(selectedCut) : null,
+        visiblePage: visibleCuts().map(cutSnap),
+        cuts: project.cuts.map(cutSnap),
         audio: {
           tracks: tracks.map(function(track) {
             return { id: track.id, label: track.label, muted: Boolean(track.muted), hidden: Boolean(track.hidden), clipIds: track.clipIds || [] };
@@ -31677,7 +31684,8 @@
       };
     }
 
-    function llmCutSnapshot(cut) {
+    function llmCutSnapshot(cut, camByCut) {
+      const layers = Array.isArray(cut.conteLayers) ? cut.conteLayers : [];
       return {
         id: cut.id,
         order: cut.order,
@@ -31693,7 +31701,12 @@
         durationFrames: Math.max(0, Math.round(Number(cut.durationFrames) || 0)),
         durationTime: framesToTimeInput(cut.durationFrames),
         sourceBlockIds: cut.sourceBlockIds || [],
-        dialogBlockIds: cut.dialogBlockIds || []
+        dialogBlockIds: cut.dialogBlockIds || [],
+        conteLayers: layers.length,
+        layerRefs: layers.map(function(l) { return l && l.drawingRef; }).filter(Boolean),
+        memoBlocks: Array.isArray(cut.memoBlockIds) ? cut.memoBlockIds.length : 0,
+        pictureTextBlocks: Array.isArray(cut.pictureTextBlockIds) ? cut.pictureTextBlockIds.length : 0,
+        cameraKeyframes: (camByCut && camByCut[cut.id]) || 0
       };
     }
 
