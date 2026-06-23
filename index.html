@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver118</title>
+  <title>Conte Editor Prototype ver119</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7069,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver118</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver119</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '118';
+    const APP_DISPLAY_VERSION = '119';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8578,12 +8578,8 @@
         const total = Math.max(1, Math.round(Number(totalFrames) || 0));
         const left = Math.max(0, Math.min(100, Math.round(Number(newStartFrame) || 0) / total * 100));
         const width = Math.max(0.01, Math.min(100, Math.round(Number(durationFrames) || 0) / total * 100));
-        const leftPx = timelineFrameToPixel(newStartFrame, total);
-        const widthPx = timelineFrameSpanToPixel(durationFrames, total);
         clipEl.style.setProperty('--left', left.toFixed(4) + '%');
         clipEl.style.setProperty('--width', width.toFixed(4) + '%');
-        clipEl.style.setProperty('--left-px', leftPx + 'px');
-        clipEl.style.setProperty('--width-px', widthPx + 'px');
         return true;
       } catch (error) {
         return false;
@@ -8847,8 +8843,6 @@
           if (!clipEl) return;
           clipEl.style.setProperty('--left', framePercent(clip.startFrame, total).toFixed(4) + '%');
           clipEl.style.setProperty('--width', Math.max(0.01, framePercent(clip.durationFrames, total)).toFixed(4) + '%');
-          clipEl.style.setProperty('--left-px', timelineFrameToPixel(clip.startFrame, total) + 'px');
-          clipEl.style.setProperty('--width-px', timelineFrameSpanToPixel(clip.durationFrames, total) + 'px');
         });
       } catch (error) {}
     }
@@ -8864,8 +8858,6 @@
           if (!clipEl) return;
           clipEl.style.setProperty('--left', framePercent(Math.max(0, clip.startFrame || 0), total).toFixed(4) + '%');
           clipEl.style.setProperty('--width', Math.max(0.001, framePercent(Math.max(1, clip.durationFrames || 1), total)).toFixed(4) + '%');
-          clipEl.style.setProperty('--left-px', timelineFrameToPixel(clip.startFrame, total) + 'px');
-          clipEl.style.setProperty('--width-px', timelineFrameSpanToPixel(clip.durationFrames, total) + 'px');
         });
       } catch (error) {}
     }
@@ -16967,13 +16959,11 @@
     function videoMediaClipHtml(clip, totalFrames) {
       const left = framePercent(Math.max(0, clip.startFrame || 0), totalFrames);
       const width = Math.max(0.001, framePercent(Math.max(1, clip.durationFrames || 1), totalFrames));
-      const leftPx = timelineFrameToPixel(clip.startFrame, totalFrames);
-      const widthPx = timelineFrameSpanToPixel(clip.durationFrames, totalFrames);
       const label = String(clip.mediaFileName || clip.sourceType || 'media').replace(/\.[^.]+$/, '');
       const kind = clip.sourceType === 'video' ? 'V' : 'I';
       const color = clip.sourceType === 'video' ? '#4f46e5' : '#2a7ec6';
       const selected = state.selectedVideoClipId === clip.id ? ' selected' : '';
-      return '<div class="video-media-clip' + selected + '" data-video-media-clip-id="' + escapeAttr(clip.id) + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--left-px:' + leftPx + 'px;--width-px:' + widthPx + 'px;--clip-color:' + color + '" title="' + escapeAttr(label) + '">' +
+      return '<div class="video-media-clip' + selected + '" data-video-media-clip-id="' + escapeAttr(clip.id) + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--clip-color:' + color + '" title="' + escapeAttr(label) + '">' +
         '<span class="audio-trim-handle left" data-audio-trim-edge="left" aria-hidden="true"></span>' +
         '<span class="video-media-kind">' + escapeHtml(kind) + '</span>' +
         '<span class="video-media-title">' + escapeHtml(label || 'media') + '</span>' +
@@ -17354,8 +17344,6 @@
     function audioTimelineClipHtml(clip, totalFrames, continuationIds) {
       const left = framePercent(clip.startFrame, totalFrames);
       const width = Math.max(0.01, framePercent(clip.durationFrames, totalFrames));
-      const leftPx = timelineFrameToPixel(clip.startFrame, totalFrames);
-      const widthPx = timelineFrameSpanToPixel(clip.durationFrames, totalFrames);
       const continuation = continuationIds && continuationIds.has(clip.id) ? ' continuation' : '';
       const active = state.activeSpeechClipId === clip.id ? ' active' : '';
       const selected = state.selectedAudioClipId === clip.id ? ' selected' : '';
@@ -17364,7 +17352,7 @@
       const waveform = audioWaveformCssValue(clip);
       const title = clip.text + (clip.audioDurationFrames ? '\nsource ' + framesToTimeInput(clip.audioDurationFrames) + ' / trim ' + framesToTimeInput(clip.audioTrimDurationFrames || clip.durationFrames) : '');
       const speakerName = String(clip.characterName || '').trim();
-      return '<div class="audio-clip' + continuation + active + selected + conflict + (speakerName ? '' : ' no-speaker') + '" data-audio-clip-id="' + escapeAttr(clip.id) + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--left-px:' + leftPx + 'px;--width-px:' + widthPx + 'px;--clip-color:' + color + (waveform ? ';--waveform:' + waveform : '') + '" title="' + escapeAttr(title) + '">' +
+      return '<div class="audio-clip' + continuation + active + selected + conflict + (speakerName ? '' : ' no-speaker') + '" data-audio-clip-id="' + escapeAttr(clip.id) + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--clip-color:' + color + (waveform ? ';--waveform:' + waveform : '') + '" title="' + escapeAttr(title) + '">' +
         '<span class="audio-trim-handle left" data-audio-trim-edge="left" aria-hidden="true"></span>' +
         (speakerName ? '<span class="audio-speaker">' + escapeHtml(speakerName) + '</span>' : '') +
         '<span class="audio-text">' + escapeHtml(clip.text) + '</span>' +
@@ -20755,10 +20743,10 @@
       state.renderedActiveSpeechClipId = next;
     }
 
-    // Re-sync every audio clip's DOM position from its LIVE data (startFrame/durationFrames) against the
-    // current total/inner-width. The lightweight runtime path only moved the playhead, so when the
-    // timeline total changed (OL/duration edits) clips kept stale --left-px and drifted out of sync with
-    // the data — the magnet then snapped/guided to the true data frame, looking "off" from the clip.
+    // Re-sync every audio clip's DOM position (--left/--width as % of the total) from its LIVE data
+    // (startFrame/durationFrames). Clips are positioned by percent (scale/zoom-independent), so this
+    // only needs to run when the timeline total changes (OL/duration edits) — the lightweight runtime
+    // path skips it, which previously let the % go stale vs the data.
     function refreshAudioClipPositionsDom(root, totalFrames) {
       if (!root) return;
       const total = Math.max(1, Math.round(Number(totalFrames) || 1));
@@ -20774,8 +20762,6 @@
         const df = Math.max(1, Math.round(Number(clip.durationFrames) || 1));
         el.style.setProperty('--left', framePercent(sf, total).toFixed(4) + '%');
         el.style.setProperty('--width', Math.max(0.001, framePercent(df, total)).toFixed(4) + '%');
-        el.style.setProperty('--left-px', timelineFrameToPixel(sf, total) + 'px');
-        el.style.setProperty('--width-px', timelineFrameSpanToPixel(df, total) + 'px');
       });
     }
 
