@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver115</title>
+  <title>Conte Editor Prototype ver116</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -4615,8 +4615,8 @@
 
     .video-media-clip {
       position: absolute;
-      left: var(--left-px, var(--left, 0%));
-      width: var(--width-px, var(--width, 0%));
+      left: var(--left, 0%);
+      width: var(--width, 0%);
       min-width: 8px;
       top: 0;
       height: 100%;
@@ -5673,8 +5673,8 @@
     .audio-clip {
       position: absolute;
       top: 0;
-      left: var(--left-px, var(--left, 0%));
-      width: var(--width-px, var(--width, 0%));
+      left: var(--left, 0%);
+      width: var(--width, 0%);
       min-width: 8px;
       height: 100%;
       box-sizing: border-box;
@@ -7069,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver115</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver116</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '115';
+    const APP_DISPLAY_VERSION = '116';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8580,8 +8580,8 @@
         const width = Math.max(0.01, Math.min(100, Math.round(Number(durationFrames) || 0) / total * 100));
         const leftPx = timelineFrameToPixel(newStartFrame, total);
         const widthPx = timelineFrameSpanToPixel(durationFrames, total);
-        clipEl.style.setProperty('--left', left.toFixed(2) + '%');
-        clipEl.style.setProperty('--width', width.toFixed(2) + '%');
+        clipEl.style.setProperty('--left', left.toFixed(4) + '%');
+        clipEl.style.setProperty('--width', width.toFixed(4) + '%');
         clipEl.style.setProperty('--left-px', leftPx + 'px');
         clipEl.style.setProperty('--width-px', widthPx + 'px');
         return true;
@@ -8845,8 +8845,8 @@
         clips.forEach(function(clip) {
           const clipEl = scope.querySelector('[data-audio-clip-id="' + cssEscapeValue(String(clip.id || '')) + '"]');
           if (!clipEl) return;
-          clipEl.style.setProperty('--left', framePercent(clip.startFrame, total).toFixed(2) + '%');
-          clipEl.style.setProperty('--width', Math.max(0.01, framePercent(clip.durationFrames, total)).toFixed(2) + '%');
+          clipEl.style.setProperty('--left', framePercent(clip.startFrame, total).toFixed(4) + '%');
+          clipEl.style.setProperty('--width', Math.max(0.01, framePercent(clip.durationFrames, total)).toFixed(4) + '%');
           clipEl.style.setProperty('--left-px', timelineFrameToPixel(clip.startFrame, total) + 'px');
           clipEl.style.setProperty('--width-px', timelineFrameSpanToPixel(clip.durationFrames, total) + 'px');
         });
@@ -17364,7 +17364,7 @@
       const waveform = audioWaveformCssValue(clip);
       const title = clip.text + (clip.audioDurationFrames ? '\nsource ' + framesToTimeInput(clip.audioDurationFrames) + ' / trim ' + framesToTimeInput(clip.audioTrimDurationFrames || clip.durationFrames) : '');
       const speakerName = String(clip.characterName || '').trim();
-      return '<div class="audio-clip' + continuation + active + selected + conflict + (speakerName ? '' : ' no-speaker') + '" data-audio-clip-id="' + escapeAttr(clip.id) + '" style="--left:' + left.toFixed(2) + '%;--width:' + width.toFixed(2) + '%;--left-px:' + leftPx + 'px;--width-px:' + widthPx + 'px;--clip-color:' + color + (waveform ? ';--waveform:' + waveform : '') + '" title="' + escapeAttr(title) + '">' +
+      return '<div class="audio-clip' + continuation + active + selected + conflict + (speakerName ? '' : ' no-speaker') + '" data-audio-clip-id="' + escapeAttr(clip.id) + '" style="--left:' + left.toFixed(4) + '%;--width:' + width.toFixed(4) + '%;--left-px:' + leftPx + 'px;--width-px:' + widthPx + 'px;--clip-color:' + color + (waveform ? ';--waveform:' + waveform : '') + '" title="' + escapeAttr(title) + '">' +
         '<span class="audio-trim-handle left" data-audio-trim-edge="left" aria-hidden="true"></span>' +
         (speakerName ? '<span class="audio-speaker">' + escapeHtml(speakerName) + '</span>' : '') +
         '<span class="audio-text">' + escapeHtml(clip.text) + '</span>' +
