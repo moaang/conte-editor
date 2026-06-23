@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver114</title>
+  <title>Conte Editor Prototype ver115</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7069,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver114</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver115</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '114';
+    const APP_DISPLAY_VERSION = '115';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -21018,6 +21018,12 @@
         consider(cutStart - duration, baseThreshold, cutStart); // clip end -> cut start
         consider(cutEnd - duration, baseThreshold, cutEnd);     // clip end -> cut end
       });
+      // Playhead (red line) — snap the clip's start OR end to the current playhead. Aligning a clip to
+      // the line also makes a render/data mismatch obvious: if the bar doesn't sit on the line after
+      // snapping, the DOM position is stale vs the data.
+      const playhead = Math.max(0, Math.round(Number(state.videoPlayheadFrames) || 0));
+      consider(playhead, baseThreshold, playhead);            // clip start -> playhead
+      consider(playhead - duration, baseThreshold, playhead); // clip end -> playhead
       return best;
     }
 
@@ -21110,6 +21116,10 @@
         consider(frame, baseThreshold, frame);
         consider(frame - duration, baseThreshold, frame);
       });
+      // Playhead (red line) snap — clip start OR end to the current playhead.
+      const playhead = Math.max(0, Math.round(Number(state.videoPlayheadFrames) || 0));
+      consider(playhead, baseThreshold, playhead);
+      consider(playhead - duration, baseThreshold, playhead);
       return best;
     }
 
