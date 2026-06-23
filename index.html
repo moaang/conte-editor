@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver116</title>
+  <title>Conte Editor Prototype ver117</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7069,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver116</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver117</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '116';
+    const APP_DISPLAY_VERSION = '117';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31257,10 +31257,32 @@
         state.llmControlLastResult = result;
         await writeLlmResultFile(result);
         await writeLlmStateFile('command', result);
+        // Consume-and-delete: remove the command (and any older stragglers) from the inbox so it can't
+        // be re-applied on the next reload (lastCommandKey resets on reload) and the inbox doesn't pile
+        // up. A newer file that arrived mid-processing has a later mtime and survives for the next poll.
+        await removeConsumedLlmCommandFiles(commandFile);
+        state.llmControlLastCommandKey = '';
         updateLlmControlUI();
       } finally {
         state.llmControlBusy = false;
       }
+    }
+
+    async function removeConsumedLlmCommandFiles(commandFile) {
+      try {
+        const inbox = await getWorkspaceDirectory(llmInboxDir(), false);
+        if (!inbox || typeof inbox.values !== 'function' || typeof inbox.removeEntry !== 'function') return;
+        const cutoff = Math.max(0, Math.round(Number(commandFile && commandFile.modified) || 0));
+        const stale = [];
+        for await (const entry of inbox.values()) {
+          if (!entry || entry.kind !== 'file') continue;
+          const nm = String(entry.name || '');
+          if (!/\.json$/i.test(nm)) continue;
+          const f = await entry.getFile();
+          if (Math.round(Number(f.lastModified) || 0) <= cutoff) stale.push(nm);
+        }
+        for (const nm of stale) { try { await inbox.removeEntry(nm); } catch (e) {} }
+      } catch (error) {}
     }
 
     async function readLatestLlmCommandFile() {
