@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver120</title>
+  <title>Conte Editor Prototype ver121</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7051,6 +7051,17 @@
           <span><span class="export-format-title">映像</span><span class="export-format-note">段階1: 現在フレームをPNG出力（レンダラ確認用）</span></span>
         </label>
       </div>
+      <div id="videoExportOptions" class="export-video-options">
+        <span class="export-video-options-title">映像オプション（映像モード時）</span>
+        <div class="export-video-options-row">
+          <label>幅 <input id="videoExportWidth" type="number" value="1280" min="320" max="3840" step="2"> px</label>
+          <label>fps <input id="videoExportFps" type="number" value="24" min="1" max="60"></label>
+          <label>開始 <input id="videoExportStart" type="number" value="0" min="0" step="0.5"> 秒</label>
+          <label>終了 <input id="videoExportEnd" type="number" placeholder="最後まで" min="0" step="0.5"> 秒</label>
+          <label class="export-video-whitecanvas"><input id="videoExportWhiteCanvas" type="checkbox"> 白キャンバス全体（カメラ枠なし）</label>
+        </div>
+        <span class="export-video-options-note">リアルタイム録画です（クリップ長と同じ時間かかります）。まず短い範囲でお試しを。音声は次段階。</span>
+      </div>
       <div id="exportStatus" class="export-status"></div>
       <div class="export-dialog-actions">
         <button id="exportDialogCloseBtn" type="button">閉じる</button>
@@ -7069,7 +7080,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver120</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver121</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7251,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '120';
+    const APP_DISPLAY_VERSION = '121';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37175,7 +37186,8 @@
       const BASE_W = LAYER_DRAWING_WIDTH, BASE_H = LAYER_DRAWING_HEIGHT; // 480 x 270
       const outW = Math.max(2, Math.round(Number(opts.outWidth) || BASE_W * 2));
       const outH = Math.round(outW * BASE_H / BASE_W);
-      outCanvas.width = outW; outCanvas.height = outH;
+      if (outCanvas.width !== outW) outCanvas.width = outW;
+      if (outCanvas.height !== outH) outCanvas.height = outH;
       const ctx = outCanvas.getContext('2d');
       ctx.clearRect(0, 0, outW, outH);
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, outW, outH);
@@ -37207,32 +37219,108 @@
         const src = drawing && drawing.bitmapDataUrl;
         if (!src) continue;
         const rect = layerDrawingBitmapRect(drawing);
-        const img = await loadImageForExport(src);
+        const img = opts.cache ? opts.cache.get(layer.drawingRef) : await loadImageForExport(src);
         if (img) ctx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
       }
       ctx.restore();
       return outCanvas;
     }
 
+    function pickVideoExportMime() {
+      if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+      const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+      return candidates.find(function(type) { return MediaRecorder.isTypeSupported(type); }) || '';
+    }
+
+    // Preload every conte-layer bitmap into an in-memory Image cache so the real-time record loop can
+    // draw each frame synchronously (no per-frame async load -> no stalls / dropped frames).
+    async function preloadVideoExportBitmaps(project, onStatus) {
+      const cache = new Map();
+      const drawings = project && project.layerDrawings ? project.layerDrawings : {};
+      const refs = Object.keys(drawings);
+      let loaded = 0;
+      for (let i = 0; i < refs.length; i += 1) {
+        const drawing = getLayerDrawingData(project, refs[i]);
+        const src = drawing && drawing.bitmapDataUrl;
+        if (!src) continue;
+        const img = await loadImageForExport(src);
+        if (img) cache.set(refs[i], img);
+        loaded += 1;
+        if (onStatus && loaded % 25 === 0) onStatus('レイヤー読み込み ' + loaded + ' ...');
+      }
+      return cache;
+    }
+
+    // STAGE 2: real-time webm capture. Renders each frame to an offscreen canvas; canvas.captureStream(fps)
+    // + MediaRecorder records it in real time (export takes ~as long as the clip). Audio is added in stage 3.
+    async function recordConteVideoWebm(opts, onStatus) {
+      opts = opts || {};
+      if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream) throw new Error('この環境は MediaRecorder / captureStream 非対応です。');
+      const project = state.project;
+      const fps = Math.max(1, Math.min(60, Math.round(Number(opts.fps) || 24)));
+      const outWidth = Math.max(320, Math.min(3840, Math.round(Number(opts.outWidth) || 1280)));
+      const total = Math.max(1, Math.round(videoTimelineDisplayTotalFrames(project)));
+      const startFrame = Math.max(0, Math.min(total - 1, Math.round((Number(opts.startSec) || 0) * fps)));
+      const endFrame = (opts.endSec != null && opts.endSec !== '') ? Math.max(startFrame + 1, Math.min(total, Math.round(Number(opts.endSec) * fps))) : total;
+      const frameCrop = opts.frameCrop !== false;
+      const cache = await preloadVideoExportBitmaps(project, onStatus);
+      const canvas = document.createElement('canvas');
+      await renderConteVideoFrameToCanvas(canvas, startFrame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+      const stream = canvas.captureStream(fps);
+      const mime = pickVideoExportMime();
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = function(event) { if (event.data && event.data.size) chunks.push(event.data); };
+      const stopped = new Promise(function(resolve) { recorder.onstop = resolve; });
+      state.videoExportCancel = false;
+      recorder.start(1000);
+      const startT = performance.now();
+      await new Promise(function(resolve) {
+        function tick() {
+          if (state.videoExportCancel) { resolve(); return; }
+          const frame = startFrame + Math.floor((performance.now() - startT) / 1000 * fps);
+          if (frame >= endFrame) {
+            renderConteVideoFrameToCanvas(canvas, endFrame - 1, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+            resolve(); return;
+          }
+          renderConteVideoFrameToCanvas(canvas, frame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+          if (onStatus) onStatus('録画中 ' + Math.round((frame - startFrame) / Math.max(1, endFrame - startFrame) * 100) + '% (' + (frame - startFrame) + '/' + (endFrame - startFrame) + 'f)');
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      });
+      await new Promise(function(resolve) { setTimeout(resolve, 300); });
+      try { recorder.stop(); } catch (error) {}
+      await stopped;
+      const blob = new Blob(chunks, { type: mime || 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'conte_video.webm';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+      return { canceled: Boolean(state.videoExportCancel), frames: endFrame - startFrame, blobSize: blob.size };
+    }
+
     async function runExportFromDialog() {
       const mode = selectedExportMode();
       if (mode === 'video') {
-        // STAGE 1 (visual check): render the current playhead frame to a PNG so we can verify the conte
-        // frame renderer (layers + camera move) before wiring the webm record loop + audio.
+        // STAGE 2: real-time webm recording (silent; audio in stage 3). Range/width/fps from the dialog.
         try {
-          setExportDialogBusy(true, '現在フレームをレンダリング中...');
+          const num = function(id, dflt) { const el = document.getElementById(id); const v = el ? Number(el.value) : NaN; return Number.isFinite(v) ? v : dflt; };
+          const endEl = document.getElementById('videoExportEnd');
+          const opts = {
+            outWidth: num('videoExportWidth', 1280),
+            fps: num('videoExportFps', 24),
+            startSec: num('videoExportStart', 0),
+            endSec: (endEl && String(endEl.value).trim() !== '') ? Number(endEl.value) : null,
+            frameCrop: !(document.getElementById('videoExportWhiteCanvas') && document.getElementById('videoExportWhiteCanvas').checked)
+          };
+          setExportDialogBusy(true, '映像録画準備中...（リアルタイム録画）');
           await flushDeferredMemoComposition({ render: false });
-          const canvas = document.createElement('canvas');
-          await renderConteVideoFrameToCanvas(canvas, state.videoPlayheadFrames, { outWidth: 1920, frameCrop: true });
-          const blob = await canvasToBlob(canvas, 'image/png');
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'conte_frame_' + Math.round(state.videoPlayheadFrames) + '.png';
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
-          setExportDialogBusy(false, '現在フレームをPNG出力しました（フレームレンダラのテスト）。');
+          const result = await recordConteVideoWebm(opts, function(msg) { setExportDialogBusy(true, msg); });
+          setExportDialogBusy(false, (result.canceled ? '録画中止（途中まで保存）' : '映像出力完了') + ' ' + Math.round(result.blobSize / 1024) + 'KB / ' + result.frames + 'f');
         } catch (error) {
-          setExportDialogBusy(false, 'フレーム出力失敗: ' + (error && error.message ? error.message : error));
+          setExportDialogBusy(false, '映像出力失敗: ' + (error && error.message ? error.message : error));
         }
         return;
       }
