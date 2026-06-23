@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver113</title>
+  <title>Conte Editor Prototype ver114</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7069,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver113</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver114</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7240,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '113';
+    const APP_DISPLAY_VERSION = '114';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -20713,6 +20713,13 @@
         });
       }
       updateTimelinePlayheadDom(root, totalFrames);
+      // Keep audio clip positions in sync with the data whenever the timeline scale changes (total or
+      // inner width). Gated so playback ticks (same total) don't re-layout clips every frame.
+      if (state.lastRuntimeTotalFrames !== totalFrames || state.lastRuntimeInnerWidth !== state.timelineInnerWidth) {
+        state.lastRuntimeTotalFrames = totalFrames;
+        state.lastRuntimeInnerWidth = state.timelineInnerWidth;
+        refreshAudioClipPositionsDom(root, totalFrames);
+      }
       updateTransportRuntimeDom(root);
       if (!options || !options.lightweight || options.updateTimecode) updateTimelineTimecodeDom(root, totalFrames);
       refreshCameraTrackSelectionDom(root);
@@ -20746,6 +20753,30 @@
         if (clipEl) clipEl.classList.toggle('active', id === next);
       });
       state.renderedActiveSpeechClipId = next;
+    }
+
+    // Re-sync every audio clip's DOM position from its LIVE data (startFrame/durationFrames) against the
+    // current total/inner-width. The lightweight runtime path only moved the playhead, so when the
+    // timeline total changed (OL/duration edits) clips kept stale --left-px and drifted out of sync with
+    // the data — the magnet then snapped/guided to the true data frame, looking "off" from the clip.
+    function refreshAudioClipPositionsDom(root, totalFrames) {
+      if (!root) return;
+      const total = Math.max(1, Math.round(Number(totalFrames) || 1));
+      const project = state.project;
+      const clips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
+      if (!clips.length) return;
+      const byId = new Map();
+      clips.forEach(function(clip) { if (clip && clip.id) byId.set(String(clip.id), clip); });
+      root.querySelectorAll('.audio-clip[data-audio-clip-id]').forEach(function(el) {
+        const clip = byId.get(String(el.dataset.audioClipId || ''));
+        if (!clip) return;
+        const sf = Math.max(0, Math.round(Number(clip.startFrame) || 0));
+        const df = Math.max(1, Math.round(Number(clip.durationFrames) || 1));
+        el.style.setProperty('--left', framePercent(sf, total).toFixed(4) + '%');
+        el.style.setProperty('--width', Math.max(0.001, framePercent(df, total)).toFixed(4) + '%');
+        el.style.setProperty('--left-px', timelineFrameToPixel(sf, total) + 'px');
+        el.style.setProperty('--width-px', timelineFrameSpanToPixel(df, total) + 'px');
+      });
     }
 
     function cssEscapeValue(value) {
@@ -20975,6 +21006,17 @@
         consider(end, baseThreshold, end);
         consider(start - duration, baseThreshold, start);
         consider(end - duration, baseThreshold, end);
+      });
+      // Cut-group boundaries (OL-aware, same model as the cut layout) — snap the clip's start OR end
+      // to a cut edge. snapFrame is the boundary the guide line lands on.
+      cutGroupTimelineItems(project).forEach(function(item) {
+        if (!item) return;
+        const cutStart = Math.max(0, Math.round(Number(item.startFrame) || 0));
+        const cutEnd = Math.max(0, Math.round(Number(item.endFrame) || 0));
+        consider(cutStart, baseThreshold, cutStart);            // clip start -> cut start
+        consider(cutEnd, baseThreshold, cutEnd);                // clip start -> cut end
+        consider(cutStart - duration, baseThreshold, cutStart); // clip end -> cut start
+        consider(cutEnd - duration, baseThreshold, cutEnd);     // clip end -> cut end
       });
       return best;
     }
