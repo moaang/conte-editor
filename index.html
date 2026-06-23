@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver112</title>
+  <title>Conte Editor Prototype ver113</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -3879,6 +3879,39 @@
       border-left: 7px solid currentColor;
     }
 
+    /* go to start (skip-to-start): vertical bar + two left triangles, a variant of step-back */
+    .timeline-icon.go-start::before {
+      content: "";
+      position: absolute;
+      left: 1px;
+      top: 2px;
+      width: 2px;
+      height: 10px;
+      border-radius: 1px;
+      background: currentColor;
+    }
+    .timeline-icon.go-start::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 2px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-right: 5px solid currentColor;
+    }
+    .timeline-icon.go-start .go-start-tri2 {
+      position: absolute;
+      left: 8px;
+      top: 2px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-right: 5px solid currentColor;
+    }
+
     .timeline-icon.wait::before {
       content: "";
       position: absolute;
@@ -7036,7 +7069,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver112</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver113</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7207,7 +7240,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '112';
+    const APP_DISPLAY_VERSION = '113';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16385,9 +16418,9 @@
 
     function renderTimelineTransportControls() {
       return '<span class="timeline-control-row">' +
+        '<button id="timelineGoStartBtn" type="button" title="Go to start" aria-label="Go to start">' + timelineIconHtml('go-start') + '</button>' +
         '<button id="timelineStepBackBtn" type="button" title="1 frame back" aria-label="1 frame back">' + timelineIconHtml('step-back') + '</button>' +
         '<button id="timelinePlayPauseBtn" class="' + (state.videoPlaying ? 'primary' : '') + '" type="button" title="' + (state.videoPlaying ? 'Pause' : 'Play') + '" aria-label="' + (state.videoPlaying ? 'Pause' : 'Play') + '">' + timelinePlayPauseIcon() + '</button>' +
-        '<button id="timelineStopBtn" type="button" title="Stop" aria-label="Stop">' + timelineIconHtml('stop') + '</button>' +
         '<button id="timelineStepForwardBtn" type="button" title="1 frame forward" aria-label="1 frame forward">' + timelineIconHtml('step-forward') + '</button>' +
         '<button id="timelineRepeatBtn" class="' + (state.timelineRepeat ? 'active' : '') + '" type="button" title="Repeat" aria-label="Repeat" aria-pressed="' + (state.timelineRepeat ? 'true' : 'false') + '">' + timelineIconHtml('repeat') + '</button>' +
       '</span>';
@@ -16395,6 +16428,7 @@
 
     function timelineIconHtml(name) {
       if (name === 'repeat') return '<span class="timeline-icon repeat" aria-hidden="true"><span class="repeat-arrow-a"></span><span class="repeat-arrow-b"></span></span>';
+      if (name === 'go-start') return '<span class="timeline-icon go-start" aria-hidden="true"><span class="go-start-tri2"></span></span>';
       return '<span class="timeline-icon ' + escapeAttr(name) + '" aria-hidden="true"></span>';
     }
 
@@ -20057,8 +20091,8 @@
       if (button) button.addEventListener('click', toggleTimelinePlayback);
       const playPause = root.querySelector('#timelinePlayPauseBtn');
       if (playPause) playPause.addEventListener('click', toggleTimelinePlayback);
-      const stop = root.querySelector('#timelineStopBtn');
-      if (stop) stop.addEventListener('click', function() {
+      const goStart = root.querySelector('#timelineGoStartBtn');
+      if (goStart) goStart.addEventListener('click', function() {
         stopTimelinePlayback(false);
         state.videoPlayheadFrames = timelineStartFrameIndex();
         if (state.videoEditMode) {
