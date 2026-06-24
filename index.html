@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver126</title>
+  <title>Conte Editor Prototype ver127</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7100,7 +7100,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver126</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver127</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7271,7 +7271,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '126';
+    const APP_DISPLAY_VERSION = '127';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37352,6 +37352,12 @@
       ctx.restore();
     }
 
+    // Cache for the static base composite (white + camera + conte layers, NO subtitle/BOLD overlay).
+    // Keyed by cut + camera + width: a cut with no camera work yields one key for all its frames, so its
+    // layers are composited ONCE and just blitted thereafter (the user's "static cuts only change per
+    // panel" insight). The overlay is redrawn every frame (dialogue clips come and go within a cut).
+    let videoExportBaseCache = null;
+    function videoExportResetFrameCache() { videoExportBaseCache = null; }
     async function renderConteVideoFrameToCanvas(outCanvas, frame, opts) {
       opts = opts || {};
       const project = state.project;
@@ -37361,40 +37367,66 @@
       if (outCanvas.width !== outW) outCanvas.width = outW;
       if (outCanvas.height !== outH) outCanvas.height = outH;
       const ctx = outCanvas.getContext('2d');
-      ctx.clearRect(0, 0, outW, outH);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, outW, outH);
       const f = Math.max(0, Math.round(Number(frame) || 0));
+      const frameCrop = opts.frameCrop !== false;
       const slot = videoSlotAtFrame(project, f);
-      if (!slot || !slot.cut) return outCanvas;
-      const sx = outW / BASE_W; // drawing-coord (480-base) -> output px
-      ctx.save();
-      if (opts.frameCrop !== false) {
-        // Replicate cameraPreviewTransformCss on canvas (origin = frame center):
-        //   translate(-x*k, -y*k) rotate(-rot) scale(1/camScale),  k = outW / VIDEO_PREVIEW_BASE_WIDTH (940)
-        const cam = normalizedCameraFrameTransform(cameraTransformAtFrame(project, f));
-        if (!cameraTransformIsDefault(cam)) {
-          const k = outW / VIDEO_PREVIEW_BASE_WIDTH;
-          const cx = outW / 2, cy = outH / 2;
-          ctx.translate(cx, cy);
-          ctx.translate(-cam.x * k, -cam.y * k);
-          ctx.rotate(-cam.rotation * Math.PI / 180);
-          const s = 1 / Math.max(0.05, cam.scale);
-          ctx.scale(s, s);
-          ctx.translate(-cx, -cy);
+      // Camera transform for this frame, and the cache discriminator built from it.
+      let cam = null, camKey = 'D';
+      if (frameCrop && slot && slot.cut) {
+        const c = normalizedCameraFrameTransform(cameraTransformAtFrame(project, f));
+        if (!cameraTransformIsDefault(c)) {
+          cam = c;
+          camKey = Math.round(c.x * 100) + ',' + Math.round(c.y * 100) + ',' + Math.round(c.scale * 1000) + ',' + Math.round(c.rotation * 100);
         }
       }
-      const entries = layerDrawingEntriesForCut(project, slot.cut.id);
-      for (let i = 0; i < entries.length; i += 1) {
-        const layer = entries[i] && entries[i].layer;
-        if (!layer) continue;
-        const drawing = getLayerDrawingData(project, layer.drawingRef);
-        const src = drawing && drawing.bitmapDataUrl;
-        if (!src) continue;
-        const rect = layerDrawingBitmapRect(drawing);
-        const img = opts.cache ? opts.cache.get(layer.drawingRef) : await loadImageForExport(src);
-        if (img) ctx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+      const cutId = (slot && slot.cut) ? slot.cut.id : 'none';
+      const baseKey = cutId + '|' + camKey + '|' + outW;
+      const useCache = opts.cacheFrames !== false;
+      let base = (useCache && videoExportBaseCache && videoExportBaseCache.key === baseKey) ? videoExportBaseCache.canvas : null;
+      if (!base) {
+        // (re)render the base composite into an offscreen canvas (memory reused across misses).
+        const off = (videoExportBaseCache && videoExportBaseCache.canvas) || document.createElement('canvas');
+        if (off.width !== outW) off.width = outW;
+        if (off.height !== outH) off.height = outH;
+        const octx = off.getContext('2d');
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+        octx.clearRect(0, 0, outW, outH);
+        octx.fillStyle = '#ffffff'; octx.fillRect(0, 0, outW, outH);
+        if (slot && slot.cut) {
+          const sx = outW / BASE_W; // drawing-coord (480-base) -> output px
+          octx.save();
+          if (cam) {
+            // Replicate cameraPreviewTransformCss on canvas (origin = frame center):
+            //   translate(-x*k, -y*k) rotate(-rot) scale(1/camScale),  k = outW / VIDEO_PREVIEW_BASE_WIDTH (940)
+            const k = outW / VIDEO_PREVIEW_BASE_WIDTH;
+            const cx = outW / 2, cy = outH / 2;
+            octx.translate(cx, cy);
+            octx.translate(-cam.x * k, -cam.y * k);
+            octx.rotate(-cam.rotation * Math.PI / 180);
+            const s = 1 / Math.max(0.05, cam.scale);
+            octx.scale(s, s);
+            octx.translate(-cx, -cy);
+          }
+          const entries = layerDrawingEntriesForCut(project, slot.cut.id);
+          for (let i = 0; i < entries.length; i += 1) {
+            const layer = entries[i] && entries[i].layer;
+            if (!layer) continue;
+            const drawing = getLayerDrawingData(project, layer.drawingRef);
+            const src = drawing && drawing.bitmapDataUrl;
+            if (!src) continue;
+            const rect = layerDrawingBitmapRect(drawing);
+            const img = opts.cache ? opts.cache.get(layer.drawingRef) : await loadImageForExport(src);
+            if (img) octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+          }
+          octx.restore();
+        }
+        base = off;
+        if (useCache) videoExportBaseCache = { key: baseKey, canvas: off };
       }
-      ctx.restore();
+      // Blit the (cached) base, then draw the per-frame overlay on top.
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, outW, outH);
+      ctx.drawImage(base, 0, 0);
       drawVideoExportOverlays(ctx, project, f, outW, outH, opts);
       return outCanvas;
     }
@@ -37475,6 +37507,7 @@
     // fps follows the project so timeline frame timing is exact. Export takes ~as long as the clip.
     async function recordConteVideoWebm(opts, onStatus) {
       opts = opts || {};
+      videoExportResetFrameCache();
       if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream) throw new Error('この環境は MediaRecorder / captureStream 非対応です。');
       const project = state.project;
       const fps = Math.max(1, Math.round(fpsForProject(project)));
