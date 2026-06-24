@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver123</title>
+  <title>Conte Editor Prototype ver124</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7075,7 +7075,11 @@
           <label>終了 <input id="videoExportEnd" type="number" placeholder="最後まで" min="0" step="0.5"> 秒</label>
           <label class="export-video-whitecanvas"><input id="videoExportWhiteCanvas" type="checkbox"> 白キャンバス全体（カメラ枠なし）</label>
         </div>
-        <span class="export-video-options-note">リアルタイム録画（クリップ長と同じ時間）。音声(セリフ+BGM)込み。まず短い範囲でお試しを。fpsはプロジェクト設定値、字幕は次段階。</span>
+        <div class="export-video-options-row">
+          <label><input id="videoExportSubtitle" type="checkbox" checked> 字幕（セリフ）</label>
+          <label><input id="videoExportBold" type="checkbox" checked> 話者＋サフィックス（BOLD・声優録音用）</label>
+        </div>
+        <span class="export-video-options-note">リアルタイム録画（クリップ長と同じ時間）。音声(ミュート以外の全クリップ)込み。まず短い範囲でお試しを。fpsはプロジェクト設定値。</span>
       </div>
       <div id="exportStatus" class="export-status"></div>
       <div class="export-dialog-actions">
@@ -7095,7 +7099,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver123</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver124</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7266,7 +7270,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '123';
+    const APP_DISPLAY_VERSION = '124';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37206,6 +37210,118 @@
     // canvas. pictureSrcForCut is empty by design -> the conte layers ARE the drawing. opts:
     //   outWidth   output width px (height derives 16:9). default base*2.
     //   frameCrop  apply the camera pan/zoom crop (default true). false => full white-canvas drawing.
+    // ---- video export overlays (screen-space, NOT camera-affected — mirrors the preview's
+    // .preview-tag-stack which lives OUTSIDE .video-preview-camera-target, so it doesn't pan/zoom)
+    //   BOLD  = speaker name + suffix tag, top-right, weight 900 (= the 声優 recording label the
+    //           preview shows as .preview-character-tag).
+    //   字幕  = active dialogue text, bottom-center, white with a black outline.
+    const VIDEO_EXPORT_JP_FONT = '"Yu Gothic","Hiragino Kaku Gothic ProN","Meiryo",sans-serif';
+    function videoExportRoundRect(ctx, x, y, w, h, r) {
+      r = Math.max(0, Math.min(r, w / 2, h / 2));
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') { ctx.roundRect(x, y, w, h, r); return; }
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    function videoExportWrapText(ctx, text, maxWidth) {
+      const out = [];
+      let line = '';
+      for (let i = 0; i < text.length; i += 1) {
+        const test = line + text[i];
+        if (line && ctx.measureText(test).width > maxWidth) { out.push(line); line = text[i]; }
+        else line = test;
+      }
+      if (line) out.push(line);
+      return out.length ? out : [text];
+    }
+    function drawVideoExportOverlays(ctx, project, frame, outW, outH, opts) {
+      const wantBold = opts.bold !== false;
+      const wantSub = opts.subtitle !== false;
+      if (!wantBold && !wantSub) return;
+      let active;
+      try { active = activeAudioClipsAt(project, frame) || []; } catch (e) { active = []; }
+      active = active.filter(function(c) { return c && String(c.text || '').trim(); });
+      if (!active.length) return;
+      const sc = outW / VIDEO_PREVIEW_BASE_WIDTH; // 940-based css px -> output px (overlay is screen-fixed)
+      ctx.save();
+      if (wantBold) {
+        const fontPx = Math.max(10, Math.round(13 * sc));
+        const modeFontPx = Math.max(8, Math.round(fontPx * 0.82));
+        const padX = Math.round(7 * sc), padY = Math.round(3 * sc), gap = Math.round(5 * sc);
+        const swatch = Math.round(10 * sc), rowGap = Math.round(4 * sc), radius = Math.round(4 * sc);
+        const marginTop = Math.round(10 * sc), marginRight = Math.round(10 * sc);
+        const pillH = fontPx + padY * 2;
+        const seen = {};
+        let y = marginTop;
+        for (let i = 0; i < active.length; i += 1) {
+          const clip = active[i];
+          const name = clip.characterName || 'Dialog';
+          let key; try { key = scenarioMetaKey(name) || name; } catch (e) { key = name; }
+          if (seen[key]) continue;
+          seen[key] = true;
+          let mode = ''; try { mode = dialogTagLabel(clip.dialogTags || clip.dialogMode || ''); } catch (e) { mode = ''; }
+          ctx.font = '900 ' + fontPx + 'px ' + VIDEO_EXPORT_JP_FONT;
+          const nameW = ctx.measureText(name).width;
+          let modeChipW = 0;
+          if (mode) { ctx.font = '900 ' + modeFontPx + 'px ' + VIDEO_EXPORT_JP_FONT; modeChipW = ctx.measureText(mode).width + Math.round(8 * sc); }
+          const contentW = swatch + gap + nameW + (mode ? gap + modeChipW : 0);
+          const pillW = contentW + padX * 2;
+          const x = Math.max(marginRight, outW - marginRight - pillW);
+          const midY = y + pillH / 2;
+          videoExportRoundRect(ctx, x, y, pillW, pillH, radius);
+          ctx.fillStyle = 'rgba(18,18,18,0.80)'; ctx.fill();
+          ctx.lineWidth = Math.max(1, sc); ctx.strokeStyle = 'rgba(255,255,255,0.72)'; ctx.stroke();
+          let cx = x + padX;
+          videoExportRoundRect(ctx, cx, midY - swatch / 2, swatch, swatch, Math.round(2 * sc));
+          ctx.fillStyle = audioClipColor(name); ctx.fill();
+          ctx.lineWidth = Math.max(1, sc); ctx.strokeStyle = 'rgba(255,255,255,0.78)'; ctx.stroke();
+          cx += swatch + gap;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.font = '900 ' + fontPx + 'px ' + VIDEO_EXPORT_JP_FONT; ctx.fillStyle = '#ffffff';
+          ctx.fillText(name, cx, midY);
+          cx += nameW;
+          if (mode) {
+            cx += gap;
+            const chipH = modeFontPx + Math.round(4 * sc);
+            videoExportRoundRect(ctx, cx, midY - chipH / 2, modeChipW, chipH, Math.round(3 * sc));
+            ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fill();
+            ctx.font = '900 ' + modeFontPx + 'px ' + VIDEO_EXPORT_JP_FONT; ctx.fillStyle = '#ffffff';
+            ctx.fillText(mode, cx + Math.round(4 * sc), midY);
+          }
+          y += pillH + rowGap;
+        }
+      }
+      if (wantSub) {
+        const fontPx = Math.max(12, Math.round(18 * sc));
+        ctx.font = '700 ' + fontPx + 'px ' + VIDEO_EXPORT_JP_FONT;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        const lineH = Math.round(fontPx * 1.32);
+        const maxW = Math.round(outW * 0.92);
+        const lines = [];
+        active.forEach(function(clip) {
+          String(clip.text || '').split(/\n+/).forEach(function(t) {
+            if (t.trim()) videoExportWrapText(ctx, t.trim(), maxW).forEach(function(l) { lines.push(l); });
+          });
+        });
+        if (lines.length) {
+          const bottom = outH - Math.round(outH * 0.06);
+          const yTop = bottom - (lines.length - 1) * lineH;
+          ctx.lineJoin = 'round';
+          ctx.lineWidth = Math.max(2, Math.round(fontPx * 0.18));
+          for (let i = 0; i < lines.length; i += 1) {
+            const yy = yTop + i * lineH;
+            ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.strokeText(lines[i], outW / 2, yy);
+            ctx.fillStyle = '#ffffff'; ctx.fillText(lines[i], outW / 2, yy);
+          }
+        }
+      }
+      ctx.restore();
+    }
+
     async function renderConteVideoFrameToCanvas(outCanvas, frame, opts) {
       opts = opts || {};
       const project = state.project;
@@ -37249,6 +37365,7 @@
         if (img) ctx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
       }
       ctx.restore();
+      drawVideoExportOverlays(ctx, project, f, outW, outH, opts);
       return outCanvas;
     }
 
@@ -37297,8 +37414,9 @@
       const recFrames = endFrame - startFrame;
       const recEndSec = recFrames / fps;
       const cache = await preloadVideoExportBitmaps(project, onStatus);
+      const renderOpts = { outWidth: outWidth, frameCrop: frameCrop, cache: cache, subtitle: opts.subtitle !== false, bold: opts.bold !== false };
       const canvas = document.createElement('canvas');
-      await renderConteVideoFrameToCanvas(canvas, startFrame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+      await renderConteVideoFrameToCanvas(canvas, startFrame, renderOpts);
 
       // audio: every clip the preview would play (= all clips with a source on a non-muted track,
       // any type — dialogue / BGM / SFX), limited to those overlapping the recorded range.
@@ -37366,10 +37484,10 @@
           if (state.videoExportCancel) { resolve(); return; }
           const frame = startFrame + Math.floor((performance.now() - startT) / 1000 * fps);
           if (frame >= endFrame) {
-            renderConteVideoFrameToCanvas(canvas, endFrame - 1, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+            renderConteVideoFrameToCanvas(canvas, endFrame - 1, renderOpts);
             resolve(); return;
           }
-          renderConteVideoFrameToCanvas(canvas, frame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+          renderConteVideoFrameToCanvas(canvas, frame, renderOpts);
           if (onStatus) onStatus('録画中 ' + Math.round((frame - startFrame) / Math.max(1, recFrames) * 100) + '% (' + (frame - startFrame) + '/' + recFrames + 'f)');
           requestAnimationFrame(tick);
         }
@@ -37399,7 +37517,9 @@
             outWidth: num('videoExportWidth', 1280),
             startSec: num('videoExportStart', 0),
             endSec: (endEl && String(endEl.value).trim() !== '') ? Number(endEl.value) : null,
-            frameCrop: !(document.getElementById('videoExportWhiteCanvas') && document.getElementById('videoExportWhiteCanvas').checked)
+            frameCrop: !(document.getElementById('videoExportWhiteCanvas') && document.getElementById('videoExportWhiteCanvas').checked),
+            subtitle: !!(document.getElementById('videoExportSubtitle') && document.getElementById('videoExportSubtitle').checked),
+            bold: !!(document.getElementById('videoExportBold') && document.getElementById('videoExportBold').checked)
           };
           setExportDialogBusy(true, '映像録画準備中...（リアルタイム録画）');
           await flushDeferredMemoComposition({ render: false });
