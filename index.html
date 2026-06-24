@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver131</title>
+  <title>Conte Editor Prototype ver132</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -2526,8 +2526,26 @@
     .export-video-options-title { font-size: 12px; font-weight: 600; }
     .export-video-options-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 12px; }
     .export-video-options-row input[type="number"] { width: 70px; }
-    .export-video-options-leg { font-weight: 600; min-width: 60px; color: var(--muted); }
     .export-video-options-row label { display: inline-flex; align-items: center; gap: 4px; }
+    .evo-row { display: flex; align-items: center; gap: 10px; }
+    .export-video-options-leg { flex: 0 0 64px; font-weight: 600; font-size: 12px; color: var(--muted); }
+    .evo-seg { display: flex; flex: 1; gap: 6px; min-width: 0; }
+    .evo-seg.evo-joined { gap: 0; }
+    .evo-seg-btn { flex: 1; min-width: 0; margin: 0; position: relative; }
+    .evo-seg-btn input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+    .evo-seg-btn > span {
+      display: block; text-align: center; padding: 7px 8px; font-size: 12px; line-height: 1.25;
+      border: 1px solid var(--border, #d0d0d0); border-radius: 8px; cursor: pointer; user-select: none;
+      background: var(--surface, #fff); color: var(--text, #222);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: background .12s ease, border-color .12s ease, color .12s ease;
+    }
+    .evo-seg-btn > span:hover { border-color: var(--focus, #2d6cdf); }
+    .evo-joined .evo-seg-btn:first-child > span { border-radius: 8px 0 0 8px; }
+    .evo-joined .evo-seg-btn:last-child > span { border-radius: 0 8px 8px 0; }
+    .evo-joined .evo-seg-btn:not(:first-child) > span { border-left: 0; }
+    .evo-seg-btn input:checked + span { background: var(--focus, #2d6cdf); border-color: var(--focus, #2d6cdf); color: #fff; font-weight: 600; }
+    .evo-seg-btn input:focus-visible + span { outline: 2px solid var(--focus, #2d6cdf); outline-offset: 1px; }
     .export-video-options-note { font-size: 11px; color: var(--muted); line-height: 1.4; }
 
     .paper-frame-dialog {
@@ -7076,17 +7094,21 @@
           <label>開始 <input id="videoExportStart" type="number" value="0" min="0" step="0.5"> 秒</label>
           <label>終了 <input id="videoExportEnd" type="number" placeholder="最後まで" min="0" step="0.5"> 秒</label>
         </div>
-        <div class="export-video-options-row">
+        <div class="evo-row">
           <span class="export-video-options-leg">出力領域</span>
-          <label><input type="radio" name="videoExportArea" value="camera" checked> カメラフレーム</label>
-          <label><input type="radio" name="videoExportArea" value="canvas"> キャンバス全体（カメラフレーム表示）</label>
+          <div class="evo-seg evo-joined">
+            <label class="evo-seg-btn"><input type="radio" name="videoExportArea" value="camera" checked><span>カメラフレーム</span></label>
+            <label class="evo-seg-btn"><input type="radio" name="videoExportArea" value="canvas"><span>キャンバス全体（枠表示）</span></label>
+          </div>
         </div>
-        <div class="export-video-options-row">
+        <div class="evo-row">
           <span class="export-video-options-leg">表示情報</span>
-          <label><input id="videoExportSubtitle" type="checkbox" checked> 字幕</label>
-          <label><input id="videoExportBold" type="checkbox" checked> 話者＋サフィックス（BOLD）</label>
+          <div class="evo-seg">
+            <label class="evo-seg-btn"><input id="videoExportSubtitle" type="checkbox" checked><span>字幕</span></label>
+            <label class="evo-seg-btn"><input id="videoExportBold" type="checkbox" checked><span>話者＋サフィックス（BOLD）</span></label>
+          </div>
         </div>
-        <span class="export-video-options-note">高速出力(WebCodecs)で書き出し。対応ブラウザ(Chrome/Edge)では mp4、非対応時は実時間録画(webm)に自動切替。音声(ミュート以外の全クリップ)込み。fps=プロジェクト設定値。幅を下げると速くなります。</span>
+        <span class="export-video-options-note">高速出力(WebCodecs)。対応ブラウザ→mp4、非対応→webm(実時間)に自動切替。音声込み・fps=プロジェクト設定値。</span>
       </div>
       <div id="exportStatus" class="export-status"></div>
       <div class="export-dialog-actions">
@@ -7106,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver131</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver132</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7277,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '131';
+    const APP_DISPLAY_VERSION = '132';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
