@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver128</title>
+  <title>Conte Editor Prototype ver129</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7101,7 +7101,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver128</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver129</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7272,7 +7272,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '128';
+    const APP_DISPLAY_VERSION = '129';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37795,14 +37795,25 @@
       return { canceled: Boolean(state.videoExportCancel), frames: recFrames, blobSize: blob.size, format: wantMp4 ? 'mp4' : 'webm', fast: true };
     }
     async function runExportVideo(opts, onStatus) {
-      if (opts.fast !== false && typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined') {
-        try { return await exportConteVideoFast(opts, onStatus); }
-        catch (e) {
-          if (typeof console !== 'undefined' && console.warn) console.warn('[video export] WebCodecs path failed; falling back to real-time', e);
-          if (onStatus) onStatus('高速出力に失敗→実時間録画に切替: ' + (e && e.message ? e.message : e));
+      let fallbackReason = '';
+      if (opts.fast !== false) {
+        const miss = [];
+        if (typeof VideoEncoder === 'undefined') miss.push('VideoEncoder');
+        if (typeof VideoFrame === 'undefined') miss.push('VideoFrame');
+        if (miss.length) {
+          fallbackReason = 'WebCodecs非対応(' + miss.join('/') + ')';
+        } else {
+          try { return await exportConteVideoFast(opts, onStatus); }
+          catch (e) {
+            fallbackReason = (e && e.message ? e.message : String(e));
+            if (typeof console !== 'undefined' && console.warn) console.warn('[video export] WebCodecs path failed; falling back to real-time', e);
+            if (onStatus) onStatus('高速失敗→実時間に切替: ' + fallbackReason);
+          }
         }
       }
-      return await recordConteVideoWebm(opts, onStatus);
+      const r = await recordConteVideoWebm(opts, onStatus);
+      if (fallbackReason && r) r.fallbackReason = fallbackReason;
+      return r;
     }
 
     async function runExportFromDialog() {
@@ -37825,7 +37836,7 @@
           setExportDialogBusy(true, '映像出力準備中…');
           await flushDeferredMemoComposition({ render: false });
           const result = await runExportVideo(opts, function(msg) { setExportDialogBusy(true, msg); });
-          setExportDialogBusy(false, (result.canceled ? '出力中止（途中まで保存）' : ('映像出力完了' + (result.fast ? '（高速）' : '（実時間）'))) + ' ' + (result.format || '') + ' ' + Math.round(result.blobSize / 1024) + 'KB / ' + result.frames + 'f');
+          setExportDialogBusy(false, (result.canceled ? '出力中止（途中まで保存）' : ('映像出力完了' + (result.fast ? '（高速）' : '（実時間）'))) + ' ' + (result.format || '') + ' ' + Math.round(result.blobSize / 1024) + 'KB / ' + result.frames + 'f' + (result.fallbackReason ? '  ⚠高速不可: ' + result.fallbackReason : ''));
         } catch (error) {
           setExportDialogBusy(false, '映像出力失敗: ' + (error && error.message ? error.message : error));
         }
