@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver122</title>
+  <title>Conte Editor Prototype ver123</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -2522,6 +2522,7 @@
       border-radius: 8px;
       background: var(--surface-muted, rgba(127,127,127,0.06));
     }
+    .export-video-options[hidden] { display: none; }
     .export-video-options-title { font-size: 12px; font-weight: 600; }
     .export-video-options-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 12px; }
     .export-video-options-row input[type="number"] { width: 70px; }
@@ -7063,7 +7064,7 @@
         </label>
         <label class="export-format-option">
           <input type="radio" name="exportMode" value="video">
-          <span><span class="export-format-title">映像</span><span class="export-format-note">段階1: 現在フレームをPNG出力（レンダラ確認用）</span></span>
+          <span><span class="export-format-title">映像</span><span class="export-format-note">コンテ＋カメラ＋音声を webm 出力</span></span>
         </label>
       </div>
       <div id="videoExportOptions" class="export-video-options" hidden>
@@ -7094,7 +7095,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver122</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver123</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7265,7 +7266,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '122';
+    const APP_DISPLAY_VERSION = '123';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37299,7 +37300,8 @@
       const canvas = document.createElement('canvas');
       await renderConteVideoFrameToCanvas(canvas, startFrame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
 
-      // audio: decode every dialogue + BGM clip overlapping the range
+      // audio: every clip the preview would play (= all clips with a source on a non-muted track,
+      // any type — dialogue / BGM / SFX), limited to those overlapping the recorded range.
       let audioCtx = null, audioDest = null;
       const scheduled = [];
       if (opts.audio !== false) {
@@ -37309,8 +37311,8 @@
             audioCtx = new AC();
             await audioCtx.resume().catch(function() {});
             audioDest = audioCtx.createMediaStreamDestination();
-            const clips = (project.audio && project.audio.clips ? project.audio.clips : []).filter(function(c) {
-              if (!c || c.hidden || audioClipIsMuted(project, c)) return false;
+            const clips = audioTimelineAudibleClips(project).filter(function(c) {
+              if (!c) return false;
               const cs = Math.round(Number(c.startFrame) || 0);
               const cd = Math.max(1, Math.round(Number(c.audioTrimDurationFrames || c.durationFrames) || 1));
               return (cs + cd) > startFrame && cs < endFrame;
