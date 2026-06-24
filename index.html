@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver136</title>
+  <title>Conte Editor Prototype ver137</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver136</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver137</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '136';
+    const APP_DISPLAY_VERSION = '137';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8393,7 +8393,7 @@
       restoreTimelineViewportForHistory(historyViewport);
     }
 
-    function runCommand(name, mutator) {
+    function runCommand(name, mutator, refreshOptions) {
       const before = snapshotProject();
       invalidateVideoTimelineCache();
       mutator(state.project);
@@ -8401,7 +8401,7 @@
       const after = snapshotProject();
       pushUndoCommand({ name: name, before: before, after: after });
       state.redoStack = [];
-      refresh();
+      refresh(refreshOptions);
     }
 
     function captureCameraTimelineState(project) {
@@ -18800,7 +18800,7 @@
           n += 1;
           cut.cutNo = String(n);
         });
-      });
+      }, { skipSource: true, skipMemo: true });
       state.timelineStatus = 'カット番号を振り直しました。';
     }
 
@@ -21364,7 +21364,7 @@
             if (rippleMode) {
               let rippleDelta = deltaFrames;
               if (originalStart + rippleDelta < 0) rippleDelta = -originalStart;
-              if (rippleDelta) runCommand('右側を一括移動', function(project) { rippleShiftTimelineFrom(project, originalStart, rippleDelta); });
+              if (rippleDelta) runCommand('右側を一括移動', function(project) { rippleShiftTimelineFrom(project, originalStart, rippleDelta); }, { skipSource: true, skipMemo: true });
               return;
             }
             const proposedStart = clampNumber(originalStart + deltaFrames, 0, maxStart, originalStart);
@@ -21520,7 +21520,7 @@
             if (rippleMode) {
               let rippleDelta = deltaFrames;
               if (originalStart + rippleDelta < 0) rippleDelta = -originalStart;
-              if (rippleDelta) runCommand('右側を一括移動', function(project) { rippleShiftTimelineFrom(project, originalStart, rippleDelta); });
+              if (rippleDelta) runCommand('右側を一括移動', function(project) { rippleShiftTimelineFrom(project, originalStart, rippleDelta); }, { skipSource: true, skipMemo: true });
               return;
             }
             const proposedStart = clampNumber(originalStart + deltaFrames, 0, maxStart, originalStart);
