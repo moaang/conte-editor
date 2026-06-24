@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver139</title>
+  <title>Conte Editor Prototype ver140</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver139</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver140</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '139';
+    const APP_DISPLAY_VERSION = '140';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17650,27 +17650,37 @@
       menu.hidden = false;
     }
 
+    // Shared simple context menu: declare items [{ label, action, disabled?, hidden? }]; this builds the
+    // buttons, wires click (preventDefault/stopPropagation/hide + action), positions and shows the menu.
+    function openSimpleContextMenu(event, items, opts) {
+      opts = opts || {};
+      const list = (items || []).filter(function(it) { return it && !it.hidden; });
+      const menu = conteLayerContextMenuEl();
+      menu.innerHTML = list.map(function(it, idx) {
+        return '<button type="button" data-ctx-menu-idx="' + idx + '"' + (it.disabled ? ' disabled' : '') + '>' + escapeHtml(String(it.label == null ? '' : it.label)) + '</button>';
+      }).join('');
+      menu.querySelectorAll('button[data-ctx-menu-idx]').forEach(function(button) {
+        button.addEventListener('click', function(clickEvent) {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
+          hideConteLayerContextMenu();
+          const it = list[Number(button.dataset.ctxMenuIdx)];
+          if (it && typeof it.action === 'function') it.action();
+        });
+      });
+      positionContextMenuNearPointer(menu, event, opts.width || 170, opts.height || 140);
+      menu.hidden = false;
+    }
+
     function showAudioClipContextMenu(event, clipId, root) {
       const id = String(clipId || '');
       const clips = state.project.audio && state.project.audio.clips ? state.project.audio.clips : [];
       const clip = clips.find(function(item) { return item.id === id; });
       if (!clip) return;
       selectAudioClip(id, root);
-      const menu = conteLayerContextMenuEl();
-      menu.innerHTML = '<button type="button" data-audio-clip-menu-action="delete">削除</button>';
-      const button = menu.querySelector('[data-audio-clip-menu-action="delete"]');
-      if (button) {
-        button.addEventListener('click', function(clickEvent) {
-          clickEvent.preventDefault();
-          clickEvent.stopPropagation();
-          hideConteLayerContextMenu();
-          runCommand('Delete dialog audio', function(project) {
-            deleteAudioClip(project, id);
-          });
-        });
-      }
-      positionContextMenuNearPointer(menu, event, 160, 60);
-      menu.hidden = false;
+      openSimpleContextMenu(event, [
+        { label: '削除', action: function() { runCommand('Delete dialog audio', function(project) { deleteAudioClip(project, id); }); } }
+      ], { width: 160, height: 60 });
     }
 
     // ===== OL (overlap / cross-dissolve) timeline window =====
@@ -18808,48 +18818,19 @@
       const targetCutId = String(cutId || currentPicturePanelId() || '');
       if (!targetCutId || cutIndexById(state.project, targetCutId) < 0) return;
       selectTimelinePanelForContextAction(root, targetCutId);
-      const menu = conteLayerContextMenuEl();
       const canDelete = state.project.cuts.length > 1;
       const hasOl = cutGroupHasOl(state.project, targetCutId);
       const prevMerge = cutMergeAllowed(state.project, targetCutId, 'prev');
       const nextMerge = cutMergeAllowed(state.project, targetCutId, 'next');
-      menu.innerHTML = [
-        '<button type="button" data-conte-layer-menu-action="add-cut">\u30ab\u30c3\u30c8\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="delete-cut"' + (canDelete ? '' : ' disabled') + '>\u30ab\u30c3\u30c8\u524a\u9664</button>',
-        (prevMerge ? '<button type="button" data-conte-layer-menu-action="merge-prev">\u2190 \u30ab\u30c3\u30c8' + escapeAttr(prevMerge.neighborCutNo) + '\u306b\u7d50\u5408</button>' : ''),
-        (nextMerge ? '<button type="button" data-conte-layer-menu-action="merge-next">\u30ab\u30c3\u30c8' + escapeAttr(nextMerge.neighborCutNo) + '\u306b\u7d50\u5408 \u2192</button>' : ''),
-        '<button type="button" data-conte-layer-menu-action="ol-window">OL \u4f5c\u6210</button>',
-        (hasOl ? '<button type="button" data-conte-layer-menu-action="ol-release">OL \u89e3\u9664</button>' : ''),
-        '<button type="button" data-conte-layer-menu-action="renumber-cuts">\u30ab\u30c3\u30c8\u756a\u53f7\u632f\u308a\u76f4\u3057</button>'
-      ].join('');
-      menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
-        button.addEventListener('click', function(clickEvent) {
-          clickEvent.preventDefault();
-          clickEvent.stopPropagation();
-          const action = button.dataset.conteLayerMenuAction || '';
-          hideConteLayerContextMenu();
-          if (action === 'add-cut') {
-            addConteCutAfterSelection();
-          } else if (action === 'delete-cut') {
-            deletePrimarySelectedPicturePanel();
-          } else if (action === 'merge-prev') {
-            mergeCutIntoNeighbor(targetCutId, 'prev');
-          } else if (action === 'merge-next') {
-            mergeCutIntoNeighbor(targetCutId, 'next');
-          } else if (action === 'ol-window') {
-            openOlWindowForCut(targetCutId);
-          } else if (action === 'ol-release') {
-            releaseOlForCut(targetCutId);
-          } else if (action === 'renumber-cuts') {
-            renumberContentCuts();
-          }
-        });
-      });
-      const x = Math.min(window.innerWidth - 170, Math.max(8, event.clientX));
-      const y = Math.min(window.innerHeight - 140, Math.max(8, event.clientY));
-      menu.style.left = x + 'px';
-      menu.style.top = y + 'px';
-      menu.hidden = false;
+      openSimpleContextMenu(event, [
+        { label: '\u30ab\u30c3\u30c8\u8ffd\u52a0', action: function() { addConteCutAfterSelection(); } },
+        { label: '\u30ab\u30c3\u30c8\u524a\u9664', disabled: !canDelete, action: function() { deletePrimarySelectedPicturePanel(); } },
+        { label: prevMerge ? ('\u2190 \u30ab\u30c3\u30c8' + prevMerge.neighborCutNo + '\u306b\u7d50\u5408') : '', hidden: !prevMerge, action: function() { mergeCutIntoNeighbor(targetCutId, 'prev'); } },
+        { label: nextMerge ? ('\u30ab\u30c3\u30c8' + nextMerge.neighborCutNo + '\u306b\u7d50\u5408 \u2192') : '', hidden: !nextMerge, action: function() { mergeCutIntoNeighbor(targetCutId, 'next'); } },
+        { label: 'OL \u4f5c\u6210', action: function() { openOlWindowForCut(targetCutId); } },
+        { label: 'OL \u89e3\u9664', hidden: !hasOl, action: function() { releaseOlForCut(targetCutId); } },
+        { label: '\u30ab\u30c3\u30c8\u756a\u53f7\u632f\u308a\u76f4\u3057', action: function() { renumberContentCuts(); } }
+      ], { width: 170, height: 140 });
     }
 
     function showConteLayerCellContextMenu(event, cellEl, root) {
@@ -18865,47 +18846,19 @@
         return;
       }
       selectConteLayerCellFromTimeline(root, cutId, rowIndex, anchorLayerId, false);
-      const menu = conteLayerContextMenuEl();
-      menu.innerHTML = [
-        '<button type="button" data-conte-layer-menu-action="add-koma">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="add-layer-below">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="add-panel">\u30d1\u30cd\u30eb\u8ffd\u52a0</button>',
-        (anchorLayerId ? '<button type="button" data-conte-layer-menu-action="delete-layer">\u30ec\u30a4\u30e4\u30fc\u524a\u9664</button>' : '')
-      ].join('');
-      menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
-        button.addEventListener('click', function(clickEvent) {
-          clickEvent.preventDefault();
-          clickEvent.stopPropagation();
-          const action = button.dataset.conteLayerMenuAction || '';
-          hideConteLayerContextMenu();
-          if (action === 'add-koma') {
-            addConteLayerToSelection('panel');
-            return;
-          }
-          if (action === 'add-layer-below') {
-            addConteLayerBelowSelectionLine(cutId, lineKey);
-            return;
-          }
-          if (action === 'add-panel') {
-            addPicturePanelAfterCutPreserveLayerSelection(cutId);
-            return;
-          }
-          if (action === 'delete-layer') {
-            if (!anchorLayerId) return;
+      openSimpleContextMenu(event, [
+        { label: '\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u8ffd\u52a0', action: function() { addConteLayerToSelection('panel'); } },
+        { label: '\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0', action: function() { addConteLayerBelowSelectionLine(cutId, lineKey); } },
+        { label: '\u30d1\u30cd\u30eb\u8ffd\u52a0', action: function() { addPicturePanelAfterCutPreserveLayerSelection(cutId); } },
+        { label: '\u30ec\u30a4\u30e4\u30fc\u524a\u9664', hidden: !anchorLayerId, action: function() {
             const ownerCutIds = conteLayerOwnerCutIdsForLayerIds(state.project, [anchorLayerId]);
             runConteLayerCutPatchCommand('Delete conte layer', ownerCutIds, function(project) {
               const selectionContext = captureConteLayerRemovalSelectionContext(project, [anchorLayerId]);
               removeConteLayersByIds(project, [anchorLayerId]);
               restoreConteLayerSelectionAfterRemoval(project, selectionContext);
             });
-          }
-        });
-      });
-      const x = Math.min(window.innerWidth - 170, Math.max(8, event.clientX));
-      const y = Math.min(window.innerHeight - 100, Math.max(8, event.clientY));
-      menu.style.left = x + 'px';
-      menu.style.top = y + 'px';
-      menu.hidden = false;
+          } }
+      ], { width: 170, height: 100 });
     }
 
     function conteLayerRowIndexAtPointer(root, event, ownerCut) {
@@ -18927,31 +18880,10 @@
       const targetCutId = String(cutId || '');
       if (!targetCutId || cutIndexById(state.project, targetCutId) < 0) return;
       const key = String(lineKey || '');
-      const menu = conteLayerContextMenuEl();
-      menu.innerHTML = [
-        '<button type="button" data-conte-layer-menu-action="add-layer-below">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="add-panel">\u30d1\u30cd\u30eb\u8ffd\u52a0</button>'
-      ].join('');
-      menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
-        button.addEventListener('click', function(clickEvent) {
-          clickEvent.preventDefault();
-          clickEvent.stopPropagation();
-          const action = button.dataset.conteLayerMenuAction || '';
-          hideConteLayerContextMenu();
-          if (action === 'add-layer-below') {
-            addConteLayerBelowSelectionLine(targetCutId, key);
-            return;
-          }
-          if (action === 'add-panel') {
-            addPicturePanelAfterCutPreserveLayerSelection(targetCutId);
-          }
-        });
-      });
-      const x = Math.min(window.innerWidth - 170, Math.max(8, event.clientX));
-      const y = Math.min(window.innerHeight - 80, Math.max(8, event.clientY));
-      menu.style.left = x + 'px';
-      menu.style.top = y + 'px';
-      menu.hidden = false;
+      openSimpleContextMenu(event, [
+        { label: '\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0', action: function() { addConteLayerBelowSelectionLine(targetCutId, key); } },
+        { label: '\u30d1\u30cd\u30eb\u8ffd\u52a0', action: function() { addPicturePanelAfterCutPreserveLayerSelection(targetCutId); } }
+      ], { width: 170, height: 80 });
     }
 
     function bindConteLayerTimeline(root, totalFrames) {
