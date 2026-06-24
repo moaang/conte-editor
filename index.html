@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver130</title>
+  <title>Conte Editor Prototype ver131</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -2526,6 +2526,8 @@
     .export-video-options-title { font-size: 12px; font-weight: 600; }
     .export-video-options-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 12px; }
     .export-video-options-row input[type="number"] { width: 70px; }
+    .export-video-options-leg { font-weight: 600; min-width: 60px; color: var(--muted); }
+    .export-video-options-row label { display: inline-flex; align-items: center; gap: 4px; }
     .export-video-options-note { font-size: 11px; color: var(--muted); line-height: 1.4; }
 
     .paper-frame-dialog {
@@ -7071,18 +7073,20 @@
         <span class="export-video-options-title">映像オプション</span>
         <div class="export-video-options-row">
           <label>幅 <input id="videoExportWidth" type="number" value="1280" min="320" max="3840" step="2"> px</label>
-          <label>画質 <select id="videoExportQuality"><option value="low">低(速い)</option><option value="std" selected>標準</option><option value="high">高</option></select></label>
           <label>開始 <input id="videoExportStart" type="number" value="0" min="0" step="0.5"> 秒</label>
           <label>終了 <input id="videoExportEnd" type="number" placeholder="最後まで" min="0" step="0.5"> 秒</label>
-          <label class="export-video-whitecanvas"><input id="videoExportWhiteCanvas" type="checkbox"> 白キャンバス全体（カメラ枠なし）</label>
         </div>
         <div class="export-video-options-row">
-          <label><input id="videoExportSubtitle" type="checkbox" checked> 字幕（セリフ）</label>
-          <label><input id="videoExportBold" type="checkbox" checked> 話者＋サフィックス（BOLD・声優録音用）</label>
-          <label><input id="videoExportFast" type="checkbox" checked> 高速出力（WebCodecs・対応時）</label>
-          <label><input id="videoExportMp4" type="checkbox"> mp4で出力</label>
+          <span class="export-video-options-leg">出力領域</span>
+          <label><input type="radio" name="videoExportArea" value="camera" checked> カメラフレーム</label>
+          <label><input type="radio" name="videoExportArea" value="canvas"> キャンバス全体（カメラフレーム表示）</label>
         </div>
-        <span class="export-video-options-note">高速出力(WebCodecs)対応ブラウザ(Chrome/Edge)なら実時間より速く出力。非対応時は実時間録画に自動切替。音声(ミュート以外の全クリップ)・字幕・BOLD込み。fps=プロジェクト設定値。mp4はインストール不要。長い範囲はまず短く試してください。</span>
+        <div class="export-video-options-row">
+          <span class="export-video-options-leg">表示情報</span>
+          <label><input id="videoExportSubtitle" type="checkbox" checked> 字幕</label>
+          <label><input id="videoExportBold" type="checkbox" checked> 話者＋サフィックス（BOLD）</label>
+        </div>
+        <span class="export-video-options-note">高速出力(WebCodecs)で書き出し。対応ブラウザ(Chrome/Edge)では mp4、非対応時は実時間録画(webm)に自動切替。音声(ミュート以外の全クリップ)込み。fps=プロジェクト設定値。幅を下げると速くなります。</span>
       </div>
       <div id="exportStatus" class="export-status"></div>
       <div class="export-dialog-actions">
@@ -7102,7 +7106,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver130</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver131</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7273,7 +7277,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '130';
+    const APP_DISPLAY_VERSION = '131';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37371,15 +37375,15 @@
       const ctx = outCanvas.getContext('2d');
       const f = Math.max(0, Math.round(Number(frame) || 0));
       const frameCrop = opts.frameCrop !== false;
+      const showFrameBox = !!opts.showCameraFrame;
       const slot = videoSlotAtFrame(project, f);
-      // Camera transform for this frame, and the cache discriminator built from it.
-      let cam = null, camKey = 'D';
-      if (frameCrop && slot && slot.cut) {
-        const c = normalizedCameraFrameTransform(cameraTransformAtFrame(project, f));
-        if (!cameraTransformIsDefault(c)) {
-          cam = c;
-          camKey = Math.round(c.x * 100) + ',' + Math.round(c.y * 100) + ',' + Math.round(c.scale * 1000) + ',' + Math.round(c.rotation * 100);
-        }
+      // Camera transform for this frame. `cam` crops the view (camera-frame mode); when showing the
+      // whole canvas we instead draw the camera frame as a box. Either way it discriminates the cache.
+      const camRaw = (slot && slot.cut) ? normalizedCameraFrameTransform(cameraTransformAtFrame(project, f)) : null;
+      const cam = (frameCrop && camRaw && !cameraTransformIsDefault(camRaw)) ? camRaw : null;
+      let camKey = 'D';
+      if ((frameCrop || showFrameBox) && camRaw && !cameraTransformIsDefault(camRaw)) {
+        camKey = (frameCrop ? 'C' : 'F') + Math.round(camRaw.x * 100) + ',' + Math.round(camRaw.y * 100) + ',' + Math.round(camRaw.scale * 1000) + ',' + Math.round(camRaw.rotation * 100);
       }
       const cutId = (slot && slot.cut) ? slot.cut.id : 'none';
       const baseKey = cutId + '|' + camKey + '|' + outW;
@@ -37421,6 +37425,20 @@
             if (img) octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
           }
           octx.restore();
+          if (showFrameBox && camRaw) {
+            // draw the camera frame as a red box on the full canvas (canvas-whole mode)
+            const corners = cameraFramePaperCorners(camRaw); // 940-coordinate space
+            const k2 = outW / VIDEO_PREVIEW_BASE_WIDTH;
+            octx.save();
+            octx.lineJoin = 'round';
+            octx.lineWidth = Math.max(1.5, outW / 640);
+            octx.strokeStyle = 'rgba(255,48,48,0.95)';
+            octx.beginPath();
+            for (let ci = 0; ci < corners.length; ci += 1) { const X = corners[ci].x * k2, Y = corners[ci].y * k2; if (ci === 0) octx.moveTo(X, Y); else octx.lineTo(X, Y); }
+            octx.closePath();
+            octx.stroke();
+            octx.restore();
+          }
         }
         base = off;
         if (useCache) videoExportBaseCache = { key: baseKey, canvas: off };
@@ -37439,10 +37457,7 @@
       return candidates.find(function(type) { return MediaRecorder.isTypeSupported(type); }) || '';
     }
 
-    // mp4 (method B): transcode the recorded webm -> mp4 entirely in-browser via ffmpeg.wasm. No local
-    // install needed. Pinned to the single-threaded 0.11.x build so it works WITHOUT cross-origin
-    // isolation (GitHub Pages sends no COOP/COEP, so SharedArrayBuffer is unavailable). Core is fetched
-    // from a CDN on first use (~25MB, then browser-cached).
+    // Load an external script once (used to fetch the WebCodecs muxer from a CDN on demand).
     function loadScriptOnce(src) {
       return new Promise(function(resolve, reject) {
         if (document.querySelector('script[data-ext-src="' + src + '"]')) { resolve(); return; }
@@ -37452,33 +37467,6 @@
         s.onerror = function() { reject(new Error('スクリプト読み込み失敗: ' + src)); };
         document.head.appendChild(s);
       });
-    }
-    async function ensureFfmpegWasm(onStatus) {
-      if (state.ffmpegWasmInstance) return state.ffmpegWasmInstance;
-      if (onStatus) onStatus('ffmpeg(wasm) 読み込み中…（初回のみ）');
-      await loadScriptOnce('https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js');
-      const lib = window.FFmpeg;
-      if (!lib || typeof lib.createFFmpeg !== 'function') throw new Error('ffmpeg.wasm のロードに失敗しました（オフライン？）');
-      const ff = lib.createFFmpeg({ log: false, corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js' });
-      if (typeof ff.setProgress === 'function') {
-        ff.setProgress(function(p) {
-          if (onStatus && p && typeof p.ratio === 'number' && p.ratio >= 0) onStatus('mp4変換中 ' + Math.min(100, Math.max(0, Math.round(p.ratio * 100))) + '%');
-        });
-      }
-      await ff.load();
-      state.ffmpegWasmFetchFile = lib.fetchFile;
-      state.ffmpegWasmInstance = ff;
-      return ff;
-    }
-    async function transcodeWebmToMp4(webmBlob, onStatus) {
-      const ff = await ensureFfmpegWasm(onStatus);
-      const fetchFile = state.ffmpegWasmFetchFile;
-      ff.FS('writeFile', 'in.webm', await fetchFile(webmBlob));
-      if (onStatus) onStatus('mp4変換中…');
-      await ff.run('-i', 'in.webm', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', 'out.mp4');
-      const data = ff.FS('readFile', 'out.mp4');
-      try { ff.FS('unlink', 'in.webm'); ff.FS('unlink', 'out.mp4'); } catch (e) {}
-      return new Blob([data.buffer], { type: 'video/mp4' });
     }
 
     // Preload every conte-layer bitmap into an in-memory Image cache so the real-time record loop can
@@ -37605,22 +37593,12 @@
       await stopped;
       if (audioCtx) { try { await audioCtx.close(); } catch (e) {} }
       const blob = new Blob(chunks, { type: mime || 'video/webm' });
-      let outBlob = blob, outName = 'conte_video.webm';
-      if (opts.mp4 && !state.videoExportCancel && blob.size > 0) {
-        try {
-          outBlob = await transcodeWebmToMp4(blob, onStatus);
-          outName = 'conte_video.mp4';
-        } catch (e) {
-          if (onStatus) onStatus('mp4変換失敗、webmで保存: ' + (e && e.message ? e.message : e));
-          outBlob = blob; outName = 'conte_video.webm';
-        }
-      }
-      const url = URL.createObjectURL(outBlob);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = outName;
+      a.href = url; a.download = 'conte_video.webm';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function() { URL.revokeObjectURL(url); }, 8000);
-      return { canceled: Boolean(state.videoExportCancel), frames: recFrames, blobSize: outBlob.size, audioClips: scheduled.length, format: outName.split('.').pop() };
+      return { canceled: Boolean(state.videoExportCancel), frames: recFrames, blobSize: blob.size, audioClips: scheduled.length, format: 'webm' };
     }
 
     // ---- Phase 2: faster-than-real-time export via WebCodecs (VideoEncoder/AudioEncoder) + a small
@@ -37694,22 +37672,44 @@
       const startFrame = Math.max(0, Math.min(total - 1, Math.round((Number(opts.startSec) || 0) * fps)));
       const endFrame = (opts.endSec != null && opts.endSec !== '') ? Math.max(startFrame + 1, Math.min(total, Math.round(Number(opts.endSec) * fps))) : total;
       const frameCrop = opts.frameCrop !== false;
+      const showCameraFrame = !!opts.showCameraFrame;
       const recFrames = endFrame - startFrame;
-      const wantMp4 = !!opts.mp4;
       const sampleRate = 48000;
-      const qMul = opts.quality === 'low' ? 0.5 : (opts.quality === 'high' ? 2 : 1);
-      const bitrate = Math.min(24000000, Math.max(1000000, Math.round(outW * outH * fps * 0.12 * qMul)));
+      const bitrate = Math.min(16000000, Math.max(2000000, Math.round(outW * outH * fps * 0.12)));
 
-      // pick a supported video codec (bump H.264 level for larger frames)
-      const vCandidates = wantMp4 ? ['avc1.42001f', 'avc1.420028', 'avc1.420033', 'avc1.4d4028'] : ['vp09.00.10.08', 'vp8'];
-      let vCfg = null;
-      for (let i = 0; i < vCandidates.length; i += 1) {
-        const cfg = { codec: vCandidates[i], width: outW, height: outH, bitrate: bitrate, framerate: fps };
-        if (wantMp4 && vCandidates[i].indexOf('avc') === 0) cfg.avc = { format: 'avc' };
-        let sup = null; try { sup = await VideoEncoder.isConfigSupported(cfg); } catch (e) { sup = null; }
-        if (sup && sup.supported) { vCfg = cfg; break; }
+      // Audio present in range? (decides whether the chosen format must also support an audio codec.)
+      const audibleInRange = audioTimelineAudibleClips(project).filter(function(c) {
+        if (!c) return false;
+        const cs = Math.round(Number(c.startFrame) || 0);
+        const cd = Math.max(1, Math.round(Number(c.audioTrimDurationFrames || c.durationFrames) || 1));
+        return (cs + cd) > startFrame && cs < endFrame;
+      });
+      const hasAudio = audibleInRange.length > 0 && opts.audio !== false && typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined';
+
+      // Pick the best in-browser format with NO post-conversion: prefer mp4 (H.264 + AAC) directly via
+      // WebCodecs; if unavailable, fall back to webm (VP9/VP8 + Opus). (Real-time recording is only used
+      // when WebCodecs can do neither — handled by the caller.)
+      const pickVideoCfg = async function(cands, isAvc) {
+        for (let i = 0; i < cands.length; i += 1) {
+          const cfg = { codec: cands[i], width: outW, height: outH, bitrate: bitrate, framerate: fps };
+          if (isAvc) cfg.avc = { format: 'avc' };
+          let s = null; try { s = await VideoEncoder.isConfigSupported(cfg); } catch (e) { s = null; }
+          if (s && s.supported) return cfg;
+        }
+        return null;
+      };
+      const audioSupported = async function(codec) {
+        try { const s = await AudioEncoder.isConfigSupported({ codec: codec, sampleRate: sampleRate, numberOfChannels: 2, bitrate: 192000 }); return !!(s && s.supported); }
+        catch (e) { return false; }
+      };
+      let wantMp4 = false, vCfg = null, aCodec = '';
+      const avcCfg = await pickVideoCfg(['avc1.42001f', 'avc1.420028', 'avc1.420033', 'avc1.4d4028'], true);
+      if (avcCfg && (!hasAudio || (await audioSupported('mp4a.40.2')))) { wantMp4 = true; vCfg = avcCfg; aCodec = 'mp4a.40.2'; }
+      if (!vCfg) {
+        const vpCfg = await pickVideoCfg(['vp09.00.10.08', 'vp09.00.31.08', 'vp8'], false);
+        if (vpCfg && (!hasAudio || (await audioSupported('opus')))) { wantMp4 = false; vCfg = vpCfg; aCodec = 'opus'; }
       }
-      if (!vCfg) throw new Error('対応する映像エンコーダなし');
+      if (!vCfg) throw new Error('対応する映像/音声エンコーダなし');
       const muxVideoCodec = wantMp4 ? (vCfg.codec.indexOf('avc') === 0 ? 'avc' : 'vp9') : (vCfg.codec.indexOf('vp09') === 0 ? 'V_VP9' : 'V_VP8');
 
       videoExportResetFrameCache();
@@ -37718,24 +37718,13 @@
       const MuxNS = wantMp4 ? window.Mp4Muxer : window.WebMMuxer;
       if (!MuxNS || !MuxNS.Muxer || !MuxNS.ArrayBufferTarget) throw new Error('muxer のロードに失敗');
 
-      // offline audio mix; if there ARE audible clips but we can't encode them, bail to the real-time
-      // path (which captures audio) rather than emit a silent file.
-      const audibleInRange = audioTimelineAudibleClips(project).filter(function(c) {
-        if (!c) return false;
-        const cs = Math.round(Number(c.startFrame) || 0);
-        const cd = Math.max(1, Math.round(Number(c.audioTrimDurationFrames || c.durationFrames) || 1));
-        return (cs + cd) > startFrame && cs < endFrame;
-      });
+      // offline audio mix (the chosen format's audio codec is already known-supported)
       let audioBuffer = null, audioOK = false;
-      const aCfg = { codec: wantMp4 ? 'mp4a.40.2' : 'opus', sampleRate: sampleRate, numberOfChannels: 2, bitrate: 192000 };
-      if (opts.audio !== false && audibleInRange.length && typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined') {
-        let aSup = null; try { aSup = await AudioEncoder.isConfigSupported(aCfg); } catch (e) { aSup = null; }
-        if (aSup && aSup.supported) {
-          if (onStatus) onStatus('音声ミックス中…');
-          try { audioBuffer = await mixAudioForExportOffline(project, startFrame, endFrame, fps, sampleRate); } catch (e) { audioBuffer = null; }
-          audioOK = !!audioBuffer;
-        }
-        if (!audioOK) throw new Error('音声エンコード未対応のため実時間録画にフォールバック');
+      const aCfg = { codec: aCodec, sampleRate: sampleRate, numberOfChannels: 2, bitrate: 192000 };
+      if (hasAudio) {
+        if (onStatus) onStatus('音声ミックス中…');
+        try { audioBuffer = await mixAudioForExportOffline(project, startFrame, endFrame, fps, sampleRate); } catch (e) { audioBuffer = null; }
+        audioOK = !!audioBuffer;
       }
 
       const muxerOpts = {
@@ -37763,7 +37752,7 @@
 
       const cache = await preloadVideoExportBitmaps(project, onStatus);
       const canvas = document.createElement('canvas'); canvas.width = outW; canvas.height = outH;
-      const renderOpts = { outWidth: outW, outHeight: outH, frameCrop: frameCrop, cache: cache, subtitle: opts.subtitle !== false, bold: opts.bold !== false, cacheFrames: true };
+      const renderOpts = { outWidth: outW, outHeight: outH, frameCrop: frameCrop, showCameraFrame: showCameraFrame, cache: cache, subtitle: opts.subtitle !== false, bold: opts.bold !== false, cacheFrames: true };
       state.videoExportCancel = false;
 
       if (audioOK) { try { encodeAudioBufferForExport(audioEncoder, audioBuffer, sampleRate); } catch (e) { encErr = encErr || e; } }
@@ -37777,9 +37766,9 @@
         const slot = videoSlotAtFrame(project, fr);
         const cutId = (slot && slot.cut) ? slot.cut.id : 'none';
         let camKey = 'D';
-        if (frameCrop && slot && slot.cut) {
+        if ((frameCrop || showCameraFrame) && slot && slot.cut) {
           const c = normalizedCameraFrameTransform(cameraTransformAtFrame(project, fr));
-          if (!cameraTransformIsDefault(c)) camKey = Math.round(c.x * 100) + ',' + Math.round(c.y * 100) + ',' + Math.round(c.scale * 1000) + ',' + Math.round(c.rotation * 100);
+          if (!cameraTransformIsDefault(c)) camKey = (frameCrop ? 'C' : 'F') + Math.round(c.x * 100) + ',' + Math.round(c.y * 100) + ',' + Math.round(c.scale * 1000) + ',' + Math.round(c.rotation * 100);
         }
         let ovKey = '';
         if (wantOverlay) {
@@ -37832,20 +37821,20 @@
       return { canceled: Boolean(state.videoExportCancel), frames: recFrames, blobSize: blob.size, format: wantMp4 ? 'mp4' : 'webm', fast: true };
     }
     async function runExportVideo(opts, onStatus) {
+      // Fast (WebCodecs) is always the default. Auto-fallback to real-time recording when WebCodecs is
+      // unavailable or the fast path throws; the reason is surfaced in the completion status.
       let fallbackReason = '';
-      if (opts.fast !== false) {
-        const miss = [];
-        if (typeof VideoEncoder === 'undefined') miss.push('VideoEncoder');
-        if (typeof VideoFrame === 'undefined') miss.push('VideoFrame');
-        if (miss.length) {
-          fallbackReason = 'WebCodecs非対応(' + miss.join('/') + ')';
-        } else {
-          try { return await exportConteVideoFast(opts, onStatus); }
-          catch (e) {
-            fallbackReason = (e && e.message ? e.message : String(e));
-            if (typeof console !== 'undefined' && console.warn) console.warn('[video export] WebCodecs path failed; falling back to real-time', e);
-            if (onStatus) onStatus('高速失敗→実時間に切替: ' + fallbackReason);
-          }
+      const miss = [];
+      if (typeof VideoEncoder === 'undefined') miss.push('VideoEncoder');
+      if (typeof VideoFrame === 'undefined') miss.push('VideoFrame');
+      if (miss.length) {
+        fallbackReason = 'WebCodecs非対応(' + miss.join('/') + ')';
+      } else {
+        try { return await exportConteVideoFast(opts, onStatus); }
+        catch (e) {
+          fallbackReason = (e && e.message ? e.message : String(e));
+          if (typeof console !== 'undefined' && console.warn) console.warn('[video export] WebCodecs path failed; falling back to real-time', e);
+          if (onStatus) onStatus('高速失敗→実時間に切替: ' + fallbackReason);
         }
       }
       const r = await recordConteVideoWebm(opts, onStatus);
@@ -37860,16 +37849,16 @@
         try {
           const num = function(id, dflt) { const el = document.getElementById(id); const v = el ? Number(el.value) : NaN; return Number.isFinite(v) ? v : dflt; };
           const endEl = document.getElementById('videoExportEnd');
+          const areaEl = document.querySelector('input[name="videoExportArea"]:checked');
+          const area = areaEl ? areaEl.value : 'camera';
           const opts = {
             outWidth: num('videoExportWidth', 1280),
             startSec: num('videoExportStart', 0),
             endSec: (endEl && String(endEl.value).trim() !== '') ? Number(endEl.value) : null,
-            frameCrop: !(document.getElementById('videoExportWhiteCanvas') && document.getElementById('videoExportWhiteCanvas').checked),
+            frameCrop: area !== 'canvas',
+            showCameraFrame: area === 'canvas',
             subtitle: !!(document.getElementById('videoExportSubtitle') && document.getElementById('videoExportSubtitle').checked),
-            bold: !!(document.getElementById('videoExportBold') && document.getElementById('videoExportBold').checked),
-            mp4: !!(document.getElementById('videoExportMp4') && document.getElementById('videoExportMp4').checked),
-            fast: !(document.getElementById('videoExportFast') && document.getElementById('videoExportFast').checked === false),
-            quality: (document.getElementById('videoExportQuality') && document.getElementById('videoExportQuality').value) || 'std'
+            bold: !!(document.getElementById('videoExportBold') && document.getElementById('videoExportBold').checked)
           };
           setExportDialogBusy(true, '映像出力準備中…');
           await flushDeferredMemoComposition({ render: false });
