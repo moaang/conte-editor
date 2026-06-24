@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver138</title>
+  <title>Conte Editor Prototype ver139</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver138</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver139</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '138';
+    const APP_DISPLAY_VERSION = '139';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -21267,20 +21267,11 @@
             const previewEl = createAudioDragPreview(track, originalClip.startFrame, originalClip.durationFrames, totalFrames);
             const captureTarget = event.target && event.target.setPointerCapture ? event.target : clipEl;
             try { captureTarget.setPointerCapture(event.pointerId); } catch (error) {}
-            let trimPreviewPending = false;
-            let trimPreviewEvent = null;
-            const previewTrim = function(moveEvent) {
-              trimPreviewEvent = moveEvent;
-              if (trimPreviewPending) return;
-              trimPreviewPending = true;
-              requestAnimationFrame(function() {
-                trimPreviewPending = false;
-                if (!trimPreviewEvent) return;
-                const deltaFrames = timelineDragFrameDelta(startX, trimPreviewEvent.clientX, totalFrames, track);
-                const preview = previewVideoMediaTrim(originalClip, trimEdge, deltaFrames);
-                updateAudioDragPreview(previewEl, preview.startFrame, preview.durationFrames, totalFrames);
-              });
-            };
+            const previewTrim = makeRafThrottled(function(moveEvent) {
+              const deltaFrames = timelineDragFrameDelta(startX, moveEvent.clientX, totalFrames, track);
+              const preview = previewVideoMediaTrim(originalClip, trimEdge, deltaFrames);
+              updateAudioDragPreview(previewEl, preview.startFrame, preview.durationFrames, totalFrames);
+            });
             const finishTrim = function(upEvent) {
               clipEl.classList.remove('dragging');
               removeVideoMediaDragPreview(previewEl);
@@ -21363,6 +21354,22 @@
 
     // Shift+drag ripple: shift every audio AND video-media clip whose startFrame is at/after `fromStartFrame`
     // by the same frame delta (the grabbed clip moves too). Clamped to >= 0.
+    // rAF-throttle a pointer handler: coalesce rapid events to one update per frame, using the latest
+    // event. Removes the repeated pending-flag + requestAnimationFrame boilerplate in the drag previews.
+    function makeRafThrottled(handler) {
+      let pending = false;
+      let lastEvent = null;
+      return function(event) {
+        lastEvent = event;
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function() {
+          pending = false;
+          if (lastEvent !== null) handler(lastEvent);
+        });
+      };
+    }
+
     function rippleShiftTimelineFrom(project, fromStartFrame, deltaFrames) {
       const from = Math.round(Number(fromStartFrame) || 0);
       const delta = Math.round(Number(deltaFrames) || 0);
@@ -21405,20 +21412,11 @@
             const previewEl = createAudioDragPreview(track, originalClip.startFrame, originalClip.durationFrames, totalFrames);
             const captureTarget = event.target && event.target.setPointerCapture ? event.target : clipEl;
             try { captureTarget.setPointerCapture(event.pointerId); } catch (error) {}
-            let trimPreviewPending = false;
-            let trimPreviewEvent = null;
-            const previewTrim = function(moveEvent) {
-              trimPreviewEvent = moveEvent;
-              if (trimPreviewPending) return;
-              trimPreviewPending = true;
-              requestAnimationFrame(function() {
-                trimPreviewPending = false;
-              if (!trimPreviewEvent) return;
-              const deltaFrames = timelineDragFrameDelta(startX, trimPreviewEvent.clientX, totalFrames, track);
+            const previewTrim = makeRafThrottled(function(moveEvent) {
+              const deltaFrames = timelineDragFrameDelta(startX, moveEvent.clientX, totalFrames, track);
               const preview = previewAudioTrim(originalClip, trimEdge, deltaFrames);
-                updateAudioDragPreview(previewEl, preview.startFrame, preview.durationFrames, totalFrames);
-              });
-            };
+              updateAudioDragPreview(previewEl, preview.startFrame, preview.durationFrames, totalFrames);
+            });
             const finishTrim = function(upEvent) {
               clipEl.classList.remove('dragging');
               updateTimelineSnapGuide(root, 0, 1, false);
