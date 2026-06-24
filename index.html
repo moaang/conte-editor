@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver121</title>
+  <title>Conte Editor Prototype ver122</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -2511,6 +2511,21 @@
       font-size: 12px;
       line-height: 1.45;
     }
+
+    .export-video-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      margin-top: 4px;
+      border: 1px solid var(--border, #ddd);
+      border-radius: 8px;
+      background: var(--surface-muted, rgba(127,127,127,0.06));
+    }
+    .export-video-options-title { font-size: 12px; font-weight: 600; }
+    .export-video-options-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 12px; }
+    .export-video-options-row input[type="number"] { width: 70px; }
+    .export-video-options-note { font-size: 11px; color: var(--muted); line-height: 1.4; }
 
     .paper-frame-dialog {
       width: min(980px, 92vw);
@@ -7051,16 +7066,15 @@
           <span><span class="export-format-title">映像</span><span class="export-format-note">段階1: 現在フレームをPNG出力（レンダラ確認用）</span></span>
         </label>
       </div>
-      <div id="videoExportOptions" class="export-video-options">
-        <span class="export-video-options-title">映像オプション（映像モード時）</span>
+      <div id="videoExportOptions" class="export-video-options" hidden>
+        <span class="export-video-options-title">映像オプション</span>
         <div class="export-video-options-row">
           <label>幅 <input id="videoExportWidth" type="number" value="1280" min="320" max="3840" step="2"> px</label>
-          <label>fps <input id="videoExportFps" type="number" value="24" min="1" max="60"></label>
           <label>開始 <input id="videoExportStart" type="number" value="0" min="0" step="0.5"> 秒</label>
           <label>終了 <input id="videoExportEnd" type="number" placeholder="最後まで" min="0" step="0.5"> 秒</label>
           <label class="export-video-whitecanvas"><input id="videoExportWhiteCanvas" type="checkbox"> 白キャンバス全体（カメラ枠なし）</label>
         </div>
-        <span class="export-video-options-note">リアルタイム録画です（クリップ長と同じ時間かかります）。まず短い範囲でお試しを。音声は次段階。</span>
+        <span class="export-video-options-note">リアルタイム録画（クリップ長と同じ時間）。音声(セリフ+BGM)込み。まず短い範囲でお試しを。fpsはプロジェクト設定値、字幕は次段階。</span>
       </div>
       <div id="exportStatus" class="export-status"></div>
       <div class="export-dialog-actions">
@@ -7080,7 +7094,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver121</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver122</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7251,7 +7265,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '121';
+    const APP_DISPLAY_VERSION = '122';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37117,12 +37131,23 @@
       return pages.length ? pages : [1];
     }
 
+    function updateExportDialogVideoOptions() {
+      const el = document.getElementById('videoExportOptions');
+      if (el) el.hidden = selectedExportMode() !== 'video';
+    }
+
     function openExportDialog() {
       const dialog = document.getElementById('exportDialog');
       const status = document.getElementById('exportStatus');
       if (status) status.textContent = fileSystemAccessAvailable()
         ? '出力形式を選んでください。'
         : 'このブラウザはフォルダ出力に対応していません。Chrome / Edgeで開いてください。';
+      document.querySelectorAll('input[name="exportMode"]').forEach(function(radio) {
+        if (radio.dataset.videoOptBound) return;
+        radio.dataset.videoOptBound = '1';
+        radio.addEventListener('change', updateExportDialogVideoOptions);
+      });
+      updateExportDialogVideoOptions();
       if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
     }
 
@@ -37228,7 +37253,7 @@
 
     function pickVideoExportMime() {
       if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
-      const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+      const candidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
       return candidates.find(function(type) { return MediaRecorder.isTypeSupported(type); }) || '';
     }
 
@@ -37251,22 +37276,61 @@
       return cache;
     }
 
-    // STAGE 2: real-time webm capture. Renders each frame to an offscreen canvas; canvas.captureStream(fps)
-    // + MediaRecorder records it in real time (export takes ~as long as the clip). Audio is added in stage 3.
+    function decodeAudioForExport(ctx, url) {
+      return fetch(url).then(function(r) { return r.arrayBuffer(); }).then(function(buf) { return ctx.decodeAudioData(buf); });
+    }
+
+    // STAGE 2+3: real-time webm capture (video via canvas.captureStream) + audio mix (dialogue + BGM
+    // scheduled on a WebAudio MediaStreamDestination, synced to the same wall-clock as the frame loop).
+    // fps follows the project so timeline frame timing is exact. Export takes ~as long as the clip.
     async function recordConteVideoWebm(opts, onStatus) {
       opts = opts || {};
       if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream) throw new Error('この環境は MediaRecorder / captureStream 非対応です。');
       const project = state.project;
-      const fps = Math.max(1, Math.min(60, Math.round(Number(opts.fps) || 24)));
+      const fps = Math.max(1, Math.round(fpsForProject(project)));
       const outWidth = Math.max(320, Math.min(3840, Math.round(Number(opts.outWidth) || 1280)));
       const total = Math.max(1, Math.round(videoTimelineDisplayTotalFrames(project)));
       const startFrame = Math.max(0, Math.min(total - 1, Math.round((Number(opts.startSec) || 0) * fps)));
       const endFrame = (opts.endSec != null && opts.endSec !== '') ? Math.max(startFrame + 1, Math.min(total, Math.round(Number(opts.endSec) * fps))) : total;
       const frameCrop = opts.frameCrop !== false;
+      const recFrames = endFrame - startFrame;
+      const recEndSec = recFrames / fps;
       const cache = await preloadVideoExportBitmaps(project, onStatus);
       const canvas = document.createElement('canvas');
       await renderConteVideoFrameToCanvas(canvas, startFrame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
+
+      // audio: decode every dialogue + BGM clip overlapping the range
+      let audioCtx = null, audioDest = null;
+      const scheduled = [];
+      if (opts.audio !== false) {
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) {
+            audioCtx = new AC();
+            await audioCtx.resume().catch(function() {});
+            audioDest = audioCtx.createMediaStreamDestination();
+            const clips = (project.audio && project.audio.clips ? project.audio.clips : []).filter(function(c) {
+              if (!c || c.hidden || audioClipIsMuted(project, c)) return false;
+              const cs = Math.round(Number(c.startFrame) || 0);
+              const cd = Math.max(1, Math.round(Number(c.audioTrimDurationFrames || c.durationFrames) || 1));
+              return (cs + cd) > startFrame && cs < endFrame;
+            });
+            let done = 0;
+            for (let i = 0; i < clips.length; i += 1) {
+              const url = await ensurePlaybackAudioUrlForClip(clips[i]);
+              if (!url) continue;
+              let buffer = null;
+              try { buffer = await decodeAudioForExport(audioCtx, url); } catch (e) { continue; }
+              if (buffer) scheduled.push({ clip: clips[i], buffer: buffer });
+              done += 1;
+              if (onStatus && done % 8 === 0) onStatus('音声読み込み ' + done + '/' + clips.length + ' ...');
+            }
+          }
+        } catch (e) { audioCtx = null; audioDest = null; }
+      }
+
       const stream = canvas.captureStream(fps);
+      if (audioDest) audioDest.stream.getAudioTracks().forEach(function(t) { stream.addTrack(t); });
       const mime = pickVideoExportMime();
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       const chunks = [];
@@ -37275,6 +37339,26 @@
       state.videoExportCancel = false;
       recorder.start(1000);
       const startT = performance.now();
+      if (audioCtx && audioDest) {
+        const t0 = audioCtx.currentTime + 0.12;
+        scheduled.forEach(function(s) {
+          const cs = Math.round(Number(s.clip.startFrame) || 0);
+          const offsetSec = (cs - startFrame) / fps;
+          const trimStartSec = Math.max(0, Number(s.clip.audioTrimStartFrames) || 0) / fps;
+          const trimDurSec = Math.max(0.01, Number(s.clip.audioTrimDurationFrames || s.clip.durationFrames) || 1) / fps;
+          const skip = Math.max(0, -offsetSec);
+          const when = t0 + Math.max(0, offsetSec);
+          const bufOffset = trimStartSec + skip;
+          if (bufOffset >= s.buffer.duration) return;
+          let playDur = Math.min(trimDurSec - skip, recEndSec - Math.max(0, offsetSec), s.buffer.duration - bufOffset);
+          if (playDur <= 0.02) return;
+          let vol = 1; try { vol = dialogAudioEffectSettings(s.clip).volume; } catch (e) { vol = Number(s.clip.volume) || 1; }
+          const src = audioCtx.createBufferSource(); src.buffer = s.buffer;
+          const g = audioCtx.createGain(); g.gain.value = Math.max(0, Math.min(4, vol));
+          src.connect(g); g.connect(audioDest);
+          try { src.start(when, bufOffset, playDur); } catch (e) {}
+        });
+      }
       await new Promise(function(resolve) {
         function tick() {
           if (state.videoExportCancel) { resolve(); return; }
@@ -37284,7 +37368,7 @@
             resolve(); return;
           }
           renderConteVideoFrameToCanvas(canvas, frame, { outWidth: outWidth, frameCrop: frameCrop, cache: cache });
-          if (onStatus) onStatus('録画中 ' + Math.round((frame - startFrame) / Math.max(1, endFrame - startFrame) * 100) + '% (' + (frame - startFrame) + '/' + (endFrame - startFrame) + 'f)');
+          if (onStatus) onStatus('録画中 ' + Math.round((frame - startFrame) / Math.max(1, recFrames) * 100) + '% (' + (frame - startFrame) + '/' + recFrames + 'f)');
           requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
@@ -37292,13 +37376,14 @@
       await new Promise(function(resolve) { setTimeout(resolve, 300); });
       try { recorder.stop(); } catch (error) {}
       await stopped;
+      if (audioCtx) { try { await audioCtx.close(); } catch (e) {} }
       const blob = new Blob(chunks, { type: mime || 'video/webm' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = 'conte_video.webm';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
-      return { canceled: Boolean(state.videoExportCancel), frames: endFrame - startFrame, blobSize: blob.size };
+      return { canceled: Boolean(state.videoExportCancel), frames: recFrames, blobSize: blob.size, audioClips: scheduled.length };
     }
 
     async function runExportFromDialog() {
@@ -37310,7 +37395,6 @@
           const endEl = document.getElementById('videoExportEnd');
           const opts = {
             outWidth: num('videoExportWidth', 1280),
-            fps: num('videoExportFps', 24),
             startSec: num('videoExportStart', 0),
             endSec: (endEl && String(endEl.value).trim() !== '') ? Number(endEl.value) : null,
             frameCrop: !(document.getElementById('videoExportWhiteCanvas') && document.getElementById('videoExportWhiteCanvas').checked)
