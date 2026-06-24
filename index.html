@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver124</title>
+  <title>Conte Editor Prototype ver125</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7099,7 +7099,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver124</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver125</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7270,7 +7270,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '124';
+    const APP_DISPLAY_VERSION = '125';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37238,14 +37238,43 @@
       if (line) out.push(line);
       return out.length ? out : [text];
     }
+    // Subtitle/BOLD source = DIALOGUE BLOCKS (not audio clips). A block linked to an audio clip shows
+    // during that clip's time window; an unlinked block shows for the WHOLE cut it belongs to.
+    function videoExportActiveDialogLines(project, frame) {
+      const slot = videoSlotAtFrame(project, frame);
+      if (!slot || !slot.cut) return [];
+      let blocks;
+      try { blocks = dialogBlocksForDisplay(project, slot.cut) || []; } catch (e) { blocks = []; }
+      const clipsById = {};
+      ((project.audio && project.audio.clips) || []).forEach(function(c) { if (c && c.id) clipsById[c.id] = c; });
+      const lines = [];
+      for (let i = 0; i < blocks.length; i += 1) {
+        const b = blocks[i];
+        const text = String(b && b.body || '').trim();
+        if (!text) continue;
+        const clip = b && b.audioClipId ? clipsById[b.audioClipId] : null;
+        let on;
+        if (clip && !clip.hidden && clip.startFrame != null) {
+          const cs = Math.round(Number(clip.startFrame) || 0);
+          const cd = Math.max(1, Math.round(Number(clip.audioTrimDurationFrames || clip.durationFrames) || 1));
+          on = (frame >= cs && frame < cs + cd);
+        } else {
+          on = true; // unlinked block -> persists across the whole cut
+        }
+        if (!on) continue;
+        const speaker = (b.kind === 'free') ? '' : String(b.speaker || '').trim();
+        let mode = '';
+        if (b.suffix) { try { mode = dialogBlockSuffixLabel(b.suffix); } catch (e) { mode = String(b.suffix); } if (mode === 'なし') mode = ''; }
+        lines.push({ speaker: speaker, mode: mode, text: text });
+      }
+      return lines;
+    }
     function drawVideoExportOverlays(ctx, project, frame, outW, outH, opts) {
       const wantBold = opts.bold !== false;
       const wantSub = opts.subtitle !== false;
       if (!wantBold && !wantSub) return;
-      let active;
-      try { active = activeAudioClipsAt(project, frame) || []; } catch (e) { active = []; }
-      active = active.filter(function(c) { return c && String(c.text || '').trim(); });
-      if (!active.length) return;
+      const lines = videoExportActiveDialogLines(project, frame);
+      if (!lines.length) return;
       const sc = outW / VIDEO_PREVIEW_BASE_WIDTH; // 940-based css px -> output px (overlay is screen-fixed)
       ctx.save();
       if (wantBold) {
@@ -37257,13 +37286,13 @@
         const pillH = fontPx + padY * 2;
         const seen = {};
         let y = marginTop;
-        for (let i = 0; i < active.length; i += 1) {
-          const clip = active[i];
-          const name = clip.characterName || 'Dialog';
+        for (let i = 0; i < lines.length; i += 1) {
+          const name = String(lines[i].speaker || '').trim();
+          if (!name) continue;
           let key; try { key = scenarioMetaKey(name) || name; } catch (e) { key = name; }
           if (seen[key]) continue;
           seen[key] = true;
-          let mode = ''; try { mode = dialogTagLabel(clip.dialogTags || clip.dialogMode || ''); } catch (e) { mode = ''; }
+          const mode = lines[i].mode || '';
           ctx.font = '900 ' + fontPx + 'px ' + VIDEO_EXPORT_JP_FONT;
           const nameW = ctx.measureText(name).width;
           let modeChipW = 0;
@@ -37301,21 +37330,21 @@
         ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
         const lineH = Math.round(fontPx * 1.32);
         const maxW = Math.round(outW * 0.92);
-        const lines = [];
-        active.forEach(function(clip) {
-          String(clip.text || '').split(/\n+/).forEach(function(t) {
-            if (t.trim()) videoExportWrapText(ctx, t.trim(), maxW).forEach(function(l) { lines.push(l); });
+        const subLines = [];
+        lines.forEach(function(ln) {
+          String(ln.text || '').split(/\n+/).forEach(function(t) {
+            if (t.trim()) videoExportWrapText(ctx, t.trim(), maxW).forEach(function(l) { subLines.push(l); });
           });
         });
-        if (lines.length) {
+        if (subLines.length) {
           const bottom = outH - Math.round(outH * 0.06);
-          const yTop = bottom - (lines.length - 1) * lineH;
+          const yTop = bottom - (subLines.length - 1) * lineH;
           ctx.lineJoin = 'round';
           ctx.lineWidth = Math.max(2, Math.round(fontPx * 0.18));
-          for (let i = 0; i < lines.length; i += 1) {
+          for (let i = 0; i < subLines.length; i += 1) {
             const yy = yTop + i * lineH;
-            ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.strokeText(lines[i], outW / 2, yy);
-            ctx.fillStyle = '#ffffff'; ctx.fillText(lines[i], outW / 2, yy);
+            ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.strokeText(subLines[i], outW / 2, yy);
+            ctx.fillStyle = '#ffffff'; ctx.fillText(subLines[i], outW / 2, yy);
           }
         }
       }
