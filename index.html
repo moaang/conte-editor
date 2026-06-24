@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver129</title>
+  <title>Conte Editor Prototype ver130</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7071,6 +7071,7 @@
         <span class="export-video-options-title">映像オプション</span>
         <div class="export-video-options-row">
           <label>幅 <input id="videoExportWidth" type="number" value="1280" min="320" max="3840" step="2"> px</label>
+          <label>画質 <select id="videoExportQuality"><option value="low">低(速い)</option><option value="std" selected>標準</option><option value="high">高</option></select></label>
           <label>開始 <input id="videoExportStart" type="number" value="0" min="0" step="0.5"> 秒</label>
           <label>終了 <input id="videoExportEnd" type="number" placeholder="最後まで" min="0" step="0.5"> 秒</label>
           <label class="export-video-whitecanvas"><input id="videoExportWhiteCanvas" type="checkbox"> 白キャンバス全体（カメラ枠なし）</label>
@@ -7101,7 +7102,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver129</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver130</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7272,7 +7273,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '129';
+    const APP_DISPLAY_VERSION = '130';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -37696,7 +37697,8 @@
       const recFrames = endFrame - startFrame;
       const wantMp4 = !!opts.mp4;
       const sampleRate = 48000;
-      const bitrate = Math.min(16000000, Math.max(2000000, Math.round(outW * outH * fps * 0.12)));
+      const qMul = opts.quality === 'low' ? 0.5 : (opts.quality === 'high' ? 2 : 1);
+      const bitrate = Math.min(24000000, Math.max(1000000, Math.round(outW * outH * fps * 0.12 * qMul)));
 
       // pick a supported video codec (bump H.264 level for larger frames)
       const vCandidates = wantMp4 ? ['avc1.42001f', 'avc1.420028', 'avc1.420033', 'avc1.4d4028'] : ['vp09.00.10.08', 'vp8'];
@@ -37767,17 +37769,52 @@
       if (audioOK) { try { encodeAudioBufferForExport(audioEncoder, audioBuffer, sampleRate); } catch (e) { encErr = encErr || e; } }
 
       const frameDur = Math.round(1000000 / fps);
-      const gop = Math.max(1, fps * 2);
-      for (let i = 0; i < recFrames; i += 1) {
+      const wantOverlay = (opts.subtitle !== false) || (opts.bold !== false);
+      // Frame-dedup: consecutive frames that are visually identical (same cut + camera base AND same
+      // overlay text) are encoded as ONE frame and held via its duration — hold-heavy conte renders &
+      // encodes far fewer frames. (Extends the "static cuts only change per panel" idea to the encoder.)
+      const identityAt = function(fr) {
+        const slot = videoSlotAtFrame(project, fr);
+        const cutId = (slot && slot.cut) ? slot.cut.id : 'none';
+        let camKey = 'D';
+        if (frameCrop && slot && slot.cut) {
+          const c = normalizedCameraFrameTransform(cameraTransformAtFrame(project, fr));
+          if (!cameraTransformIsDefault(c)) camKey = Math.round(c.x * 100) + ',' + Math.round(c.y * 100) + ',' + Math.round(c.scale * 1000) + ',' + Math.round(c.rotation * 100);
+        }
+        let ovKey = '';
+        if (wantOverlay) {
+          const lines = videoExportActiveDialogLines(project, fr);
+          for (let k = 0; k < lines.length; k += 1) ovKey += lines[k].speaker + '' + lines[k].mode + '' + lines[k].text + '';
+        }
+        return { cutId: cutId, key: cutId + '|' + camKey + '|' + ovKey };
+      };
+      let runStart = 0;
+      let runId = identityAt(startFrame);
+      let lastKfCutId = null;
+      let encoded = 0;
+      await renderConteVideoFrameToCanvas(canvas, startFrame, renderOpts);
+      const flushRun = function(endExclusive) {
+        const ts = runStart * frameDur;
+        const dur = Math.max(1, endExclusive - runStart) * frameDur;
+        const vframe = new VideoFrame(canvas, { timestamp: ts, duration: dur });
+        videoEncoder.encode(vframe, { keyFrame: runId.cutId !== lastKfCutId });
+        vframe.close();
+        lastKfCutId = runId.cutId;
+        encoded += 1;
+      };
+      for (let i = 1; i <= recFrames; i += 1) {
         if (state.videoExportCancel) break;
         if (encErr) throw encErr;
-        await renderConteVideoFrameToCanvas(canvas, startFrame + i, renderOpts);
-        const vframe = new VideoFrame(canvas, { timestamp: i * frameDur, duration: frameDur });
-        videoEncoder.encode(vframe, { keyFrame: (i % gop) === 0 });
-        vframe.close();
-        while (videoEncoder.encodeQueueSize > 20 && !encErr) { await new Promise(function(r) { setTimeout(r, 3); }); }
-        if ((i & 7) === 0) await new Promise(function(r) { setTimeout(r, 0); }); // keep UI/cancel responsive
-        if (onStatus && (i % 6) === 0) onStatus('エンコード ' + Math.round(i / recFrames * 100) + '% (' + i + '/' + recFrames + 'f)');
+        const id = (i < recFrames) ? identityAt(startFrame + i) : null;
+        if (!id || id.key !== runId.key) {
+          flushRun(i);
+          while (videoEncoder.encodeQueueSize > 20 && !encErr) { await new Promise(function(r) { setTimeout(r, 3); }); }
+          if (i < recFrames) { await renderConteVideoFrameToCanvas(canvas, startFrame + i, renderOpts); runStart = i; runId = id; }
+        }
+        if ((i & 31) === 0) {
+          await new Promise(function(r) { setTimeout(r, 0); });
+          if (onStatus) onStatus('エンコード ' + Math.round(i / recFrames * 100) + '% (' + encoded + '枚/' + i + 'f)');
+        }
       }
       if (onStatus) onStatus('まとめ中…');
       await videoEncoder.flush();
@@ -37831,7 +37868,8 @@
             subtitle: !!(document.getElementById('videoExportSubtitle') && document.getElementById('videoExportSubtitle').checked),
             bold: !!(document.getElementById('videoExportBold') && document.getElementById('videoExportBold').checked),
             mp4: !!(document.getElementById('videoExportMp4') && document.getElementById('videoExportMp4').checked),
-            fast: !(document.getElementById('videoExportFast') && document.getElementById('videoExportFast').checked === false)
+            fast: !(document.getElementById('videoExportFast') && document.getElementById('videoExportFast').checked === false),
+            quality: (document.getElementById('videoExportQuality') && document.getElementById('videoExportQuality').value) || 'std'
           };
           setExportDialogBusy(true, '映像出力準備中…');
           await flushDeferredMemoComposition({ render: false });
