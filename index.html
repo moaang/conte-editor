@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver132</title>
+  <title>Conte Editor Prototype ver133</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7098,14 +7098,14 @@
           <span class="export-video-options-leg">出力領域</span>
           <div class="evo-seg evo-joined">
             <label class="evo-seg-btn"><input type="radio" name="videoExportArea" value="camera" checked><span>カメラフレーム</span></label>
-            <label class="evo-seg-btn"><input type="radio" name="videoExportArea" value="canvas"><span>キャンバス全体（枠表示）</span></label>
+            <label class="evo-seg-btn"><input type="radio" name="videoExportArea" value="canvas"><span>キャンバス全体</span></label>
           </div>
         </div>
         <div class="evo-row">
           <span class="export-video-options-leg">表示情報</span>
           <div class="evo-seg">
             <label class="evo-seg-btn"><input id="videoExportSubtitle" type="checkbox" checked><span>字幕</span></label>
-            <label class="evo-seg-btn"><input id="videoExportBold" type="checkbox" checked><span>話者＋サフィックス（BOLD）</span></label>
+            <label class="evo-seg-btn"><input id="videoExportBold" type="checkbox" checked><span>BOLD</span></label>
           </div>
         </div>
         <span class="export-video-options-note">高速出力(WebCodecs)。対応ブラウザ→mp4、非対応→webm(実時間)に自動切替。音声込み・fps=プロジェクト設定値。</span>
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver132</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver133</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '132';
+    const APP_DISPLAY_VERSION = '133';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
