@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver134</title>
+  <title>Conte Editor Prototype ver135</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver134</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver135</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '134';
+    const APP_DISPLAY_VERSION = '135';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18787,6 +18787,23 @@
       return true;
     }
 
+    // Renumber content cuts sequentially (1..N) in timeline order. Marker cuts whose cutNo has NO digit
+    // (OP / ED / CM …) keep their label and are skipped (don't consume a number).
+    function renumberContentCuts() {
+      const cuts = (state.project && state.project.cuts) || [];
+      if (!cuts.length) return;
+      runCommand('カット番号振り直し', function(project) {
+        let n = 0;
+        (project.cuts || []).forEach(function(cut) {
+          const label = String(cut.cutNo == null ? '' : cut.cutNo).trim();
+          if (label !== '' && !/[0-9]/.test(label)) return; // OP/ED/CM etc. -> keep
+          n += 1;
+          cut.cutNo = String(n);
+        });
+      });
+      state.timelineStatus = 'カット番号を振り直しました。';
+    }
+
     function showTimelineCutAddContextMenu(event, cutId, root) {
       const targetCutId = String(cutId || currentPicturePanelId() || '');
       if (!targetCutId || cutIndexById(state.project, targetCutId) < 0) return;
@@ -18802,7 +18819,8 @@
         (prevMerge ? '<button type="button" data-conte-layer-menu-action="merge-prev">\u2190 \u30ab\u30c3\u30c8' + escapeAttr(prevMerge.neighborCutNo) + '\u306b\u7d50\u5408</button>' : ''),
         (nextMerge ? '<button type="button" data-conte-layer-menu-action="merge-next">\u30ab\u30c3\u30c8' + escapeAttr(nextMerge.neighborCutNo) + '\u306b\u7d50\u5408 \u2192</button>' : ''),
         '<button type="button" data-conte-layer-menu-action="ol-window">OL \u4f5c\u6210</button>',
-        (hasOl ? '<button type="button" data-conte-layer-menu-action="ol-release">OL \u89e3\u9664</button>' : '')
+        (hasOl ? '<button type="button" data-conte-layer-menu-action="ol-release">OL \u89e3\u9664</button>' : ''),
+        '<button type="button" data-conte-layer-menu-action="renumber-cuts">\u30ab\u30c3\u30c8\u756a\u53f7\u632f\u308a\u76f4\u3057</button>'
       ].join('');
       menu.querySelectorAll('button[data-conte-layer-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
@@ -18822,6 +18840,8 @@
             openOlWindowForCut(targetCutId);
           } else if (action === 'ol-release') {
             releaseOlForCut(targetCutId);
+          } else if (action === 'renumber-cuts') {
+            renumberContentCuts();
           }
         });
       });
