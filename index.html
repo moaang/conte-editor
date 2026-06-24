@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver137</title>
+  <title>Conte Editor Prototype ver138</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver137</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver138</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '137';
+    const APP_DISPLAY_VERSION = '138';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -21043,7 +21043,10 @@
       return Math.max(1, Math.round(TIMELINE_SNAP_PIXELS * Math.max(1, multiplier || 1) / width * Math.max(1, totalFrames)));
     }
 
-    function snapAudioClipMove(project, clipId, proposedStart, durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames) {
+    // Shared clip snapping (audio + video-media): snap the dragged clip's start OR end to the original
+    // position, neighbor-clip edges, a set of boundary frames (cut/slot/group edges), and the playhead.
+    // The two callers differ only in which neighbor clips and boundary frames they pass.
+    function snapClipMove(project, clipId, proposedStart, durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames, neighborClips, boundaryFrames) {
       const duration = Math.max(1, Math.round(Number(durationFrames) || 1));
       const baseThreshold = timelineSnapThresholdFrames(totalFrames, 1);
       const verticalThreshold = timelineSnapThresholdFrames(totalFrames, 2);
@@ -21056,7 +21059,7 @@
         }
       };
       consider(originalStart, targetTrackId !== originalTrackId ? verticalThreshold : baseThreshold, originalStart);
-      audioTimelineDisplayClips(project).forEach(function(item) {
+      (neighborClips || []).forEach(function(item) {
         if (!item || item.id === clipId) return;
         const start = Math.max(0, Math.round(Number(item.startFrame) || 0));
         const end = start + Math.max(1, Math.round(Number(item.durationFrames) || 1));
@@ -21065,24 +21068,30 @@
         consider(start - duration, baseThreshold, start);
         consider(end - duration, baseThreshold, end);
       });
-      // Cut-group boundaries (OL-aware, same model as the cut layout) — snap the clip's start OR end
-      // to a cut edge. snapFrame is the boundary the guide line lands on.
-      cutGroupTimelineItems(project).forEach(function(item) {
-        if (!item) return;
-        const cutStart = Math.max(0, Math.round(Number(item.startFrame) || 0));
-        const cutEnd = Math.max(0, Math.round(Number(item.endFrame) || 0));
-        consider(cutStart, baseThreshold, cutStart);            // clip start -> cut start
-        consider(cutEnd, baseThreshold, cutEnd);                // clip start -> cut end
-        consider(cutStart - duration, baseThreshold, cutStart); // clip end -> cut start
-        consider(cutEnd - duration, baseThreshold, cutEnd);     // clip end -> cut end
+      // Boundary frames (cut / video-slot / group edges) — snap the clip's start OR end to each edge.
+      (boundaryFrames || []).forEach(function(value) {
+        const frame = Math.max(0, Math.round(Number(value) || 0));
+        consider(frame, baseThreshold, frame);
+        consider(frame - duration, baseThreshold, frame);
       });
       // Playhead (red line) — snap the clip's start OR end to the current playhead. Aligning a clip to
       // the line also makes a render/data mismatch obvious: if the bar doesn't sit on the line after
       // snapping, the DOM position is stale vs the data.
       const playhead = Math.max(0, Math.round(Number(state.videoPlayheadFrames) || 0));
-      consider(playhead, baseThreshold, playhead);            // clip start -> playhead
-      consider(playhead - duration, baseThreshold, playhead); // clip end -> playhead
+      consider(playhead, baseThreshold, playhead);
+      consider(playhead - duration, baseThreshold, playhead);
       return best;
+    }
+
+    function snapAudioClipMove(project, clipId, proposedStart, durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames) {
+      // Cut-group boundaries (OL-aware, same model as the cut layout).
+      const boundaries = [];
+      cutGroupTimelineItems(project).forEach(function(item) {
+        if (!item) return;
+        boundaries.push(Math.max(0, Math.round(Number(item.startFrame) || 0)));
+        boundaries.push(Math.max(0, Math.round(Number(item.endFrame) || 0)));
+      });
+      return snapClipMove(project, clipId, proposedStart, durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames, audioTimelineDisplayClips(project), boundaries);
     }
 
     function selectVideoMediaClip(clipId, root) {
@@ -21137,48 +21146,20 @@
     }
 
     function snapVideoMediaClipMove(project, clipId, proposedStart, durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames) {
-      const duration = Math.max(1, Math.round(Number(durationFrames) || 1));
-      const baseThreshold = timelineSnapThresholdFrames(totalFrames, 1);
-      const verticalThreshold = timelineSnapThresholdFrames(totalFrames, 2);
-      let best = { startFrame: proposedStart, snapFrame: proposedStart, distance: Infinity, snapped: false };
-      const consider = function(candidate, threshold, snapFrame) {
-        const start = Math.max(0, Math.round(Number(candidate) || 0));
-        const distance = Math.abs(start - proposedStart);
-        if (distance <= threshold && distance < best.distance) {
-          best = { startFrame: start, snapFrame: Math.max(0, Math.round(Number(snapFrame == null ? start : snapFrame) || 0)), distance: distance, snapped: true };
-        }
-      };
-      consider(originalStart, targetTrackId !== originalTrackId ? verticalThreshold : baseThreshold, originalStart);
-      videoTimelineDisplayClips(project).forEach(function(item) {
-        if (!item || item.id === clipId) return;
-        const start = Math.max(0, Math.round(Number(item.startFrame) || 0));
-        const end = start + Math.max(1, Math.round(Number(item.durationFrames) || 1));
-        consider(start, baseThreshold, start);
-        consider(end, baseThreshold, end);
-        consider(start - duration, baseThreshold, start);
-        consider(end - duration, baseThreshold, end);
-      });
+      // Video-slot + cut-group boundaries.
       const video = buildVideoTimelineCached(project);
-      const boundaryFrames = new Set();
+      const boundaries = new Set();
       (video.slots || []).forEach(function(slot) {
         if (!slot) return;
-        boundaryFrames.add(Math.max(0, Math.round(Number(slot.startFrame) || 0)));
-        boundaryFrames.add(Math.max(0, Math.round(Number(slot.endFrame) || 0)));
+        boundaries.add(Math.max(0, Math.round(Number(slot.startFrame) || 0)));
+        boundaries.add(Math.max(0, Math.round(Number(slot.endFrame) || 0)));
       });
       (video.groups || []).forEach(function(item) {
         if (!item) return;
-        boundaryFrames.add(Math.max(0, Math.round(Number(item.startFrame) || 0)));
-        boundaryFrames.add(Math.max(0, Math.round(Number(item.endFrame) || 0)));
+        boundaries.add(Math.max(0, Math.round(Number(item.startFrame) || 0)));
+        boundaries.add(Math.max(0, Math.round(Number(item.endFrame) || 0)));
       });
-      boundaryFrames.forEach(function(frame) {
-        consider(frame, baseThreshold, frame);
-        consider(frame - duration, baseThreshold, frame);
-      });
-      // Playhead (red line) snap — clip start OR end to the current playhead.
-      const playhead = Math.max(0, Math.round(Number(state.videoPlayheadFrames) || 0));
-      consider(playhead, baseThreshold, playhead);
-      consider(playhead - duration, baseThreshold, playhead);
-      return best;
+      return snapClipMove(project, clipId, proposedStart, durationFrames, originalStart, targetTrackId, originalTrackId, totalFrames, videoTimelineDisplayClips(project), Array.from(boundaries));
     }
 
     function previewVideoMediaTrim(original, edge, deltaFrames) {
