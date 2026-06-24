@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver135</title>
+  <title>Conte Editor Prototype ver136</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7128,7 +7128,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver135</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver136</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7299,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '135';
+    const APP_DISPLAY_VERSION = '136';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -20946,13 +20946,6 @@
       return Math.round(value / total * width);
     }
 
-    function timelineFrameSpanToPixel(frames, totalFrames) {
-      const total = Math.max(1, Math.round(Number(totalFrames) || 1));
-      const width = Math.max(1, Math.round(Number(state.timelineInnerWidth) || 1));
-      const value = Math.max(0, Math.round(Number(frames) || 0));
-      return Math.max(1, Math.round(value / total * width));
-    }
-
     function updateAudioDragPreview(previewEl, startFrame, durationFrames, totalFrames) {
       if (!previewEl) return;
       const startPx = timelineFrameToPixel(startFrame, totalFrames);
@@ -28871,25 +28864,6 @@
         removePicturePanelsByIds(project, ids);
       });
       return true;
-    }
-
-    function duplicateSelectedPicturePanel() {
-      const panelId = primarySelectedPicturePanelId();
-      const index = state.project.cuts.findIndex(function(item) { return item.id === panelId; });
-      if (index < 0) return;
-      runTimelineStructureCommand('Duplicate picture panel', function(project) {
-        const source = project.cuts[index];
-        const clone = fastClone(source);
-        clone.id = 'cut-' + Date.now().toString(36);
-        clone.order = source.order + 0.5;
-        clone.meta = Object.assign({}, clone.meta, { userOverride: true });
-        project.cuts.push(clone);
-        setCurrentPicturePanelId(clone.id);
-        const selectedPanels = selectedPicturePanelSet();
-        selectedPanels.clear();
-        selectedPanels.add(clone.id);
-        state.activeConteSelectionType = 'panel';
-      }, { deferThumbnails: true, deferThumbnailMs: 520, partialTimeline: true });
     }
 
     function deletePrimarySelectedPicturePanel() {
@@ -37563,9 +37537,9 @@
       return fetch(url).then(function(r) { return r.arrayBuffer(); }).then(function(buf) { return ctx.decodeAudioData(buf); });
     }
 
-    // STAGE 2+3: real-time webm capture (video via canvas.captureStream) + audio mix (dialogue + BGM
-    // scheduled on a WebAudio MediaStreamDestination, synced to the same wall-clock as the frame loop).
-    // fps follows the project so timeline frame timing is exact. Export takes ~as long as the clip.
+    // Real-time webm capture (canvas.captureStream + MediaRecorder) + audio mix of all non-muted clips,
+    // scheduled on a WebAudio MediaStreamDestination synced to the frame loop's wall-clock. This is the
+    // FALLBACK path; exportConteVideoFast (WebCodecs) is the default. fps follows the project.
     async function recordConteVideoWebm(opts, onStatus) {
       opts = opts || {};
       videoExportResetFrameCache();
@@ -37916,7 +37890,7 @@
     async function runExportFromDialog() {
       const mode = selectedExportMode();
       if (mode === 'video') {
-        // STAGE 2: real-time webm recording (silent; audio in stage 3). Range/width/fps from the dialog.
+        // Video export: WebCodecs fast path (mp4/webm) with auto-fallback to real-time recording.
         try {
           const num = function(id, dflt) { const el = document.getElementById(id); const v = el ? Number(el.value) : NaN; return Number.isFinite(v) ? v : dflt; };
           const endEl = document.getElementById('videoExportEnd');
@@ -38552,12 +38526,6 @@
     function firstDroppedImageFile(event) {
       const files = event && event.dataTransfer && event.dataTransfer.files ? Array.from(event.dataTransfer.files) : [];
       return files.find(isImageFile) || null;
-    }
-
-    function yieldToBrowser() {
-      return new Promise(function(resolve) {
-        setTimeout(resolve, 0);
-      });
     }
 
     function guardedRender(label, fn) {
