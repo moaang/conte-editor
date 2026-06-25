@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver178</title>
+  <title>Conte Editor Prototype ver179</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -4374,9 +4374,12 @@
       min-width: 13px;
       height: 13px;
       transform: translate(-50%, -50%);
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: grab;
+      touch-action: none;
       z-index: 6;
     }
+    .le-keyframe-marker.dragging { cursor: grabbing; opacity: 0.62; }
     .le-keyframe-marker::before {
       content: '';
       display: block;
@@ -7222,7 +7225,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver178</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver179</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7393,7 +7396,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '178';
+    const APP_DISPLAY_VERSION = '179';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16921,7 +16924,7 @@
           if (slot) {
             leMarkers = layerEffectKeyframes(ref.layer).map(function(kf) {
               const abs = Math.max(0, Math.round((slot.startFrame || 0) + (Number(kf.frame) || 0)));
-              return '<span class="le-keyframe-marker" data-le-abs="' + abs + '" style="--left:' + framePercent(abs, totalFrames).toFixed(4) + '%" title="レイヤーキー ' + (Number(kf.frame) || 0) + '"></span>';
+              return '<span class="le-keyframe-marker" data-le-abs="' + abs + '" data-le-frame="' + Math.round(Number(kf.frame) || 0) + '" style="--left:' + framePercent(abs, totalFrames).toFixed(4) + '%" title="レイヤーキー ' + (Number(kf.frame) || 0) + '"></span>';
             }).join('');
           }
         }
@@ -18185,11 +18188,12 @@
       if (!kfStatus) return;
       const clip = audioFxTargetClip();
       if (!clip) return;
-      const sk = Array.isArray(audioClipFx(clip).spatialKeyframes) ? audioClipFx(clip).spatialKeyframes : [];
+      const sk = (Array.isArray(audioClipFx(clip).spatialKeyframes) ? audioClipFx(clip).spatialKeyframes : []).slice().sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); });
       const curFrame = audioFxCurrentClipFrame(clip);
-      const atKey = sk.some(function(k) { return Math.round(Number(k.frame) || 0) === curFrame; });
+      const idx = sk.findIndex(function(k) { return Math.round(Number(k.frame) || 0) === curFrame; });
       if (!sk.length) kfStatus.innerHTML = 'キーなし';
-      else kfStatus.innerHTML = (atKey ? '<span class="af-kf-here">◆</span> ' : '') + 'キー' + sk.length + ' ' + audioFxFramesLabel(curFrame);
+      else if (idx >= 0) kfStatus.innerHTML = '<span class="af-kf-here">◆</span> キー' + (idx + 1) + '/' + sk.length;
+      else kfStatus.innerHTML = 'キー' + sk.length + '個 ' + audioFxFramesLabel(curFrame);
     }
 
     function bindAudioFxControls(win) {
@@ -18492,12 +18496,12 @@
       const statusEl = win.querySelector('[data-le-kf-status]');
       if (!statusEl) return;
       const layer = layerEffectTargetLayer();
-      const kfs = layer && layer.effect && Array.isArray(layer.effect.keyframes) ? layer.effect.keyframes : [];
+      const kfs = (layer && layer.effect && Array.isArray(layer.effect.keyframes) ? layer.effect.keyframes : []).slice().sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); });
       const lf = layerEffectCurrentLocalFrame();
-      const atKey = kfs.some(function(k) { return Math.round(Number(k.frame) || 0) === lf; });
+      const idx = kfs.findIndex(function(k) { return Math.round(Number(k.frame) || 0) === lf; });
       if (!kfs.length) statusEl.innerHTML = 'キーなし(全体)';
-      else if (atKey) statusEl.innerHTML = '<span class="le-kf-here">◆</span> キー' + kfs.length + '・現在';
-      else statusEl.innerHTML = 'キー' + kfs.length;
+      else if (idx >= 0) statusEl.innerHTML = '<span class="le-kf-here">◆</span> キー' + (idx + 1) + '/' + kfs.length;
+      else statusEl.innerHTML = 'キー' + kfs.length + '個';
     }
 
     function onLayerEffectInput(prop, rawValue) {
@@ -21276,6 +21280,78 @@
           window.addEventListener('pointercancel', up);
         });
       });
+      bindLayerEffectKeyframeDrag(root, totalFrames);
+    }
+
+    // Drag the red layer-effect keyframe diamonds along the camera lane to retime them (like camera keyframes).
+    function bindLayerEffectKeyframeDrag(root, totalFrames) {
+      if (!state.layerEffectId) return;
+      root.querySelectorAll('.le-keyframe-marker[data-le-frame]').forEach(function(marker) {
+        marker.addEventListener('pointerdown', function(event) {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const ref = findConteLayerById(state.project, state.layerEffectId);
+          if (!ref) return;
+          const slot = (buildVideoTimelineCached(state.project).slots || []).find(function(s) { return s.cut && s.cut.id === ref.ownerCut.id; });
+          if (!slot) return;
+          const origLocal = Math.round(Number(marker.dataset.leFrame) || 0);
+          const startFrame = Math.round(Number(slot.startFrame) || 0);
+          const maxLocal = Math.max(0, Math.round(Number(slot.frames) || 1) - 1);
+          const pointerId = event.pointerId;
+          const startX = event.clientX;
+          let moved = false;
+          let targetLocal = origLocal;
+          marker.classList.add('dragging');
+          if (marker.setPointerCapture && pointerId != null) { try { marker.setPointerCapture(pointerId); } catch (e) {} }
+          const move = function(mv) {
+            if (pointerId != null && mv.pointerId != null && mv.pointerId !== pointerId) return;
+            const abs = timelineFrameAtPointer(root, mv, totalFrames);
+            const local = Math.max(0, Math.min(maxLocal, abs - startFrame));
+            if (Math.abs(mv.clientX - startX) > 2 || local !== targetLocal) moved = true;
+            targetLocal = local;
+            marker.style.setProperty('--left', framePercent(startFrame + targetLocal, totalFrames).toFixed(4) + '%');
+            mv.preventDefault();
+          };
+          const up = function(ue) {
+            if (pointerId != null && ue.pointerId != null && ue.pointerId !== pointerId) return;
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+            marker.classList.remove('dragging');
+            if (moved && targetLocal !== origLocal) { moveLayerEffectKeyframe(origLocal, targetLocal); return; }
+            const total = videoTimelineDisplayTotalFrames(state.project); // no move = click: seek to this key
+            state.videoPlayheadFrames = clampTimelinePlayheadFrame(startFrame + origLocal, total);
+            const rt = document.getElementById('timingDashboard');
+            if (rt) { updateTimelinePlayheadDom(rt, total); updateTimelineTimecodeDom(rt, total); }
+            renderVideoPreviewIfChanged(total);
+            syncLayerEffectWindowControls();
+          };
+          window.addEventListener('pointermove', move, { passive: false });
+          window.addEventListener('pointerup', up);
+          window.addEventListener('pointercancel', up);
+        });
+      });
+    }
+
+    // Move a layer-effect keyframe from one cut-local frame to another (drag retime); commit as one undo step.
+    function moveLayerEffectKeyframe(fromLocal, toLocal) {
+      const layer = layerEffectTargetLayer();
+      if (!layer || !layer.effect || !Array.isArray(layer.effect.keyframes)) return;
+      const from = Math.round(Number(fromLocal) || 0), to = Math.round(Number(toLocal) || 0);
+      if (from === to) return;
+      const kf = layer.effect.keyframes.find(function(k) { return Math.round(Number(k.frame) || 0) === from; });
+      if (!kf) return;
+      layer.effect.keyframes = layer.effect.keyframes.filter(function(k) { return k === kf || Math.round(Number(k.frame) || 0) !== to; }); // overwrite any key already at `to`
+      kf.frame = to;
+      layer.effect.keyframes.sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); });
+      const ref = findConteLayerById(state.project, state.layerEffectId);
+      const slot = ref ? (buildVideoTimelineCached(state.project).slots || []).find(function(s) { return s.cut && s.cut.id === ref.ownerCut.id; }) : null;
+      if (slot) { const total = videoTimelineDisplayTotalFrames(state.project); state.videoPlayheadFrames = clampTimelinePlayheadFrame(Math.round((slot.startFrame || 0) + to), total); }
+      syncLayerEffectWindowControls();
+      forceVideoPreviewRebuild();
+      refreshLayerEffectKeyframeTrack();
+      commitLayerEffectEdit();
     }
 
     function bindTimelineSeekAndZoom(root, totalFrames) {
