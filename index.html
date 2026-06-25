@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver189</title>
+  <title>Conte Editor Prototype ver190</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7239,7 +7239,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver189</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver190</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7312,7 +7312,7 @@
     .project-start-btn.primary:hover { background: #2a62ba; }
     body.project-locked .workspace { pointer-events: none; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
-    #projectCreateTitleInput {
+    #projectCreateTitleInput, #gengaCreateDialog input[type="text"], #gengaCreateDialog select {
       display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
       padding: 10px 11px; font-size: 14px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.22);
     }
@@ -7379,6 +7379,30 @@
       </div>
     </form>
   </dialog>
+  <dialog id="gengaCreateDialog" class="choice-dialog">
+    <form method="dialog">
+      <h2>新規原画プロジェクト</h2>
+      <label class="project-create-label">作品名<input id="gengaWorkInput" type="text" maxlength="40" placeholder="BW" autocomplete="off" /></label>
+      <label class="project-create-label">話数<input id="gengaEpInput" type="text" maxlength="8" placeholder="01" autocomplete="off" /></label>
+      <label class="project-create-label">カット番号<input id="gengaCutInput" type="text" maxlength="8" placeholder="002" autocomplete="off" /></label>
+      <label class="project-create-label">サフィックス（任意）
+        <select id="gengaSuffixSelect">
+          <option value="">なし</option>
+          <option value="LO">LO</option>
+          <option value="G">G</option>
+          <option value="LE">LE</option>
+          <option value="LS">LS</option>
+          <option value="GE">GE</option>
+          <option value="GS">GS</option>
+        </select>
+      </label>
+      <p id="gengaCreateHint" class="project-create-hint">例: BW_01_002_LO</p>
+      <div class="choice-dialog-actions">
+        <button type="submit" value="create" class="primary">作成</button>
+        <button type="submit" value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="projectLoadingOverlay" class="project-loading-overlay" hidden>
     <div class="project-loading-card">
@@ -7410,7 +7434,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '189';
+    const APP_DISPLAY_VERSION = '190';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7902,6 +7926,7 @@
         schemaVersion: PROJECT_FORMAT_VERSION,
         projectId: 'conte_project',
         title: '',
+        kind: 'conte',
         fps: 24,
         currentPage: 1,
         settings: {
@@ -9437,6 +9462,7 @@
       // 묶음 C: 일반 mutation 종착점에서 cycle bump → audio caches invalidate
       if (project === state.project) bumpAudioCycle();
       project.schemaVersion = PROJECT_FORMAT_VERSION;
+      project.kind = project.kind === 'genga' ? 'genga' : 'conte';
       project.settings = project.settings || {};
       project.settings.rowsPerPage = ROWS_PER_PAGE;
       project.settings.templateId = 'hanyou_fixed_5_column';
@@ -10469,55 +10495,111 @@
       return handle;
     }
 
+    // Ask to preserve unsaved work only when a project is open (the locked start screen has nothing to lose).
+    async function confirmDiscardUnsavedForNew() {
+      if (!state.projectActive) return true;
+      const choice = await askNewProjectUnsavedChoice();
+      if (choice === 'cancel') return false;
+      if (choice === 'save') { const saved = await saveJson(); if (!saved) return false; }
+      return true;
+    }
+    // Create the project once a title + kind are chosen (shared by new conte / new genga). Picks + validates the
+    // folder BEFORE wiping the current project so a cancel never destroys an open project.
+    async function finalizeNewProject(title, kind) {
+      const useFolder = fileSystemAccessAvailable() && !mobileOrTabletRuntime();
+      if (useFolder) {
+        const handle = await pickNewProjectFolder();
+        if (!handle) return false;
+        resetProjectForNewProject();
+        state.project.title = title;
+        state.project.projectId = generateProjectId();
+        state.project.kind = kind || 'conte';
+        normalizeProject(state.project);
+        const ok = await connectWorkspaceFolderHandle(handle, {
+          loadExisting: false,
+          saveCurrent: true,
+          projectFileName: projectJsonFileNameForTitle(title),
+          silent: false
+        });
+        if (!ok) return false;
+        setProjectActive(true);
+      } else {
+        resetProjectForNewProject();
+        state.project.title = title;
+        state.project.projectId = generateProjectId();
+        state.project.kind = kind || 'conte';
+        state.project.settings = state.project.settings || {};
+        state.project.settings.indexedDbAutosaveEnabled = true;
+        normalizeProject(state.project);
+        setProjectActive(true);
+        refresh();
+        scheduleIndexedDbAutosave(0);
+      }
+      return true;
+    }
     async function startNewProject() {
       try {
-        // Only ask to preserve unsaved work when a project is actually open. From the locked start
-        // screen there is nothing to lose, so go straight to the title prompt.
-        if (state.projectActive) {
-          const choice = await askNewProjectUnsavedChoice();
-          if (choice === 'cancel') return;
-          if (choice === 'save') {
-            const saved = await saveJson();
-            if (!saved) return;
-          }
-        }
+        if (!(await confirmDiscardUnsavedForNew())) return;
         const title = await askNewProjectTitle();
         if (title === null) return;
-
-        const useFolder = fileSystemAccessAvailable() && !mobileOrTabletRuntime();
-        if (useFolder) {
-          // Pick + validate the folder BEFORE wiping the current project, so a cancel here never
-          // destroys an open project.
-          const handle = await pickNewProjectFolder();
-          if (!handle) return;
-          resetProjectForNewProject();
-          state.project.title = title;
-          state.project.projectId = generateProjectId();
-          normalizeProject(state.project);
-          const ok = await connectWorkspaceFolderHandle(handle, {
-            loadExisting: false,
-            saveCurrent: true,
-            projectFileName: projectJsonFileNameForTitle(title),
-            silent: false
-          });
-          if (!ok) return;
-          setProjectActive(true);
-        } else {
-          // Mobile (no File System Access): title-based project kept in IndexedDB.
-          resetProjectForNewProject();
-          state.project.title = title;
-          state.project.projectId = generateProjectId();
-          state.project.settings = state.project.settings || {};
-          state.project.settings.indexedDbAutosaveEnabled = true;
-          normalizeProject(state.project);
-          setProjectActive(true);
-          refresh();
-          scheduleIndexedDbAutosave(0);
-        }
+        await finalizeNewProject(title, 'conte');
       } catch (error) {
         console.error('[new-project] failed', error);
         alert('New Project failed: ' + (error && error.message ? error.message : error));
       }
+    }
+    // 原画(genga) project — separate kind that shares the editor for now; name = 作品名_話数_カット番号[_suffix].
+    async function startNewGengaProject() {
+      try {
+        if (!(await confirmDiscardUnsavedForNew())) return;
+        const name = await askGengaProjectName();
+        if (name === null) return;
+        await finalizeNewProject(name, 'genga');
+      } catch (error) {
+        console.error('[new-genga] failed', error);
+        alert('新規原画プロジェクト作成に失敗: ' + (error && error.message ? error.message : error));
+      }
+    }
+    function askGengaProjectName() {
+      return new Promise(function(resolve) {
+        const dialog = document.getElementById('gengaCreateDialog');
+        const form = dialog ? dialog.querySelector('form') : null;
+        const work = document.getElementById('gengaWorkInput');
+        const ep = document.getElementById('gengaEpInput');
+        const cut = document.getElementById('gengaCutInput');
+        const suf = document.getElementById('gengaSuffixSelect');
+        const hint = document.getElementById('gengaCreateHint');
+        if (!dialog || !form || !work || !ep || !cut || !suf) { resolve(null); return; }
+        work.value = ''; ep.value = ''; cut.value = ''; suf.value = '';
+        if (hint) { hint.textContent = '例: BW_01_002_LO'; hint.classList.remove('error'); }
+        const build = function() {
+          const w = work.value.trim(), e = ep.value.trim(), c = cut.value.trim(), s = suf.value;
+          if (!w || !e || !c) return '';
+          return w + '_' + e + '_' + c + (s ? ('_' + s) : '');
+        };
+        let done = false;
+        const cleanup = function() {
+          form.removeEventListener('submit', onSubmit);
+          dialog.removeEventListener('cancel', onCancel);
+          dialog.removeEventListener('close', onClose);
+        };
+        const finish = function(value) { if (done) return; done = true; cleanup(); if (dialog.open) dialog.close(); resolve(value); };
+        const onSubmit = function(event) {
+          event.preventDefault();
+          if ((event.submitter && event.submitter.value) !== 'create') { finish(null); return; }
+          const name = build();
+          if (!name) { if (hint) { hint.textContent = '作品名・話数・カット番号は必須です。'; hint.classList.add('error'); } return; }
+          finish(name);
+        };
+        const onCancel = function(event) { event.preventDefault(); finish(null); };
+        const onClose = function() { if (!done) finish(null); };
+        form.addEventListener('submit', onSubmit);
+        dialog.addEventListener('cancel', onCancel);
+        dialog.addEventListener('close', onClose);
+        dialog.returnValue = '';
+        dialog.showModal();
+        setTimeout(function() { try { work.focus(); } catch (error) {} }, 30);
+      });
     }
 
     // プロジェクト編集 = rename the project (title only; New Project only sets the title). Persists via the
@@ -10538,9 +10620,12 @@
     }
     // Top-bar プロジェクト button → dropdown: 新規プロジェクト / プロジェクト名の編集 (edit only when a project is open).
     function openProjectMenu(event) {
-      const items = [{ label: '新規プロジェクト', action: startNewProject }];
+      const items = [
+        { label: '新規プロジェクト', action: startNewProject },
+        { label: '新規原画プロジェクト', action: startNewGengaProject }
+      ];
       if (state.projectActive) items.push({ label: 'プロジェクト名の編集', action: editProjectName });
-      openSimpleContextMenu(event, items, { width: 190, height: state.projectActive ? 76 : 44 });
+      openSimpleContextMenu(event, items, { width: 200, height: state.projectActive ? 108 : 76 });
     }
 
     function stopWorkspaceAutosaveTimer() {
