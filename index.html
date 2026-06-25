@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver164</title>
+  <title>Conte Editor Prototype ver165</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver164</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver165</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '164';
+    const APP_DISPLAY_VERSION = '165';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17979,6 +17979,7 @@
           '<label class="le-row"><span class="le-label">速度</span>' +
             '<div class="le-slider" data-af-speed data-min="50" data-max="200" data-step="5" role="slider"><div class="le-knob"></div></div>' +
             '<span class="le-val" data-af-speedval></span></label>' +
+          '<label class="le-row af-pitch-row"><span class="le-label">ピッチ維持</span><input type="checkbox" data-af-pitch><span class="le-val"></span></label>' +
           '<div class="af-map-label">空間（▲=カメラ / ●=音源：距離・左右）</div>' +
           '<div class="af-map" data-af-map>' +
             '<span class="af-map-ring r2"></span><span class="af-map-ring r1"></span>' +
@@ -18030,6 +18031,8 @@
       const ssl = win.querySelector('[data-af-speed]');
       if (ssl) ssl.style.setProperty('--le-fill', ((spct - 50) / 150 * 100) + '%');
       txt('[data-af-speedval]', Math.round((fx.speed || 1) * 100) + '%');
+      const pchk = win.querySelector('[data-af-pitch]');
+      if (pchk) pchk.checked = fx.preservePitch !== false;
       // spatial source icon: pan = horizontal; reconstruct vertical from distance canonically (toward viewer)
       const sp = Math.max(-1, Math.min(1, fx.pan)), sd = Math.max(0, Math.min(1, fx.distance));
       const sy = Math.sqrt(Math.max(0, sd * sd - sp * sp));
@@ -18134,6 +18137,16 @@
           syncAudioFxWindow();
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+      });
+      const pchk = win.querySelector('[data-af-pitch]');
+      if (pchk) pchk.addEventListener('change', function() {
+        const clip = audioFxTargetClip(); if (!clip) return;
+        const on = pchk.checked, fid = clip.id;
+        runCommand('Audio pitch lock', function(project) {
+          const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
+          if (c) { c.audioFx = normalizeAudioFx(c.audioFx); c.audioFx.preservePitch = on; }
+        });
+        syncAudioFxWindow();
       });
       const map = win.querySelector('[data-af-map]');
       if (map) map.addEventListener('pointerdown', function(e) {
@@ -27946,8 +27959,10 @@
         const offsetSeconds = Math.min(buffer.duration, trimStart + offsetInClipSeconds);
         const playDuration = Math.max(0.01, Math.min(trimDuration - offsetInClipSeconds, buffer.duration - offsetSeconds));
         const source = ctx.createBufferSource();
-        source.buffer = buffer;
+        const r4 = resolveClipSourcePlayback(ctx, clip, buffer, fps, offsetInClipSeconds, playDuration);
+        source.buffer = r4.buffer;
         connectAudioSourceForClip(source, ctx, clip, ctx.currentTime + delaySeconds, playDuration);
+        if (source.playbackRate) source.playbackRate.value = r4.rate;
         state.playbackAudioSources.push(source);
         const activate = function() {
           state.activeSpeechClipId = clip.id;
@@ -27965,8 +27980,7 @@
           if (state.activeSpeechClipId === clip.id) state.activeSpeechClipId = '';
           refreshVideoPreviewForSpeechEvent();
         };
-        const spd2 = Math.max(0.1, Math.min(4, audioClipFx(clip).speed || 1)); // speed: scale buffer offset/duration (playbackRate set in graph)
-        source.start(ctx.currentTime + delaySeconds, Math.min(trimStart + offsetInClipSeconds * spd2, Math.max(0, buffer.duration - 0.01)), playDuration * spd2);
+        source.start(ctx.currentTime + delaySeconds, r4.offset, r4.duration);
       } catch (error) {
         playHtmlAudioUrlForClip(clip, audioUrl);
       }
@@ -27975,11 +27989,99 @@
     // Shared audio graph for a clip's buffer source: volume + fade(in/out) + pan + echo. Used by both
     // playback (ctx.destination) and export (Offline/realtime, custom destination). startTime/duration are
     // in the ctx's own time base so fades can be scheduled; pass duration=0 to skip fades.
+    // ===== Phase 4b: pitch-preserving time-stretch (WSOLA) =====
+    function timeStretchChannelData(input, factor, sampleRate) {
+      const n = input.length;
+      const frame = Math.max(256, Math.round(0.046 * sampleRate));
+      if (n < frame + 4 || Math.abs(factor - 1) < 0.01) { // too short / no change → cheap resample
+        const ol = Math.max(1, Math.round(n * factor)), o = new Float32Array(ol);
+        for (let i = 0; i < ol; i++) o[i] = input[Math.min(n - 1, Math.round(i / factor))] || 0;
+        return o;
+      }
+      const synHop = Math.max(1, Math.round(frame / 2));
+      const anaHop = Math.max(1, Math.round(synHop / factor));
+      const seek = Math.max(0, Math.round(0.012 * sampleRate));
+      const win = new Float32Array(frame);
+      for (let i = 0; i < frame; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (frame - 1));
+      const outLen = Math.max(1, Math.round(n * factor));
+      const out = new Float32Array(outLen + frame);
+      const norm = new Float32Array(outLen + frame);
+      let anaPos = 0, synPos = 0, target = null;
+      while (synPos < outLen) {
+        let start = anaPos;
+        if (target) { // WSOLA: pick the offset best matching the natural continuation (phase coherence)
+          let best = -Infinity, bestD = 0;
+          for (let d = -seek; d <= seek; d++) {
+            const p = anaPos + d;
+            if (p < 0 || p + frame > n) continue;
+            let corr = 0;
+            for (let k = 0; k < frame; k += 4) corr += input[p + k] * target[k];
+            if (corr > best) { best = corr; bestD = d; }
+          }
+          start = anaPos + bestD;
+        }
+        if (start < 0) start = 0;
+        if (start + frame > n) start = Math.max(0, n - frame);
+        for (let k = 0; k < frame; k++) { out[synPos + k] += (input[start + k] || 0) * win[k]; norm[synPos + k] += win[k]; }
+        target = new Float32Array(frame);
+        for (let k = 0; k < frame; k++) target[k] = input[start + synHop + k] || 0;
+        anaPos += anaHop; synPos += synHop;
+      }
+      const res = new Float32Array(outLen);
+      for (let i = 0; i < outLen; i++) res[i] = norm[i] > 1e-6 ? out[i] / norm[i] : 0;
+      return res;
+    }
+    function timeStretchTrimmedBuffer(ctx, buffer, startSample, lenSample, factor) {
+      const ch = Math.max(1, buffer.numberOfChannels), total = buffer.length;
+      const s0 = Math.max(0, Math.min(total, startSample));
+      const len = Math.max(1, Math.min(total - s0, lenSample));
+      const chans = []; let outLen = 1;
+      for (let c = 0; c < ch; c++) {
+        const st = timeStretchChannelData(buffer.getChannelData(c).subarray(s0, s0 + len), factor, buffer.sampleRate);
+        chans.push(st); outLen = Math.max(outLen, st.length);
+      }
+      const out = ctx.createBuffer(ch, outLen, buffer.sampleRate);
+      for (let c = 0; c < ch; c++) out.getChannelData(c).set(chans[c].subarray(0, outLen));
+      return out;
+    }
+    function getStretchedClipBuffer(ctx, clip, buffer, fps) {
+      const speed = Math.max(0.1, Math.min(4, audioClipFx(clip).speed || 1));
+      const sr = buffer.sampleRate;
+      const startSample = Math.round(Math.max(0, Number(clip.audioTrimStartFrames) || 0) / fps * sr);
+      const boxFrames = Math.max(1, Number(clip.audioTrimDurationFrames || clip.durationFrames) || 1);
+      const lenSample = Math.max(1, Math.min(buffer.length - startSample, Math.round(boxFrames / fps * speed * sr)));
+      const key = clip.id + ':' + speed.toFixed(3) + ':' + startSample + ':' + lenSample + ':' + Math.round(buffer.duration * 1000);
+      if (!(state.audioStretchCache instanceof Map)) state.audioStretchCache = new Map();
+      const hit = state.audioStretchCache.get(key);
+      if (hit) return hit;
+      let out = null;
+      try { out = timeStretchTrimmedBuffer(ctx, buffer, startSample, lenSample, 1 / speed); } catch (e) { out = null; }
+      if (out) {
+        state.audioStretchCache.set(key, out);
+        if (state.audioStretchCache.size > 32) { const fk = state.audioStretchCache.keys().next().value; state.audioStretchCache.delete(fk); }
+      }
+      return out;
+    }
+    // Resolve buffer/rate/offset/duration for a clip source: pitch-preserve → pre-stretched box buffer at
+    // rate 1 (trim baked, 0-based offset); else original at playbackRate=speed (4a offset/duration scaling).
+    function resolveClipSourcePlayback(ctx, clip, buffer, fps, offsetBoxSec, durBoxSec) {
+      const fx = audioClipFx(clip);
+      const speed = Math.max(0.1, Math.min(4, fx.speed || 1));
+      if (fx.preservePitch !== false && Math.abs(speed - 1) > 0.01) {
+        const stretched = getStretchedClipBuffer(ctx, clip, buffer, fps);
+        if (stretched) {
+          const off = Math.max(0, Math.min(offsetBoxSec, Math.max(0, stretched.duration - 0.005)));
+          return { buffer: stretched, rate: 1, offset: off, duration: Math.max(0.001, Math.min(durBoxSec, stretched.duration - off)) };
+        }
+      }
+      const trimStartSec = Math.max(0, Number(clip.audioTrimStartFrames) || 0) / fps;
+      const off = Math.min(trimStartSec + offsetBoxSec * speed, Math.max(0, buffer.duration - 0.005));
+      return { buffer: buffer, rate: speed, offset: off, duration: Math.max(0.001, Math.min(durBoxSec * speed, buffer.duration - off)) };
+    }
     function wireAudioClipGraph(ctx, source, clip, startTime, duration, destination) {
       const dest = destination || ctx.destination;
       const effect = dialogAudioEffectSettings(clip);
       const fx = audioClipFx(clip);
-      if (source && source.playbackRate) source.playbackRate.value = Math.max(0.1, Math.min(4, fx.speed || 1)); // Phase 4a speed (pitch follows; preserve = 4b)
       const distGain = 1 / (1 + 3 * Math.max(0, Math.min(1, fx.distance))); // far = quieter (spatial map)
       const vol = Math.max(0, Math.min(4, effect.volume)) * distGain;
       const st = Number.isFinite(startTime) ? startTime : (Number(ctx.currentTime) || 0);
@@ -38544,11 +38646,11 @@
           if (bufOffset >= s.buffer.duration) return;
           let playDur = Math.min(trimDurSec - skip, recEndSec - Math.max(0, offsetSec), s.buffer.duration - bufOffset);
           if (playDur <= 0.02) return;
-          const src = audioCtx.createBufferSource(); src.buffer = s.buffer;
+          const r4 = resolveClipSourcePlayback(audioCtx, s.clip, s.buffer, fps, skip, playDur);
+          const src = audioCtx.createBufferSource(); src.buffer = r4.buffer;
           wireAudioClipGraph(audioCtx, src, s.clip, when, playDur, audioDest);
-          const spd2 = Math.max(0.1, Math.min(4, audioClipFx(s.clip).speed || 1));
-          const bo2 = trimStartSec + skip * spd2;
-          try { src.start(when, bo2, Math.min(playDur * spd2, Math.max(0.001, s.buffer.duration - bo2))); } catch (e) {}
+          if (src.playbackRate) src.playbackRate.value = r4.rate;
+          try { src.start(when, r4.offset, r4.duration); } catch (e) {}
         });
       }
       await new Promise(function(resolve) {
@@ -38612,11 +38714,11 @@
         if (bufOffset >= buf.duration) continue;
         const playDur = Math.min(trimDurSec - skip, durationSec - when, buf.duration - bufOffset);
         if (playDur <= 0.02) continue;
-        const src = octx.createBufferSource(); src.buffer = buf;
+        const r4 = resolveClipSourcePlayback(octx, clip, buf, fps, skip, playDur);
+        const src = octx.createBufferSource(); src.buffer = r4.buffer;
         wireAudioClipGraph(octx, src, clip, when, playDur, octx.destination);
-        const spd2 = Math.max(0.1, Math.min(4, audioClipFx(clip).speed || 1));
-        const bo2 = trimStartSec + skip * spd2;
-        try { src.start(when, bo2, Math.min(playDur * spd2, Math.max(0.001, buf.duration - bo2))); } catch (e) {}
+        if (src.playbackRate) src.playbackRate.value = r4.rate;
+        try { src.start(when, r4.offset, r4.duration); } catch (e) {}
       }
       try { return await octx.startRendering(); } catch (e) { return null; }
     }
