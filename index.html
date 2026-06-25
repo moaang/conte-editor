@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver142</title>
+  <title>Conte Editor Prototype ver143</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5641,6 +5641,13 @@
     .ol-timeline-window .ol-window-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 6px; }
     .ol-timeline-window .ol-window-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 6px; }
     .ol-timeline-window .ol-window-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.36); }
+    .layer-effect-window { width: var(--ol-window-width, 320px); resize: none; min-width: 280px; }
+    .layer-effect-window .le-body { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 7px; }
+    .layer-effect-window .le-row { display: grid; grid-template-columns: 52px 1fr 46px; align-items: center; gap: 8px; font-size: 12px; }
+    .layer-effect-window .le-label { color: rgba(238, 241, 245, 0.72); }
+    .layer-effect-window .le-row input[type="range"] { width: 100%; }
+    .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
+    .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7138,7 +7145,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver142</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver143</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7309,7 +7316,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '142';
+    const APP_DISPLAY_VERSION = '143';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17697,6 +17704,154 @@
     // Cut-level clips only (panels ignored). Dragging a clip left overlaps it onto the previous
     // cut group; the change lives in state.olDraft (which drives the live timeline via
     // cutGroupOlPrevFrames) until 適用 commits it into meta.olPrevFrames and shifts media.
+    // Force a video-preview rebuild (effect changes don't alter previewKey, so the cached preview would
+    // otherwise be skipped).
+    function forceVideoPreviewRebuild() {
+      const stageEl = document.getElementById('videoPreviewStage');
+      if (stageEl) stageEl.dataset.previewKey = '';
+      if (state.videoEditMode) renderVideoPreviewIfChanged(videoTimelineDisplayTotalFrames(state.project));
+    }
+
+    function bindLayerEffectWindowDrag(win) {
+      const header = win.querySelector('[data-le-drag="true"]');
+      if (!header) return;
+      header.addEventListener('pointerdown', function(e) {
+        if (e.button && e.button !== 0) return;
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        e.preventDefault();
+        const rect = win.getBoundingClientRect();
+        const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+        const move = function(me) {
+          win.style.setProperty('--ol-window-left', Math.max(4, Math.min(window.innerWidth - 80, me.clientX - offX)) + 'px');
+          win.style.setProperty('--ol-window-top', Math.max(4, Math.min(window.innerHeight - 40, me.clientY - offY)) + 'px');
+        };
+        const up = function() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      });
+    }
+
+    function layerEffectWindowEl() {
+      let win = document.getElementById('layerEffectWindow');
+      if (win) return win;
+      win = document.createElement('div');
+      win.id = 'layerEffectWindow';
+      win.className = 'ol-timeline-window layer-effect-window';
+      win.hidden = true;
+      const row = function(prop, label, min, max, step, kind) {
+        return '<label class="le-row"><span class="le-label">' + label + '</span>' +
+          '<input type="' + kind + '" data-le-prop="' + prop + '" min="' + min + '" max="' + max + '" step="' + step + '">' +
+          '<span class="le-val" data-le-val="' + prop + '"></span></label>';
+      };
+      win.innerHTML =
+        '<div class="ol-window-header" data-le-drag="true">' +
+          '<span class="ol-window-title">レイヤーエフェクト</span>' +
+          '<button type="button" data-le-action="reset">リセット</button>' +
+          '<button type="button" data-le-action="close">×</button>' +
+        '</div>' +
+        '<div class="le-body">' +
+          row('opacity', '透明度', 0, 100, 1, 'range') +
+          row('blur', 'ぼかし', 0, 40, 1, 'range') +
+          row('scale', '拡大', 0.1, 4, 0.01, 'number') +
+          row('rot', '回転', -180, 180, 1, 'number') +
+          row('tx', '位置X', -940, 940, 1, 'number') +
+          row('ty', '位置Y', -540, 540, 1, 'number') +
+        '</div>';
+      document.body.appendChild(win);
+      win.querySelectorAll('[data-le-action]').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault(); e.stopPropagation();
+          if (btn.dataset.leAction === 'reset') resetLayerEffect();
+          else closeLayerEffectWindow();
+        });
+      });
+      win.querySelectorAll('[data-le-prop]').forEach(function(input) {
+        input.addEventListener('input', function() { onLayerEffectInput(input.dataset.leProp, input.value); });
+      });
+      bindLayerEffectWindowDrag(win);
+      return win;
+    }
+
+    function layerEffectTargetLayer() {
+      if (!state.layerEffectId) return null;
+      const ref = findConteLayerById(state.project, state.layerEffectId);
+      return ref ? ref.layer : null;
+    }
+
+    function syncLayerEffectWindowControls() {
+      const win = document.getElementById('layerEffectWindow');
+      const layer = layerEffectTargetLayer();
+      if (!win || !layer) return;
+      const e = normalizeLayerEffect(layer.effect);
+      const set = function(prop, value, label) {
+        const input = win.querySelector('[data-le-prop="' + prop + '"]');
+        const val = win.querySelector('[data-le-val="' + prop + '"]');
+        if (input && document.activeElement !== input) input.value = value;
+        if (val) val.textContent = label;
+      };
+      set('opacity', Math.round(e.opacity * 100), Math.round(e.opacity * 100) + '%');
+      set('blur', Math.round(e.blur), Math.round(e.blur) + 'px');
+      set('scale', e.scale, Math.round(e.scale * 100) + '%');
+      set('rot', e.rot, e.rot + '°');
+      set('tx', e.tx, '');
+      set('ty', e.ty, '');
+    }
+
+    function onLayerEffectInput(prop, rawValue) {
+      const layer = layerEffectTargetLayer();
+      if (!layer) return;
+      const v = Number(rawValue);
+      if (!Number.isFinite(v)) return;
+      const eff = normalizeLayerEffect(layer.effect);
+      if (prop === 'opacity') eff.opacity = Math.max(0, Math.min(1, v / 100));
+      else if (prop === 'blur') eff.blur = Math.max(0, v);
+      else if (prop === 'scale') eff.scale = Math.max(0.01, v);
+      else if (prop === 'rot') eff.rot = v;
+      else if (prop === 'tx') eff.tx = v;
+      else if (prop === 'ty') eff.ty = v;
+      layer.effect = eff;
+      syncLayerEffectWindowControls();
+      forceVideoPreviewRebuild();
+    }
+
+    function resetLayerEffect() {
+      const layer = layerEffectTargetLayer();
+      if (!layer) return;
+      layer.effect = normalizeLayerEffect(null);
+      syncLayerEffectWindowControls();
+      forceVideoPreviewRebuild();
+    }
+
+    function openLayerEffectWindow(layerId, cutId) {
+      const ref = findConteLayerById(state.project, layerId);
+      if (!ref) return;
+      state.layerEffectId = String(layerId);
+      state.layerEffectCutId = String(cutId || (ref.ownerCut && ref.ownerCut.id) || '');
+      state.layerEffectOriginal = fastClone(normalizeLayerEffect(ref.layer.effect));
+      const win = layerEffectWindowEl();
+      win.hidden = false;
+      syncLayerEffectWindowControls();
+    }
+
+    function closeLayerEffectWindow() {
+      const win = document.getElementById('layerEffectWindow');
+      if (win) win.hidden = true;
+      const layerId = state.layerEffectId;
+      const orig = state.layerEffectOriginal;
+      state.layerEffectId = ''; state.layerEffectOriginal = null; state.layerEffectCutId = '';
+      if (!layerId || !orig) return;
+      const ref = findConteLayerById(state.project, layerId);
+      if (!ref) return;
+      const final = fastClone(normalizeLayerEffect(ref.layer.effect));
+      if (JSON.stringify(final) === JSON.stringify(orig)) return;
+      ref.layer.effect = orig; // restore so the undo command captures `orig` as the before-state
+      const cutIds = conteLayerOwnerCutIdsForLayerIds(state.project, [layerId]);
+      runConteLayerCutPatchCommand('レイヤーエフェクト', cutIds, function(project) {
+        const r = findConteLayerById(project, layerId);
+        if (r) r.layer.effect = final;
+      });
+    }
+
     function olWindowEl() {
       let win = document.getElementById('olTimelineWindow');
       if (win) return win;
@@ -18613,6 +18768,7 @@
         (expandableActive ? '' : '<button type="button" class="' + (bgActive ? 'active' : '') + '" aria-pressed="' + (bgActive ? 'true' : 'false') + '" data-conte-layer-menu-action="bg">' + bgLabel + '</button>'),
         (bgActive ? '' : '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>'),
         '<button type="button" data-conte-layer-menu-action="add">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
+        '<button type="button" data-conte-layer-menu-action="effect">\u30ec\u30a4\u30e4\u30fc\u30a8\u30d5\u30a7\u30af\u30c8</button>',
         '<button type="button" data-conte-layer-menu-action="unlink">\u30ea\u30f3\u30af\u89e3\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="rename">\u30ec\u30a4\u30e4\u30fc\u540d\u5909\u66f4</button>',
         '<button type="button" data-conte-layer-menu-action="delete-layer">\u30ec\u30a4\u30e4\u30fc\u524a\u9664</button>',
@@ -18626,6 +18782,10 @@
           hideConteLayerContextMenu();
           if (action === 'add') {
             addConteLayerToSelection('cut');
+            return;
+          }
+          if (action === 'effect') {
+            openLayerEffectWindow(id);
             return;
           }
           if (action === 'delete-layer') {
@@ -23497,11 +23657,12 @@
         if (!ref) return;
         const z = orderMaps.byLayerId.get(layerId) || orderMaps.byDrawingRef.get(ref) || 1;
         const drawing = getLayerDrawingData(state.project, ref);
+        const fx = layerEffectInlineStyle(entry.layer);
         if (fastLayerMode || layerDrawingUsesDirectPreviewImage(ref, layerId, drawing)) {
           const layerSrc = drawing && drawing.bitmapDataUrl ? ' src="' + escapeAttr(drawing.bitmapDataUrl) + '"' : '';
-          parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '"' + layerSrc + ' decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + '">');
+          parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '"' + layerSrc + ' decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + fx + '">');
         } else {
-          parts.push('<canvas class="video-preview-layer-canvas" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '" style="z-index:' + (z * 2 + 1) + '"></canvas>');
+          parts.push('<canvas class="video-preview-layer-canvas" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '" style="z-index:' + (z * 2 + 1) + ';' + fx + '"></canvas>');
         }
       });
       return parts.join('');
@@ -24309,6 +24470,40 @@
         'width:' + (rect.w / LAYER_DRAWING_WIDTH * 100) + '%',
         'height:' + (rect.h / LAYER_DRAWING_HEIGHT * 100) + '%'
       ].join(';') + ';';
+    }
+
+    // ---- Per-layer-row effects (Phase 1: static opacity / blur / move-scale-rotate; keyframes = Phase 2).
+    // tx/ty/blur are in 940-px units (preview px at zoom 1); export multiplies by k = outW/940.
+    // transform-origin = the layer's own center. Applied in BOTH preview (CSS) and export (canvas).
+    function normalizeLayerEffect(eff) {
+      eff = eff || {};
+      const num = function(v, d) { const n = Number(v); return Number.isFinite(n) ? n : d; };
+      return {
+        opacity: Math.max(0, Math.min(1, num(eff.opacity, 1))),
+        tx: num(eff.tx, 0),
+        ty: num(eff.ty, 0),
+        scale: Math.max(0.01, num(eff.scale, 1)),
+        rot: num(eff.rot, 0),
+        blur: Math.max(0, num(eff.blur, 0))
+      };
+    }
+    function layerEffectIsActive(eff) {
+      if (!eff) return false;
+      const e = normalizeLayerEffect(eff);
+      return e.opacity < 0.999 || e.tx !== 0 || e.ty !== 0 || Math.abs(e.scale - 1) > 0.0001 || e.rot !== 0 || e.blur > 0;
+    }
+    function layerEffectInlineStyle(layer) {
+      if (!layer || !layerEffectIsActive(layer.effect)) return '';
+      const e = normalizeLayerEffect(layer.effect);
+      const parts = [];
+      if (e.opacity < 0.999) parts.push('opacity:' + e.opacity);
+      const xf = [];
+      if (e.tx !== 0 || e.ty !== 0) xf.push('translate(' + e.tx + 'px,' + e.ty + 'px)');
+      if (e.rot !== 0) xf.push('rotate(' + e.rot + 'deg)');
+      if (Math.abs(e.scale - 1) > 0.0001) xf.push('scale(' + e.scale + ')');
+      if (xf.length) { parts.push('transform:' + xf.join(' ')); parts.push('transform-origin:center'); }
+      if (e.blur > 0) parts.push('filter:blur(' + e.blur + 'px)');
+      return parts.length ? (parts.join(';') + ';') : '';
     }
 
     function applyLayerImageBitmapGeometry(image, drawing) {
@@ -37426,7 +37621,23 @@
             if (!src) continue;
             const rect = layerDrawingBitmapRect(drawing);
             const img = opts.cache ? opts.cache.get(layer.drawingRef) : await loadImageForExport(src);
-            if (img) octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+            if (img && layerEffectIsActive(layer.effect)) {
+              const e = normalizeLayerEffect(layer.effect);
+              const k = outW / VIDEO_PREVIEW_BASE_WIDTH;
+              const lcx = (rect.x + rect.w / 2) * sx, lcy = (rect.y + rect.h / 2) * sx;
+              octx.save();
+              octx.globalAlpha = e.opacity;
+              octx.translate(e.tx * k, e.ty * k);
+              octx.translate(lcx, lcy);
+              octx.rotate(e.rot * Math.PI / 180);
+              octx.scale(e.scale, e.scale);
+              octx.translate(-lcx, -lcy);
+              if (e.blur > 0) octx.filter = 'blur(' + (e.blur * k) + 'px)';
+              octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+              octx.restore();
+            } else if (img) {
+              octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+            }
           }
           octx.restore();
           if (showFrameBox && camRaw) {
