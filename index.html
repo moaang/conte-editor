@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver141</title>
+  <title>Conte Editor Prototype ver142</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5636,6 +5636,11 @@
       overflow-y: hidden;
     }
     .ol-timeline-window .ol-track { position: relative; }
+    .ol-timeline-window .ol-window-body { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.28) transparent; }
+    .ol-timeline-window .ol-window-body::-webkit-scrollbar { height: 10px; }
+    .ol-timeline-window .ol-window-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 6px; }
+    .ol-timeline-window .ol-window-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 6px; }
+    .ol-timeline-window .ol-window-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.36); }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7133,7 +7138,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver141</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver142</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7304,7 +7309,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '141';
+    const APP_DISPLAY_VERSION = '142';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17856,7 +17861,7 @@
       const ppf = olZoomValue();
       const trackW = Math.max(1, Math.round(layout.total * ppf));
       const trackH = pad * 2 + layout.lanes * rowH;
-      body.style.height = trackH + 'px';
+      body.style.height = (trackH + 14) + 'px'; // +room for the horizontal scrollbar so the bottom lane isn't clipped
       const prevScroll = body.scrollLeft;
       const focusOwner = state.olDraft.focusCutId;
       let html = '<div class="ol-track" style="width:' + trackW + 'px;height:' + trackH + 'px;">';
