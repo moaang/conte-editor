@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver172</title>
+  <title>Conte Editor Prototype ver173</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7219,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver172</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver173</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7390,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '172';
+    const APP_DISPLAY_VERSION = '173';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8708,7 +8708,11 @@
         guardedRender('stage', renderStageView);
       }
       if (state.audioPerfTrace) console.time('refreshAudioTimelineEdit:guardedRenders');
-      guardedRender('timing', renderTimingDashboard);
+      // Video-edit mode: patch the timeline in place (conte track is patched, preserving its layer thumbnails)
+      // instead of a full renderTimingDashboard that rebuilds every thumbnail = a thumbnail flash on each audio edit.
+      if (!state.videoEditMode || !renderVideoEditorTimelinePartial(document.getElementById('timingDashboard'), { deferThumbnails: true })) {
+        guardedRender('timing', renderTimingDashboard);
+      }
       guardedRender('inspector', renderInspector);
       guardedRender('chrome', refreshChromeControls);
       if (state.audioPerfTrace) console.timeEnd('refreshAudioTimelineEdit:guardedRenders');
@@ -28042,11 +28046,11 @@
         const trimDuration = clipAudioTrimDurationSeconds(clip, fps) || Math.max(0.01, buffer.duration - trimStart);
         if (offsetInClipSeconds >= trimDuration) return;
         const offsetSeconds = Math.min(buffer.duration, trimStart + offsetInClipSeconds);
-        const playDuration = Math.max(0.01, Math.min(trimDuration - offsetInClipSeconds, buffer.duration - offsetSeconds));
+        const boxDuration = Math.max(0.01, trimDuration - offsetInClipSeconds); // timeline box length (may exceed source audio when slowed); resolveClipSourcePlayback clamps per path
         const source = ctx.createBufferSource();
-        const r4 = resolveClipSourcePlayback(ctx, clip, buffer, fps, offsetInClipSeconds, playDuration);
+        const r4 = resolveClipSourcePlayback(ctx, clip, buffer, fps, offsetInClipSeconds, boxDuration);
         source.buffer = r4.buffer;
-        connectAudioSourceForClip(source, ctx, clip, ctx.currentTime + delaySeconds, playDuration, offsetInClipSeconds);
+        connectAudioSourceForClip(source, ctx, clip, ctx.currentTime + delaySeconds, boxDuration, offsetInClipSeconds);
         if (source.playbackRate) source.playbackRate.value = r4.rate;
         state.playbackAudioSources.push(source);
         const activate = function() {
@@ -38751,7 +38755,7 @@
           const when = t0 + Math.max(0, offsetSec);
           const bufOffset = trimStartSec + skip;
           if (bufOffset >= s.buffer.duration) return;
-          let playDur = Math.min(trimDurSec - skip, recEndSec - Math.max(0, offsetSec), s.buffer.duration - bufOffset);
+          let playDur = Math.min(trimDurSec - skip, recEndSec - Math.max(0, offsetSec)); // box length within range (no source-audio clamp; resolve clamps per path so slowed clips aren't cut)
           if (playDur <= 0.02) return;
           const r4 = resolveClipSourcePlayback(audioCtx, s.clip, s.buffer, fps, skip, playDur);
           const src = audioCtx.createBufferSource(); src.buffer = r4.buffer;
@@ -38819,7 +38823,7 @@
         const when = Math.max(0, offsetSec);
         const bufOffset = trimStartSec + skip;
         if (bufOffset >= buf.duration) continue;
-        const playDur = Math.min(trimDurSec - skip, durationSec - when, buf.duration - bufOffset);
+        const playDur = Math.min(trimDurSec - skip, durationSec - when); // box length within range (no source-audio clamp; resolve clamps per path so slowed clips aren't cut)
         if (playDur <= 0.02) continue;
         const r4 = resolveClipSourcePlayback(octx, clip, buf, fps, skip, playDur);
         const src = octx.createBufferSource(); src.buffer = r4.buffer;
