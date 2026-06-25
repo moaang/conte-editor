@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver190</title>
+  <title>Conte Editor Prototype ver191</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7239,7 +7239,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver190</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver191</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7361,6 +7361,7 @@
       <div class="project-start-sub">新しいプロジェクトを作成するか、既存のプロジェクトを開いてください。</div>
       <div class="project-start-actions">
         <button id="projectStartNewBtn" type="button" class="project-start-btn primary">新規プロジェクト</button>
+        <button id="projectStartNewGengaBtn" type="button" class="project-start-btn">新規原画プロジェクト</button>
         <button id="projectStartLoadBtn" type="button" class="project-start-btn">プロジェクトを開く</button>
       </div>
     </div>
@@ -7434,7 +7435,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '190';
+    const APP_DISPLAY_VERSION = '191';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40853,6 +40854,8 @@
       document.getElementById('loadJsonBtn').addEventListener('click', chooseJsonForLoad);
       const projectStartNewBtn = document.getElementById('projectStartNewBtn');
       if (projectStartNewBtn) projectStartNewBtn.addEventListener('click', startNewProject);
+      const projectStartNewGengaBtn = document.getElementById('projectStartNewGengaBtn');
+      if (projectStartNewGengaBtn) projectStartNewGengaBtn.addEventListener('click', startNewGengaProject);
       const projectStartLoadBtn = document.getElementById('projectStartLoadBtn');
       if (projectStartLoadBtn) projectStartLoadBtn.addEventListener('click', function() {
         const loadBtn = document.getElementById('loadJsonBtn');
