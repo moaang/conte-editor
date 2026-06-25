@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver183</title>
+  <title>Conte Editor Prototype ver184</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6760,7 +6760,7 @@
               <path d="M8 20v-6h8v6"></path>
             </svg>
           </button>
-          <button id="exportBundleBtn" class="json-icon-btn" type="button" aria-label="Export self-contained JSON (media embedded)" title="共有用に書き出し（メディア同梱・iPad↔PC）">
+          <button id="exportBundleBtn" class="json-icon-btn" type="button" aria-label="Export self-contained ZIP (media embedded)" title="共有用ZIP書き出し（メディア同梱・iPad↔PC）">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 3v10"></path>
               <path d="m8 7 4-4 4 4"></path>
@@ -7234,7 +7234,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver183</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver184</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7405,7 +7405,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '183';
+    const APP_DISPLAY_VERSION = '184';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31591,39 +31591,158 @@
       return copy;
     }
 
-    async function exportSelfContainedJson() {
-      const fileName = projectJsonFileNameForTitle(state.project.title || state.project.projectId || 'project');
-      // Pick the save location FIRST, while still inside the click gesture (showSaveFilePicker throws if called
-      // after the long await below — user activation would be gone). Desktop → save dialog; mobile → share/download.
-      let handle = null;
-      if (typeof window.showSaveFilePicker === 'function') {
-        try {
-          handle = await window.showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{ description: 'Conte project (media embedded)', accept: { 'application/json': ['.json'] } }]
-          });
-        } catch (error) {
-          if (error && error.name === 'AbortError') return; // user cancelled the dialog
-          handle = null; // picker unavailable/blocked → fall back to download below
+    // A single self-contained JSON (media inlined as base64) overflows JSON.stringify's ~512MB string limit on
+    // large projects ("Invalid string length"), and JSON.parse would fail the same way on import. So the share
+    // format is a STORE (uncompressed — media is already compressed) ZIP, written entry-by-entry to a stream:
+    // no giant string at any point. Read back by the existing importConteFolderZip (method 0, basename match).
+    let __zipCrcTable = null;
+    function zipCrc32(bytes) {
+      if (!__zipCrcTable) {
+        __zipCrcTable = new Uint32Array(256);
+        for (let n = 0; n < 256; n += 1) { let c = n; for (let k = 0; k < 8; k += 1) { c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); } __zipCrcTable[n] = c >>> 0; }
+      }
+      let c = 0xFFFFFFFF;
+      for (let i = 0; i < bytes.length; i += 1) { c = (__zipCrcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8)) >>> 0; }
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+    function zipConcatBytes(list) {
+      let len = 0; for (let i = 0; i < list.length; i += 1) len += list[i].length;
+      const out = new Uint8Array(len); let o = 0;
+      for (let i = 0; i < list.length; i += 1) { out.set(list[i], o); o += list[i].length; }
+      return out;
+    }
+    function zipStoreWriter(write) { // write(Uint8Array)->Promise ; STORE (method 0) only
+      const enc = new TextEncoder();
+      const entries = [];
+      let offset = 0;
+      const u16 = function(v) { return new Uint8Array([v & 0xFF, (v >>> 8) & 0xFF]); };
+      const u32 = function(v) { v = v >>> 0; return new Uint8Array([v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF]); };
+      return {
+        addFile: async function(name, bytes) {
+          const nameBytes = enc.encode(name);
+          const crc = zipCrc32(bytes);
+          const size = bytes.length >>> 0;
+          await write(zipConcatBytes([u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0), u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0)]));
+          await write(nameBytes);
+          if (size) await write(bytes);
+          entries.push({ nameBytes: nameBytes, crc: crc, size: size, offset: offset });
+          offset += 30 + nameBytes.length + size;
+        },
+        finish: async function() {
+          const cdStart = offset; let cdSize = 0;
+          for (let i = 0; i < entries.length; i += 1) {
+            const e = entries[i];
+            const ch = zipConcatBytes([u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0), u32(e.crc), u32(e.size), u32(e.size), u16(e.nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(e.offset)]);
+            await write(ch); await write(e.nameBytes);
+            cdSize += ch.length + e.nameBytes.length;
+          }
+          await write(zipConcatBytes([u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length), u32(cdSize), u32(cdStart), u16(0)]));
+        }
+      };
+    }
+    function audioExtFromMime(mime) {
+      const m = String(mime || '').toLowerCase();
+      if (m.indexOf('mpeg') >= 0) return '.mp3';
+      if (m.indexOf('mp4') >= 0 || m.indexOf('aac') >= 0) return '.m4a';
+      if (m.indexOf('wav') >= 0) return '.wav';
+      if (m.indexOf('ogg') >= 0) return '.ogg';
+      return '.webm';
+    }
+    // Project JSON with media as REFS (small → no string-length limit) + the media blobs to write alongside
+    // (audio + layer bitmaps; video not bundled). Names match what importConteFolderZip re-inlines by basename.
+    async function buildConteFolderBundle() {
+      await hydrateWorkspaceMediaRefs();
+      const copy = fastClone(state.project);
+      copy.schemaVersion = PROJECT_FORMAT_VERSION;
+      copy.settings = copy.settings || {};
+      copy.settings.shortcuts = Object.assign({}, state.shortcuts);
+      copy.settings.editorUi = Object.assign({}, copy.settings.editorUi || {}, editorUiStatePayload());
+      copy.settings.localWorkspace = normalizeWorkspaceSettings(Object.assign({}, copy.settings.localWorkspace, { enabled: false, name: '' }));
+      if (copy.video && Array.isArray(copy.video.clips)) copy.video.clips.forEach(function(c) { c.mediaDataUrl = ''; });
+      const media = [];
+      const used = {};
+      const uniqueName = function(name) { let n = name, i = 1; while (used[n.toLowerCase()]) { const dot = name.lastIndexOf('.'); n = dot > 0 ? (name.slice(0, dot) + '_' + i + name.slice(dot)) : (name + '_' + i); i += 1; } used[n.toLowerCase()] = true; return n; };
+      const audioClips = (copy.audio && Array.isArray(copy.audio.clips)) ? copy.audio.clips : [];
+      for (let i = 0; i < audioClips.length; i += 1) {
+        const c = audioClips[i];
+        const live = ((state.project.audio && state.project.audio.clips) || []).find(function(x) { return x && x.id === c.id; });
+        let url = '';
+        try { url = live ? await ensurePlaybackAudioUrlForClip(live) : ''; } catch (e) {}
+        if (!url) continue;
+        const name = uniqueName(c.audioFileName || (c.id + audioExtFromMime(c.audioMime)));
+        c.audioFileName = name; c.audioDataUrl = '';
+        c.audioStorage = { kind: 'workspace', dir: 'assets/audio', fileName: name };
+        media.push({ path: 'assets/audio/' + name, url: url });
+      }
+      if (copy.layerDrawings && typeof copy.layerDrawings === 'object') {
+        const refs = Object.keys(copy.layerDrawings);
+        for (let i = 0; i < refs.length; i += 1) {
+          const ref = refs[i];
+          const d = normalizeLayerDrawingData(copy.layerDrawings[ref]);
+          d.undo = []; d.redo = []; d.strokes = [];
+          const live = state.project.layerDrawings ? state.project.layerDrawings[ref] : null;
+          const url = live ? String(live.bitmapDataUrl || '') : '';
+          if (url) {
+            const name = uniqueName((d.bitmapStorage && d.bitmapStorage.fileName) || (ref + '.png'));
+            d.bitmapStorage = { dir: 'assets/layers', fileName: name };
+            d.bitmapDataUrl = '';
+            media.push({ path: 'assets/layers/' + name, url: url });
+          }
+          copy.layerDrawings[ref] = d;
         }
       }
+      return { projectJson: JSON.stringify(copy), media: media };
+    }
+    async function blobFromMediaUrl(url) {
+      const u = String(url || '');
+      if (/^data:/i.test(u)) return dataUrlToBlob(u);
+      return await fetch(u).then(function(r) { return r.blob(); });
+    }
+    async function deliverBlobFile(blob, fileName) {
+      const file = typeof File !== 'undefined' ? new File([blob], fileName, { type: blob.type || 'application/octet-stream' }) : null;
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      if (file && nav && typeof nav.share === 'function') {
+        try { if (!nav.canShare || nav.canShare({ files: [file] })) { await nav.share({ files: [file], title: fileName }); return; } }
+        catch (error) { if (error && error.name === 'AbortError') return; }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+    async function exportConteFolderZip() {
+      const base = String(projectJsonFileNameForTitle(state.project.title || state.project.projectId || 'project')).replace(/\.conte\.json$/i, '').replace(/\.json$/i, '');
+      const zipName = base + '.conte.zip';
+      // Pick the save location FIRST (still inside the click gesture); desktop → save dialog, mobile → share/download.
+      let writable = null, chunks = null;
+      if (typeof window.showSaveFilePicker === 'function') {
+        let handle = null;
+        try { handle = await window.showSaveFilePicker({ suggestedName: zipName, types: [{ description: 'Conte bundle (zip)', accept: { 'application/zip': ['.zip'] } }] }); }
+        catch (error) { if (error && error.name === 'AbortError') return; handle = null; }
+        if (handle) writable = await handle.createWritable();
+      }
+      if (!writable) chunks = [];
+      const write = writable ? function(u) { return writable.write(u); } : function(u) { chunks.push(u.slice()); return Promise.resolve(); };
       try {
-        showLoadingOverlay('共有用ファイルを作成中…（メディア同梱）');
-        const payload = JSON.stringify(await projectForSelfContainedExport());
-        hideLoadingOverlay();
-        if (handle) {
-          const writable = await handle.createWritable();
-          await writable.write(payload);
-          await writable.close();
-          state.workspaceStatus = '共有用書き出し\n' + (handle.name || fileName);
-        } else {
-          await deliverJsonFile(payload, fileName);
-          state.workspaceStatus = '共有用書き出し\n' + fileName;
+        showLoadingOverlay('共有用ZIPを作成中…（メディア同梱）');
+        const bundle = await buildConteFolderBundle();
+        const zip = zipStoreWriter(write);
+        await zip.addFile('project.conte.json', new TextEncoder().encode(bundle.projectJson));
+        for (let i = 0; i < bundle.media.length; i += 1) {
+          let bytes = null;
+          try { const blob = await blobFromMediaUrl(bundle.media[i].url); bytes = new Uint8Array(await blob.arrayBuffer()); } catch (e) { bytes = null; }
+          if (bytes) await zip.addFile(bundle.media[i].path, bytes);
         }
+        await zip.finish();
+        hideLoadingOverlay();
+        if (writable) await writable.close();
+        else await deliverBlobFile(new Blob(chunks, { type: 'application/zip' }), zipName);
+        state.workspaceStatus = '共有用ZIP書き出し\n' + zipName;
         updateWorkspaceUI();
       } catch (error) {
         hideLoadingOverlay();
-        alert('共有用書き出しに失敗: ' + (error && error.message ? error.message : error));
+        if (writable) { try { await writable.close(); } catch (e) {} }
+        alert('共有用ZIP書き出しに失敗: ' + (error && error.message ? error.message : error));
       }
     }
 
@@ -40537,7 +40656,7 @@
       document.getElementById('newProjectBtn').addEventListener('click', startNewProject);
       document.getElementById('saveJsonBtn').addEventListener('click', saveJson);
       const exportBundleBtn = document.getElementById('exportBundleBtn');
-      if (exportBundleBtn) exportBundleBtn.addEventListener('click', exportSelfContainedJson);
+      if (exportBundleBtn) exportBundleBtn.addEventListener('click', exportConteFolderZip);
       document.getElementById('loadJsonBtn').addEventListener('click', chooseJsonForLoad);
       const projectStartNewBtn = document.getElementById('projectStartNewBtn');
       if (projectStartNewBtn) projectStartNewBtn.addEventListener('click', startNewProject);
