@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver184</title>
+  <title>Conte Editor Prototype ver185</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7234,7 +7234,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver184</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver185</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7405,7 +7405,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '184';
+    const APP_DISPLAY_VERSION = '185';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31532,7 +31532,21 @@
           copy.layerDrawings[ref] = drawing;
         });
       }
+      compactWaveformPeaksInPlace(copy);
       return copy;
+    }
+
+    // Waveform peaks are display-only but were stored at full float precision (e.g. 0.42842436085061064 ≈ 18
+    // chars each) — ~47% of the saved JSON on a clip-heavy project. Rounding to 3 decimals (≈5 chars) is visually
+    // identical and roughly halves the audio section. Load is unchanged (still 0..1 float arrays).
+    function compactWaveformPeaksInPlace(project) {
+      const clips = project && project.audio && Array.isArray(project.audio.clips) ? project.audio.clips : [];
+      const r = function(arr) { return Array.isArray(arr) ? arr.map(function(v) { return Math.round((Number(v) || 0) * 1000) / 1000; }) : arr; };
+      for (let i = 0; i < clips.length; i += 1) {
+        const c = clips[i];
+        if (c.waveformPeaks) c.waveformPeaks = r(c.waveformPeaks);
+        if (c.audioSourceWaveformPeaks) c.audioSourceWaveformPeaks = r(c.audioSourceWaveformPeaks);
+      }
     }
 
     function serializedProjectJson() {
@@ -31691,6 +31705,7 @@
           copy.layerDrawings[ref] = d;
         }
       }
+      compactWaveformPeaksInPlace(copy);
       return { projectJson: JSON.stringify(copy), media: media };
     }
     async function blobFromMediaUrl(url) {
