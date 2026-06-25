@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver185</title>
+  <title>Conte Editor Prototype ver186</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7234,7 +7234,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver185</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver186</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7405,7 +7405,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '185';
+    const APP_DISPLAY_VERSION = '186';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31662,6 +31662,36 @@
       if (m.indexOf('ogg') >= 0) return '.ogg';
       return '.webm';
     }
+    let __audioExportDecodeCtx = null;
+    function audioExportDecodeCtx() {
+      if (!__audioExportDecodeCtx) {
+        const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        __audioExportDecodeCtx = new OAC(2, 1, 48000);
+      }
+      return __audioExportDecodeCtx;
+    }
+    // Re-encode an AudioBuffer to a compressed file (AAC/m4a if supported, else Opus/webm) reusing the video
+    // export's WebCodecs AudioEncoder + muxer. Used to shrink big WAV BGM in the share ZIP (~10x).
+    async function encodeAudioBufferToFileBytes(audioBuffer, bitrate) {
+      if (typeof AudioEncoder === 'undefined') throw new Error('AudioEncoder unsupported');
+      const sr = audioBuffer.sampleRate;
+      const supp = async function(codec) { try { const s = await AudioEncoder.isConfigSupported({ codec: codec, sampleRate: sr, numberOfChannels: 2, bitrate: bitrate }); return !!(s && s.supported); } catch (e) { return false; } };
+      const wantMp4 = await supp('mp4a.40.2');
+      if (!wantMp4 && !(await supp('opus'))) throw new Error('no audio encoder');
+      await loadScriptOnce(wantMp4 ? 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/build/mp4-muxer.min.js' : 'https://cdn.jsdelivr.net/npm/webm-muxer@5/build/webm-muxer.min.js');
+      const MuxNS = wantMp4 ? window.Mp4Muxer : window.WebMMuxer;
+      if (!MuxNS || !MuxNS.Muxer) throw new Error('muxer load failed');
+      const muxer = new MuxNS.Muxer(Object.assign({ target: new MuxNS.ArrayBufferTarget(), audio: { codec: wantMp4 ? 'aac' : 'A_OPUS', sampleRate: sr, numberOfChannels: 2 } }, wantMp4 ? { fastStart: 'in-memory' } : {}));
+      let encErr = null;
+      const enc = new AudioEncoder({ output: function(chunk, meta) { try { muxer.addAudioChunk(chunk, meta); } catch (e) { encErr = encErr || e; } }, error: function(e) { encErr = encErr || e; } });
+      enc.configure({ codec: wantMp4 ? 'mp4a.40.2' : 'opus', sampleRate: sr, numberOfChannels: 2, bitrate: bitrate });
+      encodeAudioBufferForExport(enc, audioBuffer, sr);
+      await enc.flush();
+      try { enc.close(); } catch (e) {}
+      if (encErr) throw encErr;
+      muxer.finalize();
+      return { bytes: new Uint8Array(muxer.target.buffer), ext: wantMp4 ? '.m4a' : '.webm', mime: wantMp4 ? 'audio/mp4' : 'audio/webm' };
+    }
     // Project JSON with media as REFS (small → no string-length limit) + the media blobs to write alongside
     // (audio + layer bitmaps; video not bundled). Names match what importConteFolderZip re-inlines by basename.
     async function buildConteFolderBundle() {
@@ -31676,22 +31706,51 @@
       const media = [];
       const used = {};
       const uniqueName = function(name) { let n = name, i = 1; while (used[n.toLowerCase()]) { const dot = name.lastIndexOf('.'); n = dot > 0 ? (name.slice(0, dot) + '_' + i + name.slice(dot)) : (name + '_' + i); i += 1; } used[n.toLowerCase()] = true; return n; };
+      // Audio: big WAV sources (BGM, >0.8MB) get re-encoded to AAC/Opus (~10x smaller); small ones (voice) are
+      // copied as-is. De-duped by source so a shared BGM is encoded once. Trim/speed/peaks stay valid (same content).
+      const AUDIO_COMPRESS_MIN = 800 * 1024;
+      const audioMap = {};
       const audioClips = (copy.audio && Array.isArray(copy.audio.clips)) ? copy.audio.clips : [];
       for (let i = 0; i < audioClips.length; i += 1) {
         const c = audioClips[i];
         const live = ((state.project.audio && state.project.audio.clips) || []).find(function(x) { return x && x.id === c.id; });
-        let url = '';
-        try { url = live ? await ensurePlaybackAudioUrlForClip(live) : ''; } catch (e) {}
-        if (!url) continue;
-        const name = uniqueName(c.audioFileName || (c.id + audioExtFromMime(c.audioMime)));
-        c.audioFileName = name; c.audioDataUrl = '';
-        c.audioStorage = { kind: 'workspace', dir: 'assets/audio', fileName: name };
-        media.push({ path: 'assets/audio/' + name, url: url });
+        if (!live) continue;
+        const key = c.audioFileName || ('id:' + c.id);
+        if (!audioMap[key]) {
+          let url = '';
+          try { url = await ensurePlaybackAudioUrlForClip(live); } catch (e) {}
+          if (!url) continue;
+          let blob = null;
+          try { blob = await blobFromMediaUrl(url); } catch (e) {}
+          if (!blob) continue;
+          let entry = null;
+          if (blob.size > AUDIO_COMPRESS_MIN && typeof AudioEncoder !== 'undefined') {
+            try {
+              showLoadingOverlay('音声を圧縮中…（BGM）');
+              const full = await audioExportDecodeCtx().decodeAudioData(await blob.arrayBuffer());
+              const enc = await encodeAudioBufferToFileBytes(full, 160000);
+              const nm = uniqueName(String(c.audioFileName || c.id).replace(/\.[^.]+$/, '') + enc.ext);
+              media.push({ path: 'assets/audio/' + nm, bytes: enc.bytes });
+              entry = { name: nm, mime: enc.mime };
+            } catch (e) { entry = null; }
+          }
+          if (!entry) {
+            const nm = uniqueName(c.audioFileName || (c.id + audioExtFromMime(c.audioMime)));
+            media.push({ path: 'assets/audio/' + nm, url: url });
+            entry = { name: nm, mime: c.audioMime };
+          }
+          audioMap[key] = entry;
+        }
+        const am = audioMap[key];
+        c.audioFileName = am.name; if (am.mime) c.audioMime = am.mime; c.audioDataUrl = '';
+        c.audioStorage = { kind: 'workspace', dir: 'assets/audio', fileName: am.name };
       }
       if (copy.layerDrawings && typeof copy.layerDrawings === 'object') {
+        const usedRefs = referencedConteLayerDrawingRefs(copy);
         const refs = Object.keys(copy.layerDrawings);
         for (let i = 0; i < refs.length; i += 1) {
           const ref = refs[i];
+          if (/^drawing-conte-layer-/i.test(ref) && !usedRefs.has(ref)) { delete copy.layerDrawings[ref]; continue; } // used assets only: drop orphan layer drawings
           const d = normalizeLayerDrawingData(copy.layerDrawings[ref]);
           d.undo = []; d.redo = []; d.strokes = [];
           const live = state.project.layerDrawings ? state.project.layerDrawings[ref] : null;
@@ -31744,8 +31803,8 @@
         const zip = zipStoreWriter(write);
         await zip.addFile('project.conte.json', new TextEncoder().encode(bundle.projectJson));
         for (let i = 0; i < bundle.media.length; i += 1) {
-          let bytes = null;
-          try { const blob = await blobFromMediaUrl(bundle.media[i].url); bytes = new Uint8Array(await blob.arrayBuffer()); } catch (e) { bytes = null; }
+          let bytes = bundle.media[i].bytes || null;
+          if (!bytes) { try { const blob = await blobFromMediaUrl(bundle.media[i].url); bytes = new Uint8Array(await blob.arrayBuffer()); } catch (e) { bytes = null; } }
           if (bytes) await zip.addFile(bundle.media[i].path, bytes);
         }
         await zip.finish();
