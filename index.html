@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver165</title>
+  <title>Conte Editor Prototype ver166</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver165</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver166</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '165';
+    const APP_DISPLAY_VERSION = '166';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31014,6 +31014,10 @@
           } catch (error) { stats.missing += 1; }
         }
       }
+      // Newly-resolved object URLs flip audioClipHasSource true → invalidate the audio display/track caches
+      // and rebuild the track, so clips appear right after boot restore (iPad: previously a stale cache hid
+      // inline/IndexedDB voice clips until the user manually touched the audio timeline).
+      if (project === state.project && stats.found > 0) { bumpAudioCycle(); writeAudioTimelineTrack(project); }
       return stats;
     }
 
