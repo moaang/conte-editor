@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver145</title>
+  <title>Conte Editor Prototype ver146</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5651,6 +5651,10 @@
     .layer-effect-window .le-title-stack { display: flex; flex-direction: column; line-height: 1.2; gap: 1px; min-width: 0; }
     .layer-effect-window .le-title-main { font-weight: 800; }
     .layer-effect-window .le-title-target { font-size: 11px; font-weight: 600; color: rgba(238, 241, 245, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .layer-effect-window .le-kf-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+    .layer-effect-window .le-kf-row button { border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: inherit; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+    .layer-effect-window .le-kf-row button:hover { filter: brightness(1.15); }
+    .layer-effect-window .le-kf-status { margin-left: auto; font-size: 11px; color: rgba(238, 241, 245, 0.55); }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7148,7 +7152,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver145</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver146</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7319,7 +7323,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '145';
+    const APP_DISPLAY_VERSION = '146';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17759,12 +17763,20 @@
           row('rot', '回転', -180, 180, 1, 'number') +
           row('tx', '位置X', -940, 940, 1, 'number') +
           row('ty', '位置Y', -540, 540, 1, 'number') +
+          '<div class="le-kf-row">' +
+            '<button type="button" data-le-action="addkey">◆ キー追加</button>' +
+            '<button type="button" data-le-action="delkey">キー削除</button>' +
+            '<span class="le-kf-status" data-le-kf-status></span>' +
+          '</div>' +
         '</div>';
       document.body.appendChild(win);
       win.querySelectorAll('[data-le-action]').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
           e.preventDefault(); e.stopPropagation();
-          if (btn.dataset.leAction === 'reset') resetLayerEffect();
+          const a = btn.dataset.leAction;
+          if (a === 'reset') resetLayerEffect();
+          else if (a === 'addkey') addLayerEffectKeyframe();
+          else if (a === 'delkey') removeLayerEffectKeyframe();
           else closeLayerEffectWindow();
         });
       });
@@ -17781,11 +17793,19 @@
       return ref ? ref.layer : null;
     }
 
+    function layerEffectCurrentLocalFrame() {
+      const ref = state.layerEffectId ? findConteLayerById(state.project, state.layerEffectId) : null;
+      if (!ref) return 0;
+      const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
+      return (slot && slot.cut && slot.cut.id === ref.ownerCut.id) ? cameraLocalFrameForSlot(slot, state.videoPlayheadFrames) : 0;
+    }
+
     function syncLayerEffectWindowControls() {
       const win = document.getElementById('layerEffectWindow');
       const layer = layerEffectTargetLayer();
       if (!win || !layer) return;
-      const e = normalizeLayerEffect(layer.effect);
+      const lf = layerEffectCurrentLocalFrame();
+      const e = layerEffectAtFrame(layer, lf);
       const set = function(prop, value, label) {
         const input = win.querySelector('[data-le-prop="' + prop + '"]');
         const val = win.querySelector('[data-le-val="' + prop + '"]');
@@ -17794,10 +17814,16 @@
       };
       set('opacity', Math.round(e.opacity * 100), Math.round(e.opacity * 100) + '%');
       set('blur', Math.round(e.blur), Math.round(e.blur) + 'px');
-      set('scale', e.scale, Math.round(e.scale * 100) + '%');
-      set('rot', e.rot, e.rot + '°');
-      set('tx', e.tx, '');
-      set('ty', e.ty, '');
+      set('scale', Math.round(e.scale * 100) / 100, Math.round(e.scale * 100) + '%');
+      set('rot', Math.round(e.rot), Math.round(e.rot) + '°');
+      set('tx', Math.round(e.tx), '');
+      set('ty', Math.round(e.ty), '');
+      const statusEl = win.querySelector('[data-le-kf-status]');
+      if (statusEl) {
+        const kfs = layer.effect && Array.isArray(layer.effect.keyframes) ? layer.effect.keyframes : [];
+        const atKey = kfs.some(function(k) { return Math.round(Number(k.frame) || 0) === lf; });
+        statusEl.textContent = kfs.length ? ('キー' + kfs.length + (atKey ? ' ●現在' : '')) : 'キーなし(全体)';
+      }
     }
 
     function onLayerEffectInput(prop, rawValue) {
@@ -17805,14 +17831,43 @@
       if (!layer) return;
       const v = Number(rawValue);
       if (!Number.isFinite(v)) return;
-      const eff = normalizeLayerEffect(layer.effect);
-      if (prop === 'opacity') eff.opacity = Math.max(0, Math.min(1, v / 100));
-      else if (prop === 'blur') eff.blur = Math.max(0, v);
-      else if (prop === 'scale') eff.scale = Math.max(0.01, v);
-      else if (prop === 'rot') eff.rot = v;
-      else if (prop === 'tx') eff.tx = v;
-      else if (prop === 'ty') eff.ty = v;
-      layer.effect = eff;
+      if (!layer.effect) layer.effect = normalizeLayerEffect(null);
+      const kfs = Array.isArray(layer.effect.keyframes) ? layer.effect.keyframes : null;
+      if (kfs && kfs.length) {
+        // keyframed: edit (creating if needed) the keyframe at the current playhead local frame.
+        const lf = layerEffectCurrentLocalFrame();
+        let kf = null;
+        for (let i = 0; i < kfs.length; i += 1) { if (Math.round(Number(kfs[i].frame) || 0) === lf) { kf = kfs[i]; break; } }
+        if (!kf) { kf = Object.assign({ frame: lf }, layerEffectAtFrame(layer, lf)); kfs.push(kf); kfs.sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); }); }
+        setEffectProp(kf, prop, v);
+      } else {
+        setEffectProp(layer.effect, prop, v);
+      }
+      syncLayerEffectWindowControls();
+      forceVideoPreviewRebuild();
+    }
+
+    function addLayerEffectKeyframe() {
+      const layer = layerEffectTargetLayer();
+      if (!layer) return;
+      if (!layer.effect) layer.effect = normalizeLayerEffect(null);
+      if (!Array.isArray(layer.effect.keyframes)) layer.effect.keyframes = [];
+      const lf = layerEffectCurrentLocalFrame();
+      const cur = layerEffectAtFrame(layer, lf);
+      let existing = null;
+      for (let i = 0; i < layer.effect.keyframes.length; i += 1) { if (Math.round(Number(layer.effect.keyframes[i].frame) || 0) === lf) { existing = layer.effect.keyframes[i]; break; } }
+      if (existing) Object.assign(existing, cur);
+      else layer.effect.keyframes.push(Object.assign({ frame: lf }, cur));
+      layer.effect.keyframes.sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); });
+      syncLayerEffectWindowControls();
+      forceVideoPreviewRebuild();
+    }
+
+    function removeLayerEffectKeyframe() {
+      const layer = layerEffectTargetLayer();
+      if (!layer || !layer.effect || !Array.isArray(layer.effect.keyframes)) return;
+      const lf = layerEffectCurrentLocalFrame();
+      layer.effect.keyframes = layer.effect.keyframes.filter(function(k) { return Math.round(Number(k.frame) || 0) !== lf; });
       syncLayerEffectWindowControls();
       forceVideoPreviewRebuild();
     }
@@ -17820,7 +17875,7 @@
     function resetLayerEffect() {
       const layer = layerEffectTargetLayer();
       if (!layer) return;
-      layer.effect = normalizeLayerEffect(null);
+      layer.effect = normalizeLayerEffect(null); // clears static values AND keyframes
       syncLayerEffectWindowControls();
       forceVideoPreviewRebuild();
     }
@@ -17830,7 +17885,7 @@
       if (!ref) return;
       state.layerEffectId = String(layerId);
       state.layerEffectCutId = String(cutId || (ref.ownerCut && ref.ownerCut.id) || '');
-      state.layerEffectOriginal = fastClone(normalizeLayerEffect(ref.layer.effect));
+      state.layerEffectOriginal = fastClone(ref.layer.effect || {});
       const win = layerEffectWindowEl();
       win.hidden = false;
       const titleEl = win.querySelector('[data-le-title]');
@@ -17853,7 +17908,7 @@
       if (!layerId || !orig) return;
       const ref = findConteLayerById(state.project, layerId);
       if (!ref) return;
-      const final = fastClone(normalizeLayerEffect(ref.layer.effect));
+      const final = fastClone(ref.layer.effect || {});
       if (JSON.stringify(final) === JSON.stringify(orig)) return;
       ref.layer.effect = orig; // restore so the undo command captures `orig` as the before-state
       const cutIds = conteLayerOwnerCutIdsForLayerIds(state.project, [layerId]);
@@ -23668,7 +23723,7 @@
         if (!ref) return;
         const z = orderMaps.byLayerId.get(layerId) || orderMaps.byDrawingRef.get(ref) || 1;
         const drawing = getLayerDrawingData(state.project, ref);
-        const fx = layerEffectInlineStyle(entry.layer);
+        const fx = layerEffectInlineStyle(entry.layer, previewLocalFrameForCut(cutId));
         if (fastLayerMode || layerDrawingUsesDirectPreviewImage(ref, layerId, drawing)) {
           const layerSrc = drawing && drawing.bitmapDataUrl ? ' src="' + escapeAttr(drawing.bitmapDataUrl) + '"' : '';
           parts.push('<img class="video-preview-layer-image" data-layer-drawing-ref="' + escapeAttr(ref) + '" data-conte-layer-id="' + escapeAttr(layerId) + '"' + layerSrc + ' decoding="sync" alt="" draggable="false" style="z-index:' + (z * 2 + 1) + ';' + layerDrawingBitmapGeometryStyle(drawing) + fx + '">');
@@ -23858,6 +23913,7 @@
         target.style.transformOrigin = '50% 50%';
         target.style.transform = css;
       });
+      updateLayerEffectsPreview(stage);
     }
 
     function cameraFrameOverlayHtml() {
@@ -24503,18 +24559,89 @@
       const e = normalizeLayerEffect(eff);
       return e.opacity < 0.999 || e.tx !== 0 || e.ty !== 0 || Math.abs(e.scale - 1) > 0.0001 || e.rot !== 0 || e.blur > 0;
     }
-    function layerEffectInlineStyle(layer) {
-      if (!layer || !layerEffectIsActive(layer.effect)) return '';
-      const e = normalizeLayerEffect(layer.effect);
-      const parts = [];
-      if (e.opacity < 0.999) parts.push('opacity:' + e.opacity);
+    // ---- Phase 2: keyframes. layer.effect.keyframes[] = [{frame(cut-local), opacity,tx,ty,scale,rot,blur}].
+    // No keyframes -> the static layer.effect values apply to the whole cut.
+    function layerEffectKeyframes(layer) {
+      const kf = layer && layer.effect && Array.isArray(layer.effect.keyframes) ? layer.effect.keyframes : [];
+      return kf.slice().sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); });
+    }
+    function layerEffectAtFrame(layer, localFrame) {
+      const kf = layerEffectKeyframes(layer);
+      if (!kf.length) return normalizeLayerEffect(layer && layer.effect);
+      const f = Math.max(0, Math.round(Number(localFrame) || 0));
+      if (f <= (Number(kf[0].frame) || 0)) return normalizeLayerEffect(kf[0]);
+      if (f >= (Number(kf[kf.length - 1].frame) || 0)) return normalizeLayerEffect(kf[kf.length - 1]);
+      let a = kf[0], b = kf[kf.length - 1];
+      for (let i = 0; i < kf.length - 1; i += 1) {
+        if ((Number(kf[i].frame) || 0) <= f && f <= (Number(kf[i + 1].frame) || 0)) { a = kf[i]; b = kf[i + 1]; break; }
+      }
+      const fa = Number(a.frame) || 0, fb = Number(b.frame) || 0;
+      const t = fb > fa ? (f - fa) / (fb - fa) : 0;
+      const A = normalizeLayerEffect(a), B = normalizeLayerEffect(b);
+      const lp = function(x, y) { return x + (y - x) * t; };
+      return { opacity: lp(A.opacity, B.opacity), tx: lp(A.tx, B.tx), ty: lp(A.ty, B.ty), scale: lp(A.scale, B.scale), rot: lp(A.rot, B.rot), blur: lp(A.blur, B.blur) };
+    }
+    function layerEffectIsAnimatedOrActive(layer) {
+      if (!layer || !layer.effect) return false;
+      if (Array.isArray(layer.effect.keyframes) && layer.effect.keyframes.length) return true;
+      return layerEffectIsActive(layer.effect);
+    }
+    function layerEffectTransformParts(e) {
       const xf = [];
       if (e.tx !== 0 || e.ty !== 0) xf.push('translate(' + e.tx + 'px,' + e.ty + 'px)');
       if (e.rot !== 0) xf.push('rotate(' + e.rot + 'deg)');
       if (Math.abs(e.scale - 1) > 0.0001) xf.push('scale(' + e.scale + ')');
+      return xf;
+    }
+    function layerEffectInlineStyle(layer, localFrame) {
+      if (!layer || !layerEffectIsAnimatedOrActive(layer)) return '';
+      const e = layerEffectAtFrame(layer, localFrame || 0);
+      const parts = [];
+      if (e.opacity < 0.999) parts.push('opacity:' + e.opacity);
+      const xf = layerEffectTransformParts(e);
       if (xf.length) { parts.push('transform:' + xf.join(' ')); parts.push('transform-origin:center'); }
       if (e.blur > 0) parts.push('filter:blur(' + e.blur + 'px)');
       return parts.length ? (parts.join(';') + ';') : '';
+    }
+    function applyLayerEffectStyleToEl(el, layer, localFrame) {
+      if (!el) return;
+      if (!layerEffectIsAnimatedOrActive(layer)) {
+        if (el.style.transform || el.style.opacity || el.style.filter) { el.style.transform = ''; el.style.opacity = ''; el.style.filter = ''; el.style.transformOrigin = ''; }
+        return;
+      }
+      const e = layerEffectAtFrame(layer, localFrame || 0);
+      el.style.opacity = e.opacity < 0.999 ? String(e.opacity) : '';
+      const xf = layerEffectTransformParts(e);
+      el.style.transform = xf.join(' ');
+      el.style.transformOrigin = xf.length ? 'center' : '';
+      el.style.filter = e.blur > 0 ? ('blur(' + e.blur + 'px)') : '';
+    }
+    function setEffectProp(obj, prop, v) {
+      if (!obj || !Number.isFinite(v)) return;
+      if (prop === 'opacity') obj.opacity = Math.max(0, Math.min(1, v / 100));
+      else if (prop === 'blur') obj.blur = Math.max(0, v);
+      else if (prop === 'scale') obj.scale = Math.max(0.01, v);
+      else if (prop === 'rot') obj.rot = v;
+      else if (prop === 'tx') obj.tx = v;
+      else if (prop === 'ty') obj.ty = v;
+    }
+    function previewLocalFrameForCut(cutId) {
+      const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
+      return (slot && slot.cut && slot.cut.id === cutId) ? cameraLocalFrameForSlot(slot, state.videoPlayheadFrames) : 0;
+    }
+    function updateLayerEffectsPreview(stageEl) {
+      try {
+        if (!stageEl) return;
+        const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
+        if (!slot || !slot.cut) return;
+        const localFrame = cameraLocalFrameForSlot(slot, state.videoPlayheadFrames);
+        const nodes = stageEl.querySelectorAll('.video-preview-camera-target [data-conte-layer-id]');
+        for (let i = 0; i < nodes.length; i += 1) {
+          const ref = findConteLayerById(state.project, nodes[i].dataset.conteLayerId || '');
+          if (ref && ref.layer) applyLayerEffectStyleToEl(nodes[i], ref.layer, localFrame);
+        }
+        if (state.layerEffectId) syncLayerEffectWindowControls();
+      } catch (e) {}
     }
 
     function applyLayerImageBitmapGeometry(image, drawing) {
@@ -37596,7 +37723,11 @@
         camKey = (frameCrop ? 'C' : 'F') + Math.round(camRaw.x * 100) + ',' + Math.round(camRaw.y * 100) + ',' + Math.round(camRaw.scale * 1000) + ',' + Math.round(camRaw.rotation * 100);
       }
       const cutId = (slot && slot.cut) ? slot.cut.id : 'none';
-      const baseKey = cutId + '|' + camKey + '|' + outW;
+      // If any layer in this cut has effect keyframes, its composite changes per frame -> include f so the
+      // base cache isn't reused across frames (no-keyframe cuts still cache by cut + camera + width).
+      let kfTag = '';
+      if (slot && slot.cut && layerDrawingEntriesForCut(project, slot.cut.id).some(function(en) { return en.layer && en.layer.effect && Array.isArray(en.layer.effect.keyframes) && en.layer.effect.keyframes.length; })) kfTag = '|kf' + f;
+      const baseKey = cutId + '|' + camKey + '|' + outW + kfTag;
       const useCache = opts.cacheFrames !== false;
       let base = (useCache && videoExportBaseCache && videoExportBaseCache.key === baseKey) ? videoExportBaseCache.canvas : null;
       if (!base) {
@@ -37624,6 +37755,7 @@
             octx.translate(-cx, -cy);
           }
           const entries = layerDrawingEntriesForCut(project, slot.cut.id);
+          const leLocal = cameraLocalFrameForSlot(slot, f);
           for (let i = 0; i < entries.length; i += 1) {
             const layer = entries[i] && entries[i].layer;
             if (!layer) continue;
@@ -37632,8 +37764,8 @@
             if (!src) continue;
             const rect = layerDrawingBitmapRect(drawing);
             const img = opts.cache ? opts.cache.get(layer.drawingRef) : await loadImageForExport(src);
-            if (img && layerEffectIsActive(layer.effect)) {
-              const e = normalizeLayerEffect(layer.effect);
+            if (img && layerEffectIsAnimatedOrActive(layer)) {
+              const e = layerEffectAtFrame(layer, leLocal);
               const k = outW / VIDEO_PREVIEW_BASE_WIDTH;
               const lcx = (rect.x + rect.w / 2) * sx, lcy = (rect.y + rect.h / 2) * sx;
               octx.save();
