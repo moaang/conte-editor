@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver182</title>
+  <title>Conte Editor Prototype ver183</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7234,7 +7234,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver182</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver183</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7405,7 +7405,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '182';
+    const APP_DISPLAY_VERSION = '183';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31592,13 +31592,34 @@
     }
 
     async function exportSelfContainedJson() {
+      const fileName = projectJsonFileNameForTitle(state.project.title || state.project.projectId || 'project');
+      // Pick the save location FIRST, while still inside the click gesture (showSaveFilePicker throws if called
+      // after the long await below — user activation would be gone). Desktop → save dialog; mobile → share/download.
+      let handle = null;
+      if (typeof window.showSaveFilePicker === 'function') {
+        try {
+          handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{ description: 'Conte project (media embedded)', accept: { 'application/json': ['.json'] } }]
+          });
+        } catch (error) {
+          if (error && error.name === 'AbortError') return; // user cancelled the dialog
+          handle = null; // picker unavailable/blocked → fall back to download below
+        }
+      }
       try {
         showLoadingOverlay('共有用ファイルを作成中…（メディア同梱）');
         const payload = JSON.stringify(await projectForSelfContainedExport());
-        const fileName = projectJsonFileNameForTitle(state.project.title || state.project.projectId || 'project');
         hideLoadingOverlay();
-        await deliverJsonFile(payload, fileName);
-        state.workspaceStatus = '共有用書き出し\n' + fileName;
+        if (handle) {
+          const writable = await handle.createWritable();
+          await writable.write(payload);
+          await writable.close();
+          state.workspaceStatus = '共有用書き出し\n' + (handle.name || fileName);
+        } else {
+          await deliverJsonFile(payload, fileName);
+          state.workspaceStatus = '共有用書き出し\n' + fileName;
+        }
         updateWorkspaceUI();
       } catch (error) {
         hideLoadingOverlay();
