@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver171</title>
+  <title>Conte Editor Prototype ver172</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7219,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver171</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver172</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7390,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '171';
+    const APP_DISPLAY_VERSION = '172';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8652,7 +8652,9 @@
         sourceCutId: String(clip && clip.sourceCutId || ''),
         syncedCutIds: Array.isArray(clip && clip.syncedCutIds) ? clip.syncedCutIds.slice() : [],
         syncedDialogTexts: Array.isArray(clip && clip.syncedDialogTexts) ? clip.syncedDialogTexts.slice() : [],
-        waveformPeaks: Array.isArray(clip && clip.waveformPeaks) ? clip.waveformPeaks.slice() : []
+        waveformPeaks: Array.isArray(clip && clip.waveformPeaks) ? clip.waveformPeaks.slice() : [],
+        volume: clampAudioClipVolume(clip && clip.volume),
+        audioFx: normalizeAudioFx(clip && clip.audioFx)
       };
     }
 
@@ -8671,6 +8673,8 @@
       clip.syncedCutIds = Array.isArray(data.syncedCutIds) ? data.syncedCutIds.slice() : [];
       clip.syncedDialogTexts = Array.isArray(data.syncedDialogTexts) ? data.syncedDialogTexts.slice() : [];
       clip.waveformPeaks = Array.isArray(data.waveformPeaks) ? data.waveformPeaks.slice() : waveformPeaksForClipTrim(clip);
+      if (Object.prototype.hasOwnProperty.call(data, 'volume')) clip.volume = clampAudioClipVolume(data.volume);
+      if (data.audioFx) clip.audioFx = normalizeAudioFx(data.audioFx);
       if (state.audioWaveformCssCache) delete state.audioWaveformCssCache[clip.id];
       // 묶음 C: clip 직접 변경 후 cycle bump
       if (project === state.project) bumpAudioCycle();
@@ -18040,16 +18044,14 @@
           const clip = audioFxTargetClip(); if (!clip) return;
           const action = btn.dataset.afAction;
           const fid = clip.id, frame = audioFxCurrentClipFrame(clip), cur = audioFxSpatialAt(audioClipFx(clip), frame);
-          runCommand(action === 'spat-reset' ? 'Audio spatial reset' : (action === 'spatkey-add' ? 'Audio spatial key' : 'Audio spatial key delete'), function(project) {
-            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-            if (!c) return;
-            c.audioFx = normalizeAudioFx(c.audioFx);
-            if (action === 'spat-reset') { c.audioFx.pan = 0; c.audioFx.distance = 0; c.audioFx.spatialKeyframes = []; return; } // 音源位置＋キー全消去
-            const sk = c.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
+          runAudioClipEditCommand(action === 'spat-reset' ? 'Audio spatial reset' : (action === 'spatkey-add' ? 'Audio spatial key' : 'Audio spatial key delete'), fid, function(clip) {
+            clip.audioFx = normalizeAudioFx(clip.audioFx);
+            if (action === 'spat-reset') { clip.audioFx.pan = 0; clip.audioFx.distance = 0; clip.audioFx.spatialKeyframes = []; return; } // 音源位置＋キー全消去
+            const sk = clip.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
             if (action === 'spatkey-add') sk.push({ frame: frame, pan: cur.pan, distance: cur.distance });
             sk.sort(function(a, b) { return a.frame - b.frame; });
-            c.audioFx.spatialKeyframes = sk;
-          });
+            clip.audioFx.spatialKeyframes = sk;
+          }, { skipWaveform: true });
           syncAudioFxWindow();
         });
       });
@@ -18140,10 +18142,7 @@
           const up = function() {
             window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
             const fid = clip.id, prop = which === 'out' ? 'fadeOutFrames' : 'fadeInFrames', val = frames;
-            runCommand('Audio fade', function(project) {
-              const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-              if (c) { c.audioFx = normalizeAudioFx(c.audioFx); c.audioFx[prop] = val; }
-            });
+            runAudioClipEditCommand('Audio fade', fid, function(clip) { clip.audioFx = normalizeAudioFx(clip.audioFx); clip.audioFx[prop] = val; }, { skipWaveform: true });
             syncAudioFxWindow();
           };
           window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
@@ -18173,10 +18172,7 @@
           const up = function() {
             window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
             const fid = clip.id, val = v;
-            runCommand(spec.name, function(project) {
-              const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-              if (c) spec.set(c, val);
-            });
+            runAudioClipEditCommand(spec.name, fid, function(clip) { spec.set(clip, val); }, { skipWaveform: true });
             syncAudioFxWindow();
           };
           window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
@@ -18201,16 +18197,16 @@
         const up = function() {
           window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
           const fid = clip.id, newSpeed = Math.max(0.1, Math.min(4, pct / 100));
-          runCommand('Audio speed', function(project) {
-            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-            if (!c) return;
-            const old = Math.max(0.1, Math.min(4, audioClipFx(c).speed || 1));
-            const box = Math.max(1, Math.round(Number(c.audioTrimDurationFrames || c.durationFrames) || 1));
+          runAudioClipEditCommand('Audio speed', fid, function(clip) {
+            const old = Math.max(0.1, Math.min(4, audioClipFx(clip).speed || 1));
+            const box = Math.max(1, Math.round(Number(clip.audioTrimDurationFrames || clip.durationFrames) || 1));
             const content = box * old; // frames of audio content (speed-independent)
-            c.audioFx = normalizeAudioFx(c.audioFx);
-            c.audioFx.speed = newSpeed;
-            c.audioTrimDurationFrames = Math.max(1, Math.round(content / newSpeed)); // retime the box
-          });
+            clip.audioFx = normalizeAudioFx(clip.audioFx);
+            clip.audioFx.speed = newSpeed;
+            const newBox = Math.max(1, Math.round(content / newSpeed)); // retime: box length = content / speed
+            clip.audioTrimDurationFrames = newBox;
+            clip.durationFrames = newBox; // the timeline clip box width reads durationFrames
+          }, { skipWaveform: true });
           syncAudioFxWindow();
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
@@ -18219,10 +18215,7 @@
       if (pchk) pchk.addEventListener('change', function() {
         const clip = audioFxTargetClip(); if (!clip) return;
         const on = pchk.checked, fid = clip.id;
-        runCommand('Audio pitch lock', function(project) {
-          const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-          if (c) { c.audioFx = normalizeAudioFx(c.audioFx); c.audioFx.preservePitch = on; }
-        });
+        runAudioClipEditCommand('Audio pitch lock', fid, function(clip) { clip.audioFx = normalizeAudioFx(clip.audioFx); clip.audioFx.preservePitch = on; }, { skipWaveform: true });
         syncAudioFxWindow();
       });
       const map = win.querySelector('[data-af-map]');
@@ -18247,17 +18240,15 @@
         const up = function() {
           window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
           const fid = clip.id, p = pan, d = distance, frame = audioFxCurrentClipFrame(clip);
-          runCommand('Audio spatial', function(project) {
-            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-            if (!c) return;
-            c.audioFx = normalizeAudioFx(c.audioFx);
-            if (c.audioFx.spatialKeyframes.length) { // keyframed → edit/create the key at the current frame
-              const sk = c.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
+          runAudioClipEditCommand('Audio spatial', fid, function(clip) {
+            clip.audioFx = normalizeAudioFx(clip.audioFx);
+            if (clip.audioFx.spatialKeyframes.length) { // keyframed → edit/create the key at the current frame
+              const sk = clip.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
               sk.push({ frame: frame, pan: p, distance: d });
               sk.sort(function(a, b) { return a.frame - b.frame; });
-              c.audioFx.spatialKeyframes = sk;
-            } else { c.audioFx.pan = p; c.audioFx.distance = d; }
-          });
+              clip.audioFx.spatialKeyframes = sk;
+            } else { clip.audioFx.pan = p; clip.audioFx.distance = d; }
+          }, { skipWaveform: true });
           syncAudioFxWindow();
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
