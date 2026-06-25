@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver140</title>
+  <title>Conte Editor Prototype ver141</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5593,6 +5593,9 @@
       font-size: 12px;
       user-select: none;
       overflow: hidden;
+      resize: horizontal;
+      min-width: 380px;
+      max-width: 96vw;
     }
     .ol-timeline-window[hidden] { display: none; }
     .ol-timeline-window .ol-window-header {
@@ -5629,8 +5632,10 @@
       margin: 4px 10px 12px;
       background: rgba(0, 0, 0, 0.28);
       border-radius: 6px;
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
+    .ol-timeline-window .ol-track { position: relative; }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7128,7 +7133,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver140</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver141</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7299,7 +7304,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '140';
+    const APP_DISPLAY_VERSION = '141';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17697,6 +17702,8 @@
       win.innerHTML =
         '<div class="ol-window-header" data-ol-window-drag="true">' +
           '<span class="ol-window-title">OL タイムライン</span>' +
+          '<button type="button" data-ol-action="zoom-out" title="縮小">−</button>' +
+          '<button type="button" data-ol-action="zoom-in" title="拡大">＋</button>' +
           '<button type="button" class="ol-apply" data-ol-action="apply">適用</button>' +
           '<button type="button" data-ol-action="cancel">キャンセル</button>' +
           '<button type="button" data-ol-action="close">×</button>' +
@@ -17710,6 +17717,8 @@
           e.stopPropagation();
           const action = btn.dataset.olAction;
           if (action === 'apply') applyOlDraft();
+          else if (action === 'zoom-in') olAdjustZoom(1.5);
+          else if (action === 'zoom-out') olAdjustZoom(1 / 1.5);
           else closeOlWindow(true);
         });
       });
@@ -17772,6 +17781,7 @@
       const win = olWindowEl();
       win.hidden = false;
       renderOlWindow();
+      olScrollToPlayhead();
       olRefreshMainTimeline();
     }
 
@@ -17809,32 +17819,65 @@
       return { items: items, total: total, laneOf: laneOf, lanes: Math.max(1, laneEnds.length) };
     }
 
+    function olZoomValue() {
+      const z = Number(state.olZoom);
+      return Number.isFinite(z) && z > 0 ? Math.min(12, Math.max(0.5, z)) : 2;
+    }
+
+    function olScrollToPlayhead() {
+      const body = document.getElementById('olWindowBody');
+      if (!body) return;
+      const ppf = olZoomValue();
+      const playhead = Math.max(0, Math.round(Number(state.videoPlayheadFrames) || 0));
+      const viewW = body.getBoundingClientRect().width || 580;
+      body.scrollLeft = Math.max(0, playhead * ppf - viewW / 2);
+    }
+
+    function olAdjustZoom(factor) {
+      if (!state.olDraft) return;
+      const body = document.getElementById('olWindowBody');
+      const ppfOld = olZoomValue();
+      const viewW = body ? (body.getBoundingClientRect().width || 580) : 580;
+      const centerFrame = body ? (body.scrollLeft + viewW / 2) / ppfOld : 0;
+      state.olZoom = Math.min(12, Math.max(0.5, ppfOld * factor));
+      renderOlWindow();
+      if (body) body.scrollLeft = Math.max(0, centerFrame * olZoomValue() - viewW / 2);
+    }
+
+    // OL timeline = the FULL cut timeline at a fixed zoom (px/frame), inside a horizontal scroll
+    // container, opened scrolled to the playhead. (Was: whole project squeezed to 100% width -> cuts
+    // too thin to grab on long projects.)
     function renderOlWindow() {
       const body = document.getElementById('olWindowBody');
       if (!body || !state.olDraft) return;
       const layout = olWindowLayout();
       const rowH = 28;
       const pad = 4;
-      body.style.height = (pad * 2 + layout.lanes * rowH) + 'px';
-      const bodyWidth = Math.max(1, body.getBoundingClientRect().width || 580);
+      const ppf = olZoomValue();
+      const trackW = Math.max(1, Math.round(layout.total * ppf));
+      const trackH = pad * 2 + layout.lanes * rowH;
+      body.style.height = trackH + 'px';
+      const prevScroll = body.scrollLeft;
       const focusOwner = state.olDraft.focusCutId;
-      let html = '';
+      let html = '<div class="ol-track" style="width:' + trackW + 'px;height:' + trackH + 'px;">';
       layout.items.forEach(function(it, i) {
         const owner = it.group.cuts[0];
         const ownerId = owner ? owner.id : '';
-        const left = (it.startFrame / layout.total) * 100;
-        const width = Math.max(0.3, (it.frames / layout.total) * 100);
+        const left = Math.round(it.startFrame * ppf);
+        const width = Math.max(2, Math.round(it.frames * ppf));
         const top = pad + layout.laneOf[i] * rowH;
         const focus = ownerId === focusOwner ? ' ol-clip-focus' : '';
-        html += '<div class="ol-clip' + focus + '" data-ol-owner-id="' + escapeAttr(ownerId) + '" data-ol-prev-frames="' + (it.olPrevFrames || 0) + '" style="left:' + left.toFixed(3) + '%;width:' + width.toFixed(3) + '%;top:' + top + 'px;">' + escapeHtml(String(it.group.cutNo || '·')) + '</div>';
+        html += '<div class="ol-clip' + focus + '" data-ol-owner-id="' + escapeAttr(ownerId) + '" data-ol-prev-frames="' + (it.olPrevFrames || 0) + '" style="left:' + left + 'px;width:' + width + 'px;top:' + top + 'px;">' + escapeHtml(String(it.group.cutNo || '·')) + '</div>';
         if (it.olPrevFrames > 0) {
-          const olWidth = Math.max(0.2, (it.olPrevFrames / layout.total) * 100);
+          const olWidth = Math.max(2, Math.round(it.olPrevFrames * ppf));
           const olLabel = framesToTime(it.olPrevFrames) || '00+00';
-          html += '<div class="ol-clip-overlap" style="left:' + left.toFixed(3) + '%;width:' + olWidth.toFixed(3) + '%;top:' + top + 'px;">' + olLabel + '</div>';
+          html += '<div class="ol-clip-overlap" style="left:' + left + 'px;width:' + olWidth + 'px;top:' + top + 'px;">' + olLabel + '</div>';
         }
       });
+      html += '</div>';
       body.innerHTML = html;
-      bindOlClipDrag(body, layout, bodyWidth / layout.total);
+      body.scrollLeft = prevScroll;
+      bindOlClipDrag(body, layout, ppf);
     }
 
     function bindOlClipDrag(body, layout, pxPerFrame) {
