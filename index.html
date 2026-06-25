@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver173</title>
+  <title>Conte Editor Prototype ver174</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7219,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver173</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver174</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7390,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '173';
+    const APP_DISPLAY_VERSION = '174';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8708,9 +8708,10 @@
         guardedRender('stage', renderStageView);
       }
       if (state.audioPerfTrace) console.time('refreshAudioTimelineEdit:guardedRenders');
-      // Video-edit mode: patch the timeline in place (conte track is patched, preserving its layer thumbnails)
-      // instead of a full renderTimingDashboard that rebuilds every thumbnail = a thumbnail flash on each audio edit.
-      if (!state.videoEditMode || !renderVideoEditorTimelinePartial(document.getElementById('timingDashboard'), { deferThumbnails: true })) {
+      // Video-edit mode: update ONLY the audio lane (audioOnly) so the conte track DOM — and its layer
+      // thumbnails — are left untouched. A full renderTimingDashboard (or a non-scoped partial) rebuilds every
+      // conte thumbnail on each audio edit = the bulk thumbnail flash. Falls back to full when audioOnly bails.
+      if (!state.videoEditMode || !renderVideoEditorTimelinePartial(document.getElementById('timingDashboard'), { audioOnly: true })) {
         guardedRender('timing', renderTimingDashboard);
       }
       guardedRender('inspector', renderInspector);
@@ -16221,6 +16222,12 @@
       const videoMediaTracks = videoMediaTimelineTracks(state.project);
       const targetFrames = projectTargetFrames(state.project);
       const totalFrames = videoTimelineDisplayTotalFrames(state.project);
+      // audioOnly: only the audio lane changed (fx / trim / move). Bail to a full render if the total frame
+      // count shifted (e.g. a speed retime pushed audio past the video end) so the conte/video lanes reposition.
+      if (options.audioOnly) {
+        const prevTotal = targetRoot.dataset ? (Number(targetRoot.dataset.timelineTotalFrames) || 0) : 0;
+        if (prevTotal !== totalFrames) return false;
+      }
       updateTargetTimeInputs(targetFrames);
       state.videoPlayheadFrames = clampTimelinePlayheadFrame(state.videoPlayheadFrames, totalFrames);
       if (!options.skipPlayheadSelectionSync) syncTimelineRenderSelectionToPlayhead(state.project);
@@ -16241,18 +16248,23 @@
       let ruler = true;
       let cutTrack = true;
       let cameraTrack = true;
-      if (!options.conteOnly) {
+      if (!options.conteOnly && !options.audioOnly) {
         ruler = replaceTimelineElementHtml(inner, '.timeline-ruler', timelineRulerTrackHtml(totalFrames, innerWidth));
         cutTrack = replaceTimelineElementHtml(inner, '.conte-cut-number-track', conteCutNumberTrackHtml(video, totalFrames));
         cameraTrack = replaceTimelineElementHtml(inner, '.conte-camera-track', cameraTimelineTrackHtml(totalFrames));
       }
-      const currentConteTrack = inner.querySelector('.conte-video-track');
-      const conteWrap = document.createElement('div');
-      conteWrap.innerHTML = conteTimelineTrackHtml(video, totalFrames);
-      const nextConteTrack = conteWrap.firstElementChild;
-      const conteTrack = currentConteTrack && nextConteTrack && patchConteTimelineTrack(currentConteTrack, nextConteTrack, {
-        patchOwnerCutIds: options.patchOwnerCutIds
-      }) ? currentConteTrack : replaceTimelineElementHtml(inner, '.conte-video-track', conteTimelineTrackHtml(video, totalFrames));
+      // audioOnly leaves the conte track DOM untouched (audio never changes conte layers) so its layer
+      // thumbnails are preserved instead of rebuilt + redrawn = the bulk thumbnail flash on every audio edit.
+      let conteTrack = inner.querySelector('.conte-video-track');
+      if (!options.audioOnly) {
+        const currentConteTrack = conteTrack;
+        const conteWrap = document.createElement('div');
+        conteWrap.innerHTML = conteTimelineTrackHtml(video, totalFrames);
+        const nextConteTrack = conteWrap.firstElementChild;
+        conteTrack = currentConteTrack && nextConteTrack && patchConteTimelineTrack(currentConteTrack, nextConteTrack, {
+          patchOwnerCutIds: options.patchOwnerCutIds
+        }) ? currentConteTrack : replaceTimelineElementHtml(inner, '.conte-video-track', conteTimelineTrackHtml(video, totalFrames));
+      }
       if (!ruler || !cutTrack || !cameraTrack || !conteTrack) return false;
 
       syncTimelineThumbnailSuspensionClass(targetRoot);
@@ -16263,20 +16275,24 @@
       state.timelineCenterPlayheadOnNextRender = false;
       cacheTimelineRuntimeDom(targetRoot, totalFrames, innerWidth);
       const fixedOverlay = refreshTimelineFixedLabelOverlay(targetRoot, videoMediaTracks, audioTracks);
-      if (!options.conteOnly) bindCameraTimeline(inner, totalFrames);
-      bindConteLayerTimeline(inner, totalFrames);
-      bindTimelineTrackLabelControls(conteTrack);
+      if (!options.conteOnly && !options.audioOnly) bindCameraTimeline(inner, totalFrames);
+      if (!options.audioOnly) {
+        bindConteLayerTimeline(inner, totalFrames);
+        bindTimelineTrackLabelControls(conteTrack);
+      }
       if (fixedOverlay) {
         bindTimelineTrackLabelControls(fixedOverlay);
-        bindCameraTimeline(fixedOverlay, totalFrames);
+        if (!options.audioOnly) bindCameraTimeline(fixedOverlay, totalFrames);
       }
       if (!options.conteOnly) {
-        refreshVideoMediaClipPixelStyles(timeline, totalFrames);
+        if (!options.audioOnly) refreshVideoMediaClipPixelStyles(timeline, totalFrames);
         refreshAudioClipPixelStyles(timeline, totalFrames);
       }
       refreshTimelineSelectionDom(targetRoot, { thumbnails: false });
-      if (options.deferThumbnails) scheduleTimelineLayerThumbnailRefresh(targetRoot, options.deferThumbnailMs || 320);
-      else drawTimelineLayerKomaThumbnails(targetRoot);
+      if (!options.audioOnly) {
+        if (options.deferThumbnails) scheduleTimelineLayerThumbnailRefresh(targetRoot, options.deferThumbnailMs || 320);
+        else drawTimelineLayerKomaThumbnails(targetRoot);
+      }
       syncTimelineFixedLowerLabels(targetRoot);
       positionTimelineGroupCollapseButtons(targetRoot);
       requestAnimationFrame(function() {
