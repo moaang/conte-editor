@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver167</title>
+  <title>Conte Editor Prototype ver168</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5692,7 +5692,7 @@
     .audio-fx-window .af-map-ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, 0.14); transform: translate(-50%, -50%); pointer-events: none; }
     .audio-fx-window .af-map-ring.r1 { width: 50%; height: 50%; }
     .audio-fx-window .af-map-ring.r2 { width: 100%; height: 100%; }
-    .audio-fx-window .af-map-cam { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: translate(-50%, -50%); border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 13px solid #4a8bff; pointer-events: none; }
+    .audio-fx-window .af-map-cam { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(-90deg); background: no-repeat center / 22px 22px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3.2' y='7' width='12.4' height='10' rx='2.1' fill='%234a8bff'/%3E%3Cpath d='M22 8.4 16.8 12 22 15.6Z' fill='%234a8bff'/%3E%3C/svg%3E"); pointer-events: none; }
     .audio-fx-window .af-map-src { position: absolute; left: var(--af-src-x, 50%); top: var(--af-src-y, 50%); width: 15px; height: 15px; border-radius: 50%; background: #ffcf3f; border: 2px solid #1b1f27; transform: translate(-50%, -50%); cursor: grab; }
     .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
     .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver167</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver168</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '167';
+    const APP_DISPLAY_VERSION = '168';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17980,7 +17980,7 @@
             '<div class="le-slider" data-af-speed data-min="50" data-max="200" data-step="5" role="slider"><div class="le-knob"></div></div>' +
             '<span class="le-val" data-af-speedval></span></label>' +
           '<label class="le-row af-pitch-row"><span class="le-label">ピッチ維持</span><input type="checkbox" data-af-pitch><span class="le-val"></span></label>' +
-          '<div class="af-map-label">空間（▲=カメラ / ●=音源：距離・左右）</div>' +
+          '<div class="af-map-label">空間（カメラ↑＝上向き / ●＝音源：右なら右から）</div>' +
           '<div class="af-map" data-af-map>' +
             '<span class="af-map-ring r2"></span><span class="af-map-ring r1"></span>' +
             '<span class="af-map-cam" aria-hidden="true"></span>' +
