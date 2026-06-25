@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver162</title>
+  <title>Conte Editor Prototype ver163</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver162</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver163</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '162';
+    const APP_DISPLAY_VERSION = '163';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17976,6 +17976,9 @@
           '<label class="le-row"><span class="le-label">エコー</span>' +
             '<div class="le-slider" data-af-prop="echo" data-min="0" data-max="100" data-step="1" role="slider"><div class="le-knob"></div></div>' +
             '<span class="le-val" data-af-echoval></span></label>' +
+          '<label class="le-row"><span class="le-label">速度</span>' +
+            '<div class="le-slider" data-af-speed data-min="50" data-max="200" data-step="5" role="slider"><div class="le-knob"></div></div>' +
+            '<span class="le-val" data-af-speedval></span></label>' +
           '<div class="af-map-label">空間（▲=カメラ / ●=音源：距離・左右）</div>' +
           '<div class="af-map" data-af-map>' +
             '<span class="af-map-ring r2"></span><span class="af-map-ring r1"></span>' +
@@ -18023,6 +18026,10 @@
       const esl = win.querySelector('[data-af-prop="echo"]');
       if (esl) esl.style.setProperty('--le-fill', epct + '%');
       txt('[data-af-echoval]', Math.round(epct) + '%');
+      const spct = Math.max(50, Math.min(200, (fx.speed || 1) * 100));
+      const ssl = win.querySelector('[data-af-speed]');
+      if (ssl) ssl.style.setProperty('--le-fill', ((spct - 50) / 150 * 100) + '%');
+      txt('[data-af-speedval]', Math.round((fx.speed || 1) * 100) + '%');
       // spatial source icon: pan = horizontal; reconstruct vertical from distance canonically (toward viewer)
       const sp = Math.max(-1, Math.min(1, fx.pan)), sd = Math.max(0, Math.min(1, fx.distance));
       const sy = Math.sqrt(Math.max(0, sd * sd - sp * sp));
@@ -18094,6 +18101,39 @@
           };
           window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
         });
+      });
+      const ssl = win.querySelector('[data-af-speed]');
+      if (ssl) ssl.addEventListener('pointerdown', function(e) {
+        if (e.button && e.button !== 0) return;
+        e.preventDefault();
+        const clip = audioFxTargetClip(); if (!clip) return;
+        let pct = 100;
+        try { ssl.setPointerCapture(e.pointerId); } catch (err) {}
+        const apply = function(clientX) {
+          const r = ssl.getBoundingClientRect();
+          const t = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0;
+          pct = Math.round((50 + t * 150) / 5) * 5;
+          ssl.style.setProperty('--le-fill', ((pct - 50) / 150 * 100) + '%');
+          const lab = win.querySelector('[data-af-speedval]'); if (lab) lab.textContent = pct + '%';
+        };
+        apply(e.clientX);
+        const mv = function(ev) { apply(ev.clientX); };
+        const up = function() {
+          window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+          const fid = clip.id, newSpeed = Math.max(0.1, Math.min(4, pct / 100));
+          runCommand('Audio speed', function(project) {
+            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
+            if (!c) return;
+            const old = Math.max(0.1, Math.min(4, audioClipFx(c).speed || 1));
+            const box = Math.max(1, Math.round(Number(c.audioTrimDurationFrames || c.durationFrames) || 1));
+            const content = box * old; // frames of audio content (speed-independent)
+            c.audioFx = normalizeAudioFx(c.audioFx);
+            c.audioFx.speed = newSpeed;
+            c.audioTrimDurationFrames = Math.max(1, Math.round(content / newSpeed)); // retime the box
+          });
+          syncAudioFxWindow();
+        };
+        window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
       });
       const map = win.querySelector('[data-af-map]');
       if (map) map.addEventListener('pointerdown', function(e) {
@@ -27939,7 +27979,8 @@
           if (state.activeSpeechClipId === clip.id) state.activeSpeechClipId = '';
           refreshVideoPreviewForSpeechEvent();
         };
-        source.start(ctx.currentTime + delaySeconds, Math.min(offsetSeconds, Math.max(0, buffer.duration - 0.01)), playDuration);
+        const spd2 = Math.max(0.1, Math.min(4, audioClipFx(clip).speed || 1)); // speed: scale buffer offset/duration (playbackRate set in graph)
+        source.start(ctx.currentTime + delaySeconds, Math.min(trimStart + offsetInClipSeconds * spd2, Math.max(0, buffer.duration - 0.01)), playDuration * spd2);
       } catch (error) {
         playHtmlAudioUrlForClip(clip, audioUrl);
       }
@@ -27952,6 +27993,7 @@
       const dest = destination || ctx.destination;
       const effect = dialogAudioEffectSettings(clip);
       const fx = audioClipFx(clip);
+      if (source && source.playbackRate) source.playbackRate.value = Math.max(0.1, Math.min(4, fx.speed || 1)); // Phase 4a speed (pitch follows; preserve = 4b)
       const distGain = 1 / (1 + 3 * Math.max(0, Math.min(1, fx.distance))); // far = quieter (spatial map)
       const vol = Math.max(0, Math.min(4, effect.volume)) * distGain;
       const st = Number.isFinite(startTime) ? startTime : (Number(ctx.currentTime) || 0);
@@ -38518,7 +38560,9 @@
           if (playDur <= 0.02) return;
           const src = audioCtx.createBufferSource(); src.buffer = s.buffer;
           wireAudioClipGraph(audioCtx, src, s.clip, when, playDur, audioDest);
-          try { src.start(when, bufOffset, playDur); } catch (e) {}
+          const spd2 = Math.max(0.1, Math.min(4, audioClipFx(s.clip).speed || 1));
+          const bo2 = trimStartSec + skip * spd2;
+          try { src.start(when, bo2, Math.min(playDur * spd2, Math.max(0.001, s.buffer.duration - bo2))); } catch (e) {}
         });
       }
       await new Promise(function(resolve) {
@@ -38584,7 +38628,9 @@
         if (playDur <= 0.02) continue;
         const src = octx.createBufferSource(); src.buffer = buf;
         wireAudioClipGraph(octx, src, clip, when, playDur, octx.destination);
-        try { src.start(when, bufOffset, playDur); } catch (e) {}
+        const spd2 = Math.max(0.1, Math.min(4, audioClipFx(clip).speed || 1));
+        const bo2 = trimStartSec + skip * spd2;
+        try { src.start(when, bo2, Math.min(playDur * spd2, Math.max(0.001, buf.duration - bo2))); } catch (e) {}
       }
       try { return await octx.startRendering(); } catch (e) { return null; }
     }
