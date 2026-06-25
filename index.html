@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver191</title>
+  <title>Conte Editor Prototype ver192</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7239,7 +7239,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver191</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver192</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7435,7 +7435,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '191';
+    const APP_DISPLAY_VERSION = '192';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -10507,7 +10507,8 @@
     // Create the project once a title + kind are chosen (shared by new conte / new genga). Picks + validates the
     // folder BEFORE wiping the current project so a cancel never destroys an open project.
     async function finalizeNewProject(title, kind) {
-      const useFolder = fileSystemAccessAvailable() && !mobileOrTabletRuntime();
+      // Genga projects never use a working folder — kept in-memory + IndexedDB (like the no-FS path), exported via ZIP/JSON.
+      const useFolder = kind !== 'genga' && fileSystemAccessAvailable() && !mobileOrTabletRuntime();
       if (useFolder) {
         const handle = await pickNewProjectFolder();
         if (!handle) return false;
