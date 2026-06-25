@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver169</title>
+  <title>Conte Editor Prototype ver170</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5693,7 +5693,14 @@
     .audio-fx-window .af-map-ring.r1 { width: 50%; height: 50%; }
     .audio-fx-window .af-map-ring.r2 { width: 100%; height: 100%; }
     .audio-fx-window .af-map-cam { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(-90deg); background: no-repeat center / 22px 22px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3.2' y='7' width='12.4' height='10' rx='2.1' fill='%234a8bff'/%3E%3Cpath d='M22 8.4 16.8 12 22 15.6Z' fill='%234a8bff'/%3E%3C/svg%3E"); pointer-events: none; }
-    .audio-fx-window .af-map-src { position: absolute; left: var(--af-src-x, 50%); top: var(--af-src-y, 50%); width: 15px; height: 15px; border-radius: 50%; background: #ffcf3f; border: 2px solid #1b1f27; transform: translate(-50%, -50%); cursor: grab; }
+    .audio-fx-window .af-map-src { position: absolute; left: var(--af-src-x, 50%); top: var(--af-src-y, 50%); width: 15px; height: 15px; border-radius: 50%; background: #ffcf3f; border: 2px solid #1b1f27; transform: translate(-50%, -50%); cursor: grab; z-index: 3; }
+    .audio-fx-window .af-map-kf { position: absolute; width: 15px; height: 15px; border-radius: 50%; background: rgba(74, 139, 255, 0.5); border: 2px solid #4a8bff; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
+    .audio-fx-window .af-map-kf.current { background: #4a8bff; }
+    .audio-fx-window .af-map-kf-label { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 2px; font-size: 9px; line-height: 1; color: rgba(238, 241, 245, 0.85); white-space: nowrap; }
+    .audio-fx-window .af-kf-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .audio-fx-window .af-kf-row button { border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: inherit; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+    .audio-fx-window .af-kf-row button:hover { filter: brightness(1.15); }
+    .audio-fx-window .af-kf-status { margin-left: auto; font-size: 11px; color: rgba(238, 241, 245, 0.55); }
     .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
     .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
     .layer-effect-window .le-title-stack { display: flex; flex-direction: column; line-height: 1.2; gap: 1px; min-width: 0; }
@@ -7212,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver169</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver170</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '169';
+    const APP_DISPLAY_VERSION = '170';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17956,6 +17963,36 @@
       const f = Math.max(0, Math.round(Number(frames) || 0));
       return String(Math.floor(f / fps)).padStart(2, '0') + '+' + String(f % fps).padStart(2, '0');
     }
+    // Spatial keyframes (clip-local frames): interpolate pan/distance; static fx.pan/distance if none.
+    function audioFxSpatialAt(fx, frame) {
+      const sk = fx && Array.isArray(fx.spatialKeyframes) ? fx.spatialKeyframes : [];
+      if (!sk.length) return { pan: fx ? Number(fx.pan) || 0 : 0, distance: fx ? Number(fx.distance) || 0 : 0 };
+      const f = Math.max(0, Math.round(Number(frame) || 0));
+      if (f <= sk[0].frame) return { pan: sk[0].pan, distance: sk[0].distance };
+      const last = sk[sk.length - 1];
+      if (f >= last.frame) return { pan: last.pan, distance: last.distance };
+      let a = sk[0], b = last;
+      for (let i = 0; i < sk.length - 1; i += 1) { if (sk[i].frame <= f && f <= sk[i + 1].frame) { a = sk[i]; b = sk[i + 1]; break; } }
+      const t = b.frame > a.frame ? (f - a.frame) / (b.frame - a.frame) : 0;
+      return { pan: a.pan + (b.pan - a.pan) * t, distance: a.distance + (b.distance - a.distance) * t };
+    }
+    function audioFxCurrentClipFrame(clip) {
+      const box = audioClipFxDurationFrames(clip);
+      return Math.max(0, Math.min(box, Math.round(Number(state.videoPlayheadFrames) || 0) - Math.round(Number(clip && clip.startFrame) || 0)));
+    }
+    function audioFxMapXY(pan, distance) { // map fraction 0..1; vertical reconstructed from distance (front)
+      const p = Math.max(-1, Math.min(1, pan)), d = Math.max(0, Math.min(1, distance));
+      return { x: 0.5 + p / 2, y: 0.5 + Math.sqrt(Math.max(0, d * d - p * p)) / 2 };
+    }
+    function updateAudioFxLive() {
+      const win = document.getElementById('audioFxWindow');
+      const clip = win && !win.hidden ? audioFxTargetClip() : null;
+      if (!clip) return;
+      const pos = audioFxSpatialAt(audioClipFx(clip), audioFxCurrentClipFrame(clip));
+      const xy = audioFxMapXY(pos.pan, pos.distance);
+      win.style.setProperty('--af-src-x', (xy.x * 100) + '%');
+      win.style.setProperty('--af-src-y', (xy.y * 100) + '%');
+    }
     function audioFxWindowEl() {
       let win = document.getElementById('audioFxWindow');
       if (win) return win;
@@ -17991,11 +18028,30 @@
             '<span class="af-map-cam" aria-hidden="true"></span>' +
             '<span class="af-map-src" data-af-src aria-hidden="true"></span>' +
           '</div>' +
+          '<div class="af-kf-row"><button type="button" data-af-action="spatkey-add">◆ キー追加</button><button type="button" data-af-action="spatkey-del">キー削除</button><span class="af-kf-status" data-af-kf-status></span></div>' +
         '</div>';
       document.body.appendChild(win);
       bindLayerEffectWindowDrag(win);
       const closeBtn = win.querySelector('[data-af-action="close"]');
       if (closeBtn) closeBtn.addEventListener('click', function(e) { e.preventDefault(); closeAudioFxWindow(); });
+      win.querySelectorAll('[data-af-action="spatkey-add"], [data-af-action="spatkey-del"]').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const clip = audioFxTargetClip(); if (!clip) return;
+          const add = btn.dataset.afAction === 'spatkey-add';
+          const fid = clip.id, frame = audioFxCurrentClipFrame(clip), cur = audioFxSpatialAt(audioClipFx(clip), frame);
+          runCommand(add ? 'Audio spatial key' : 'Audio spatial key delete', function(project) {
+            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
+            if (!c) return;
+            c.audioFx = normalizeAudioFx(c.audioFx);
+            const sk = c.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
+            if (add) sk.push({ frame: frame, pan: cur.pan, distance: cur.distance });
+            sk.sort(function(a, b) { return a.frame - b.frame; });
+            c.audioFx.spatialKeyframes = sk;
+          });
+          syncAudioFxWindow();
+        });
+      });
       bindAudioFxControls(win);
       return win;
     }
@@ -18038,11 +18094,26 @@
       txt('[data-af-speedval]', Math.round((fx.speed || 1) * 100) + '%');
       const pchk = win.querySelector('[data-af-pitch]');
       if (pchk) pchk.checked = fx.preservePitch !== false;
-      // spatial source icon: pan = horizontal; reconstruct vertical from distance canonically (toward viewer)
-      const sp = Math.max(-1, Math.min(1, fx.pan)), sd = Math.max(0, Math.min(1, fx.distance));
-      const sy = Math.sqrt(Math.max(0, sd * sd - sp * sp));
-      win.style.setProperty('--af-src-x', ((0.5 + sp / 2) * 100) + '%');
-      win.style.setProperty('--af-src-y', ((0.5 + sy / 2) * 100) + '%');
+      // spatial: source = interpolated position at the current playhead; render keyframe marks + labels
+      const skList = Array.isArray(fx.spatialKeyframes) ? fx.spatialKeyframes : [];
+      const curFrame = audioFxCurrentClipFrame(clip);
+      const curXY = audioFxMapXY(audioFxSpatialAt(fx, curFrame).pan, audioFxSpatialAt(fx, curFrame).distance);
+      win.style.setProperty('--af-src-x', (curXY.x * 100) + '%');
+      win.style.setProperty('--af-src-y', (curXY.y * 100) + '%');
+      const mapEl = win.querySelector('[data-af-map]');
+      if (mapEl) {
+        Array.prototype.slice.call(mapEl.querySelectorAll('.af-map-kf')).forEach(function(el) { if (el.parentNode) el.parentNode.removeChild(el); });
+        skList.forEach(function(kf) {
+          const xy = audioFxMapXY(kf.pan, kf.distance);
+          const dot = document.createElement('span');
+          dot.className = 'af-map-kf' + (Math.round(kf.frame) === curFrame ? ' current' : '');
+          dot.style.left = (xy.x * 100) + '%'; dot.style.top = (xy.y * 100) + '%';
+          dot.innerHTML = '<b class="af-map-kf-label">' + audioFxFramesLabel(kf.frame) + '</b>';
+          mapEl.appendChild(dot);
+        });
+      }
+      const kfStatus = win.querySelector('[data-af-kf-status]');
+      if (kfStatus) kfStatus.textContent = skList.length ? ('キー' + skList.length + ' @' + audioFxFramesLabel(curFrame)) : 'キーなし';
       txt('[data-af-title]', (clip.characterName || 'Audio') + (clip.text ? (' / ' + String(clip.text).slice(0, 14)) : ''));
     }
     function bindAudioFxControls(win) {
@@ -18174,10 +18245,17 @@
         const mv = function(ev) { apply(ev.clientX, ev.clientY); };
         const up = function() {
           window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
-          const fid = clip.id, p = pan, d = distance;
+          const fid = clip.id, p = pan, d = distance, frame = audioFxCurrentClipFrame(clip);
           runCommand('Audio spatial', function(project) {
             const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-            if (c) { c.audioFx = normalizeAudioFx(c.audioFx); c.audioFx.pan = p; c.audioFx.distance = d; }
+            if (!c) return;
+            c.audioFx = normalizeAudioFx(c.audioFx);
+            if (c.audioFx.spatialKeyframes.length) { // keyframed → edit/create the key at the current frame
+              const sk = c.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
+              sk.push({ frame: frame, pan: p, distance: d });
+              sk.sort(function(a, b) { return a.frame - b.frame; });
+              c.audioFx.spatialKeyframes = sk;
+            } else { c.audioFx.pan = p; c.audioFx.distance = d; }
           });
           syncAudioFxWindow();
         };
@@ -25211,6 +25289,7 @@
     }
     function updateLayerEffectsPreview(stageEl) {
       try {
+        updateAudioFxLive(); // keep the audio-fx spatial source following the playhead while its window is open
         if (!stageEl) return;
         const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
         if (!slot || !slot.cut) return;
@@ -27621,7 +27700,10 @@
         pan: Math.max(-1, Math.min(1, Number(fx.pan) || 0)),            // Phase 3 (spatial map)
         distance: Math.max(0, Math.min(1, Number(fx.distance) || 0)),  // Phase 3
         speed: Math.max(0.1, Math.min(4, Number(fx.speed) || 1)),      // Phase 4 (retime)
-        preservePitch: fx.preservePitch !== false
+        preservePitch: fx.preservePitch !== false,
+        spatialKeyframes: (Array.isArray(fx.spatialKeyframes) ? fx.spatialKeyframes : []).map(function(k) {
+          return { frame: Math.max(0, Math.round(Number(k && k.frame) || 0)), pan: Math.max(-1, Math.min(1, Number(k && k.pan) || 0)), distance: Math.max(0, Math.min(1, Number(k && k.distance) || 0)) };
+        }).sort(function(a, b) { return a.frame - b.frame; })
       };
     }
     function audioClipFx(clip) { return normalizeAudioFx(clip && clip.audioFx); }
@@ -27972,7 +28054,7 @@
         const source = ctx.createBufferSource();
         const r4 = resolveClipSourcePlayback(ctx, clip, buffer, fps, offsetInClipSeconds, playDuration);
         source.buffer = r4.buffer;
-        connectAudioSourceForClip(source, ctx, clip, ctx.currentTime + delaySeconds, playDuration);
+        connectAudioSourceForClip(source, ctx, clip, ctx.currentTime + delaySeconds, playDuration, offsetInClipSeconds);
         if (source.playbackRate) source.playbackRate.value = r4.rate;
         state.playbackAudioSources.push(source);
         const activate = function() {
@@ -28089,15 +28171,22 @@
       const off = Math.min(trimStartSec + offsetBoxSec * speed, Math.max(0, buffer.duration - 0.005));
       return { buffer: buffer, rate: speed, offset: off, duration: Math.max(0.001, Math.min(durBoxSec * speed, buffer.duration - off)) };
     }
-    function wireAudioClipGraph(ctx, source, clip, startTime, duration, destination) {
+    function wireAudioClipGraph(ctx, source, clip, startTime, duration, destination, clipOffsetSec) {
       const dest = destination || ctx.destination;
       const effect = dialogAudioEffectSettings(clip);
       const fx = audioClipFx(clip);
-      const distGain = 1 / (1 + 3 * Math.max(0, Math.min(1, fx.distance))); // far = quieter (spatial map)
-      const vol = Math.max(0, Math.min(4, effect.volume)) * distGain;
+      const sk = (fx.spatialKeyframes && fx.spatialKeyframes.length) ? fx.spatialKeyframes : null; // spatial keyframes
       const st = Number.isFinite(startTime) ? startTime : (Number(ctx.currentTime) || 0);
       const dur = Number.isFinite(duration) && duration > 0 ? duration : 0;
       const fps = fpsForProject(state.project);
+      const offSec = Math.max(0, Number(clipOffsetSec) || 0);
+      const distOf = function(d) { return 1 / (1 + 3 * Math.max(0, Math.min(1, d))); };       // far = quieter
+      const freqOf = function(d) { return Math.max(500, 18000 * Math.pow(1 - Math.max(0, Math.min(1, d)), 2) + 500); }; // far = muffled
+      const sp0 = audioFxSpatialAt(fx, 0);                            // clip start (== fx.pan/distance when static)
+      const spStart = audioFxSpatialAt(fx, Math.round(offSec * fps)); // value at the playback start offset
+      const rampEach = function(param, valueOf) { sk.forEach(function(kf) { const t = st + (kf.frame / fps - offSec); if (t > st + 0.0005) param.linearRampToValueAtTime(valueOf(kf), t); }); };
+      const baseVol = Math.max(0, Math.min(4, effect.volume));
+      const vol = baseVol * (sk ? 1 : distOf(sp0.distance)); // keyframed distance handled on its own node below
       const gain = ctx.createGain();
       const fi = dur > 0 ? Math.min(Math.max(0, fx.fadeInFrames) / fps, dur) : 0;
       const fo = dur > 0 ? Math.min(Math.max(0, fx.fadeOutFrames) / fps, dur) : 0;
@@ -28108,16 +28197,24 @@
       } else { gain.gain.value = vol; }
       source.connect(gain);
       let output = gain;
-      if (fx.distance > 0.05 && ctx.createBiquadFilter) {
-        const lp = ctx.createBiquadFilter(); // far = muffled
-        lp.type = 'lowpass';
-        lp.frequency.value = Math.max(500, 18000 * Math.pow(1 - fx.distance, 2) + 500);
+      if (sk) { // animated distance attenuation
+        const dgain = ctx.createGain();
+        dgain.gain.setValueAtTime(distOf(spStart.distance), st);
+        rampEach(dgain.gain, function(kf) { return distOf(kf.distance); });
+        output.connect(dgain); output = dgain;
+      }
+      const wantLp = sk ? sk.some(function(k) { return k.distance > 0.05; }) : (sp0.distance > 0.05);
+      if (wantLp && ctx.createBiquadFilter) {
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+        if (sk) { lp.frequency.setValueAtTime(freqOf(spStart.distance), st); rampEach(lp.frequency, function(kf) { return freqOf(kf.distance); }); }
+        else lp.frequency.value = freqOf(sp0.distance);
         output.connect(lp); output = lp;
       }
-      const effPan = fx.pan !== 0 ? Math.max(-1, Math.min(1, fx.pan)) : effect.pan; // spatial-map pan overrides tag pan
-      if (effPan && ctx.createStereoPanner) {
+      const staticPan = sp0.pan !== 0 ? sp0.pan : effect.pan; // spatial pan overrides tag pan
+      if ((sk || staticPan) && ctx.createStereoPanner) {
         const panner = ctx.createStereoPanner();
-        panner.pan.value = effPan;
+        if (sk) { panner.pan.setValueAtTime(Math.max(-1, Math.min(1, spStart.pan)), st); rampEach(panner.pan, function(kf) { return Math.max(-1, Math.min(1, kf.pan)); }); }
+        else panner.pan.value = Math.max(-1, Math.min(1, staticPan));
         output.connect(panner); output = panner;
       }
       output.connect(dest);
@@ -28133,8 +28230,8 @@
         gain.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(wet); wet.connect(dest);
       }
     }
-    function connectAudioSourceForClip(source, ctx, clip, startTime, duration) {
-      wireAudioClipGraph(ctx, source, clip, startTime, duration, ctx.destination);
+    function connectAudioSourceForClip(source, ctx, clip, startTime, duration, offsetSec) {
+      wireAudioClipGraph(ctx, source, clip, startTime, duration, ctx.destination, offsetSec);
     }
 
     function clipAudioTrimStartSeconds(clip, fps) {
@@ -38666,7 +38763,7 @@
           if (playDur <= 0.02) return;
           const r4 = resolveClipSourcePlayback(audioCtx, s.clip, s.buffer, fps, skip, playDur);
           const src = audioCtx.createBufferSource(); src.buffer = r4.buffer;
-          wireAudioClipGraph(audioCtx, src, s.clip, when, playDur, audioDest);
+          wireAudioClipGraph(audioCtx, src, s.clip, when, playDur, audioDest, skip);
           if (src.playbackRate) src.playbackRate.value = r4.rate;
           try { src.start(when, r4.offset, r4.duration); } catch (e) {}
         });
@@ -38734,7 +38831,7 @@
         if (playDur <= 0.02) continue;
         const r4 = resolveClipSourcePlayback(octx, clip, buf, fps, skip, playDur);
         const src = octx.createBufferSource(); src.buffer = r4.buffer;
-        wireAudioClipGraph(octx, src, clip, when, playDur, octx.destination);
+        wireAudioClipGraph(octx, src, clip, when, playDur, octx.destination, skip);
         if (src.playbackRate) src.playbackRate.value = r4.rate;
         try { src.start(when, r4.offset, r4.duration); } catch (e) {}
       }
