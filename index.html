@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver159</title>
+  <title>Conte Editor Prototype ver160</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5679,6 +5679,14 @@
     .layer-effect-window .le-slider::before { content: ''; position: absolute; left: 0; right: 0; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); z-index: 0; }
     .layer-effect-window .le-slider::after { content: ''; position: absolute; left: 0; height: 6px; border-radius: 999px; background: #4a8bff; width: var(--le-fill, 0%); z-index: 1; }
     .layer-effect-window .le-knob { position: absolute; left: var(--le-fill, 0%); top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; pointer-events: none; z-index: 2; }
+    .audio-fx-window .af-clipbar { position: relative; height: 46px; border-radius: 6px; background: rgba(120, 160, 255, 0.28); overflow: hidden; margin: 2px 0 6px; }
+    .audio-fx-window .af-fade-tri { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+    .audio-fx-window .af-fade-tri.fi { left: 0; width: var(--af-fi, 0%); background: linear-gradient(to right, rgba(8, 12, 20, 0.55), rgba(8, 12, 20, 0)); }
+    .audio-fx-window .af-fade-tri.fo { right: 0; width: var(--af-fo, 0%); background: linear-gradient(to left, rgba(8, 12, 20, 0.55), rgba(8, 12, 20, 0)); }
+    .audio-fx-window .af-fade-handle { position: absolute; top: -4px; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; cursor: ew-resize; transform: translateX(-50%); z-index: 2; touch-action: none; }
+    .audio-fx-window .af-fade-handle.fi { left: var(--af-fi, 0%); }
+    .audio-fx-window .af-fade-handle.fo { left: calc(100% - var(--af-fo, 0%)); }
+    .audio-fx-window .af-fade-row { display: flex; justify-content: space-between; font-size: 11px; color: rgba(238, 241, 245, 0.6); margin-bottom: 6px; }
     .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
     .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
     .layer-effect-window .le-title-stack { display: flex; flex-direction: column; line-height: 1.2; gap: 1px; min-width: 0; }
@@ -7197,7 +7205,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver159</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver160</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7368,7 +7376,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '159';
+    const APP_DISPLAY_VERSION = '160';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -14308,6 +14316,7 @@
         clip.trackId = clip.trackId || 'dialog-main';
         clip.hidden = Boolean(clip.hidden);
         clip.volume = clampAudioClipVolume(clip.volume);
+        clip.audioFx = normalizeAudioFx(clip.audioFx);
       });
       dedupeAutoDialogCandidateAudioClips(project);
       // 묶음 C: 동일 사이클 마킹 (project === state.project 인 경우에만)
@@ -17773,8 +17782,10 @@
       if (!clip) return;
       selectAudioClip(id, root);
       openSimpleContextMenu(event, [
+        { label: 'エフェクト', action: function() { openAudioFxWindow(id); } },
+        { separator: true },
         { label: '削除', action: function() { runCommand('Delete dialog audio', function(project) { deleteAudioClip(project, id); }); } }
-      ], { width: 160, height: 60 });
+      ], { width: 160, height: 96 });
     }
 
     // ===== OL (overlap / cross-dissolve) timeline window =====
@@ -17920,6 +17931,138 @@
         const up = function() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', up);
+      });
+    }
+
+    // ===== Audio clip effect window (Phase 1: fade in/out via clip-bar drag + volume; no keyframes) =====
+    function audioFxTargetClip() {
+      const id = state.audioFxClipId;
+      if (!id) return null;
+      const clips = (state.project.audio && state.project.audio.clips) || [];
+      return clips.find(function(c) { return c.id === id; }) || null;
+    }
+    function audioClipFxDurationFrames(clip) {
+      return Math.max(1, Math.round(Number(clip && (clip.audioTrimDurationFrames || clip.durationFrames)) || 1));
+    }
+    function audioFxWindowEl() {
+      let win = document.getElementById('audioFxWindow');
+      if (win) return win;
+      win = document.createElement('div');
+      win.id = 'audioFxWindow';
+      win.className = 'ol-timeline-window layer-effect-window audio-fx-window';
+      win.hidden = true;
+      win.innerHTML =
+        '<div class="ol-window-header" data-le-drag="true">' +
+          '<span class="ol-window-title le-title-stack"><span class="le-title-main">オーディオエフェクト</span><span class="le-title-target" data-af-title></span></span>' +
+          '<button type="button" data-af-action="close">×</button>' +
+        '</div>' +
+        '<div class="le-body">' +
+          '<div class="af-clipbar" data-af-clipbar>' +
+            '<span class="af-fade-tri fi"></span><span class="af-fade-tri fo"></span>' +
+            '<span class="af-fade-handle fi" data-af-fade="in" title="フェードイン"></span>' +
+            '<span class="af-fade-handle fo" data-af-fade="out" title="フェードアウト"></span>' +
+          '</div>' +
+          '<div class="af-fade-row"><span>FI <b data-af-val="in">0</b>f</span><span>FO <b data-af-val="out">0</b>f</span></div>' +
+          '<label class="le-row"><span class="le-label">音量</span>' +
+            '<div class="le-slider" data-af-prop="volume" data-min="0" data-max="200" data-step="1" role="slider"><div class="le-knob"></div></div>' +
+            '<span class="le-val" data-af-volval></span></label>' +
+        '</div>';
+      document.body.appendChild(win);
+      bindLayerEffectWindowDrag(win);
+      const closeBtn = win.querySelector('[data-af-action="close"]');
+      if (closeBtn) closeBtn.addEventListener('click', function(e) { e.preventDefault(); closeAudioFxWindow(); });
+      bindAudioFxControls(win);
+      return win;
+    }
+    function openAudioFxWindow(clipId) {
+      const clips = (state.project.audio && state.project.audio.clips) || [];
+      const clip = clips.find(function(c) { return c.id === String(clipId); });
+      if (!clip) return;
+      state.audioFxClipId = String(clipId);
+      const win = audioFxWindowEl();
+      win.hidden = false;
+      syncAudioFxWindow();
+    }
+    function closeAudioFxWindow() {
+      const win = document.getElementById('audioFxWindow');
+      if (win) win.hidden = true;
+      state.audioFxClipId = '';
+    }
+    function syncAudioFxWindow() {
+      const win = document.getElementById('audioFxWindow');
+      const clip = audioFxTargetClip();
+      if (!win || !clip) return;
+      const fx = audioClipFx(clip);
+      const total = audioClipFxDurationFrames(clip);
+      win.style.setProperty('--af-fi', Math.max(0, Math.min(100, fx.fadeInFrames / total * 100)) + '%');
+      win.style.setProperty('--af-fo', Math.max(0, Math.min(100, fx.fadeOutFrames / total * 100)) + '%');
+      const txt = function(sel, t) { const el = win.querySelector(sel); if (el) el.textContent = t; };
+      txt('[data-af-val="in"]', fx.fadeInFrames);
+      txt('[data-af-val="out"]', fx.fadeOutFrames);
+      const vpct = Math.max(0, Math.min(200, (Number(clip.volume) || 1) * 100));
+      const vsl = win.querySelector('[data-af-prop="volume"]');
+      if (vsl) vsl.style.setProperty('--le-fill', (vpct / 200 * 100) + '%');
+      txt('[data-af-volval]', Math.round(vpct) + '%');
+      txt('[data-af-title]', (clip.characterName || 'Audio') + (clip.text ? (' / ' + String(clip.text).slice(0, 14)) : ''));
+    }
+    function bindAudioFxControls(win) {
+      const bar = win.querySelector('[data-af-clipbar]');
+      win.querySelectorAll('.af-fade-handle').forEach(function(h) {
+        const which = h.dataset.afFade; // 'in' | 'out'
+        h.addEventListener('pointerdown', function(e) {
+          if (e.button && e.button !== 0) return;
+          e.preventDefault(); e.stopPropagation();
+          const clip = audioFxTargetClip(); if (!clip || !bar) return;
+          const total = audioClipFxDurationFrames(clip);
+          const otherFrames = which === 'out' ? audioClipFx(clip).fadeInFrames : audioClipFx(clip).fadeOutFrames;
+          let frames = which === 'out' ? audioClipFx(clip).fadeOutFrames : audioClipFx(clip).fadeInFrames;
+          try { h.setPointerCapture(e.pointerId); } catch (err) {}
+          const move = function(me) {
+            const r = bar.getBoundingClientRect();
+            const t = r.width > 0 ? Math.max(0, Math.min(1, (me.clientX - r.left) / r.width)) : 0;
+            const frac = which === 'out' ? (1 - t) : t;
+            frames = Math.max(0, Math.min(Math.round(frac * total), total - otherFrames));
+            win.style.setProperty(which === 'out' ? '--af-fo' : '--af-fi', (frames / total * 100) + '%');
+            const vEl = win.querySelector('[data-af-val="' + which + '"]'); if (vEl) vEl.textContent = frames;
+          };
+          const up = function() {
+            window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+            const fid = clip.id, prop = which === 'out' ? 'fadeOutFrames' : 'fadeInFrames', val = frames;
+            runCommand('Audio fade', function(project) {
+              const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
+              if (c) { c.audioFx = normalizeAudioFx(c.audioFx); c.audioFx[prop] = val; }
+            });
+            syncAudioFxWindow();
+          };
+          window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+        });
+      });
+      const vsl = win.querySelector('[data-af-prop="volume"]');
+      if (vsl) vsl.addEventListener('pointerdown', function(e) {
+        if (e.button && e.button !== 0) return;
+        e.preventDefault();
+        const clip = audioFxTargetClip(); if (!clip) return;
+        let vol = Number(clip.volume) || 1;
+        try { vsl.setPointerCapture(e.pointerId); } catch (err) {}
+        const apply = function(clientX) {
+          const r = vsl.getBoundingClientRect();
+          const t = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0;
+          vol = Math.round(t * 200) / 100;
+          vsl.style.setProperty('--le-fill', (t * 100) + '%');
+          const vv = win.querySelector('[data-af-volval]'); if (vv) vv.textContent = Math.round(vol * 100) + '%';
+        };
+        apply(e.clientX);
+        const mv = function(ev) { apply(ev.clientX); };
+        const up = function() {
+          window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+          const fid = clip.id, val = vol;
+          runCommand('Audio volume', function(project) {
+            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
+            if (c) c.volume = clampAudioClipVolume(val);
+          });
+          syncAudioFxWindow();
+        };
+        window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
       });
     }
 
@@ -27357,6 +27500,20 @@
       const n = Number(value);
       return Number.isFinite(n) && n >= 0 ? Math.min(4, n) : 1;
     }
+    // Per-clip audio effect model (no keyframes). fade frames are along the clip's own timeline length.
+    function normalizeAudioFx(raw) {
+      const fx = raw && typeof raw === 'object' ? raw : {};
+      return {
+        fadeInFrames: Math.max(0, Math.round(Number(fx.fadeInFrames) || 0)),
+        fadeOutFrames: Math.max(0, Math.round(Number(fx.fadeOutFrames) || 0)),
+        echo: Math.max(0, Math.min(1, Number(fx.echo) || 0)),          // Phase 2
+        pan: Math.max(-1, Math.min(1, Number(fx.pan) || 0)),            // Phase 3 (spatial map)
+        distance: Math.max(0, Math.min(1, Number(fx.distance) || 0)),  // Phase 3
+        speed: Math.max(0.1, Math.min(4, Number(fx.speed) || 1)),      // Phase 4 (retime)
+        preservePitch: fx.preservePitch !== false
+      };
+    }
+    function audioClipFx(clip) { return normalizeAudioFx(clip && clip.audioFx); }
     function audioClipVolumeToDb(volume) {
       const v = clampAudioClipVolume(volume);
       return v <= 0 ? -Infinity : 20 * Math.log10(v);
@@ -38344,8 +38501,17 @@
         const playDur = Math.min(trimDurSec - skip, durationSec - when, buf.duration - bufOffset);
         if (playDur <= 0.02) continue;
         let vol = 1; try { vol = dialogAudioEffectSettings(clip).volume; } catch (e) { vol = Number(clip.volume) || 1; }
+        vol = Math.max(0, Math.min(4, vol));
         const src = octx.createBufferSource(); src.buffer = buf;
-        const g = octx.createGain(); g.gain.value = Math.max(0, Math.min(4, vol));
+        const g = octx.createGain();
+        const afx = normalizeAudioFx(clip.audioFx);
+        const fiSec = Math.min(Math.max(0, afx.fadeInFrames) / fps, playDur);
+        const foSec = Math.min(Math.max(0, afx.fadeOutFrames) / fps, playDur);
+        if (fiSec > 0 || foSec > 0) {
+          g.gain.setValueAtTime(fiSec > 0 ? 0.0001 : vol, when);
+          if (fiSec > 0) g.gain.linearRampToValueAtTime(vol, when + fiSec);
+          if (foSec > 0) { g.gain.setValueAtTime(vol, Math.max(when, when + playDur - foSec)); g.gain.linearRampToValueAtTime(0.0001, when + playDur); }
+        } else { g.gain.value = vol; }
         src.connect(g); g.connect(octx.destination);
         try { src.start(when, bufOffset, playDur); } catch (e) {}
       }
