@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver192</title>
+  <title>Conte Editor Prototype ver193</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7239,7 +7239,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver192</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver193</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7397,6 +7397,20 @@
           <option value="GS">GS</option>
         </select>
       </label>
+      <label class="project-create-label">カメラサイズ（出力解像度）
+        <select id="gengaCamPreset">
+          <option value="1920x1080">1920 × 1080</option>
+          <option value="1280x720">1280 × 720</option>
+          <option value="854x480">854 × 480</option>
+          <option value="480x270">480 × 270</option>
+          <option value="custom">自由入力</option>
+        </select>
+      </label>
+      <div id="gengaCamCustomRow" style="display:none; align-items:center; gap:8px; margin-top:6px;">
+        <input id="gengaCamW" type="number" min="1" max="8192" placeholder="幅" style="flex:1; min-width:0; padding:8px 9px; border-radius:8px; border:1px solid rgba(0,0,0,0.22); box-sizing:border-box;" autocomplete="off" />
+        <span style="opacity:0.6;">×</span>
+        <input id="gengaCamH" type="number" min="1" max="8192" placeholder="高さ" style="flex:1; min-width:0; padding:8px 9px; border-radius:8px; border:1px solid rgba(0,0,0,0.22); box-sizing:border-box;" autocomplete="off" />
+      </div>
       <p id="gengaCreateHint" class="project-create-hint">例: BW_01_002_LO</p>
       <div class="choice-dialog-actions">
         <button type="submit" value="create" class="primary">作成</button>
@@ -7435,7 +7449,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '192';
+    const APP_DISPLAY_VERSION = '193';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -9464,6 +9478,7 @@
       if (project === state.project) bumpAudioCycle();
       project.schemaVersion = PROJECT_FORMAT_VERSION;
       project.kind = project.kind === 'genga' ? 'genga' : 'conte';
+      if (project.kind === 'genga') normalizeGengaTimeline(project);
       project.settings = project.settings || {};
       project.settings.rowsPerPage = ROWS_PER_PAGE;
       project.settings.templateId = 'hanyou_fixed_5_column';
@@ -10506,7 +10521,70 @@
     }
     // Create the project once a title + kind are chosen (shared by new conte / new genga). Picks + validates the
     // folder BEFORE wiping the current project so a cancel never destroys an open project.
-    async function finalizeNewProject(title, kind) {
+    // 原画(genga) data model: paper (作画用紙, base canvas) + camera (output crop = project resolution) + layers/exposures.
+    function applyGengaCreateResolution(project, camW, camH) {
+      const w = Math.max(1, Math.round(Number(camW) || 1920));
+      const h = Math.max(1, Math.round(Number(camH) || 1080));
+      project.gengaTimeline = {
+        fps: Math.max(1, Math.round(Number(project.fps) || 24)),
+        paper: { w: w, h: h },
+        camera: { x: 0, y: 0, w: w, h: h },
+        totalFrames: 1,
+        layers: []
+      };
+    }
+    function normalizeGengaExposure(exp) {
+      exp = exp && typeof exp === 'object' ? exp : {};
+      return {
+        id: typeof exp.id === 'string' && exp.id ? exp.id : ('genga-exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)),
+        startFrame: Math.max(1, Math.round(Number(exp.startFrame) || 1)),
+        holdFrames: Math.max(1, Math.round(Number(exp.holdFrames) || 1)),
+        instanceValue: (exp.instanceValue === undefined || exp.instanceValue === '') ? null : exp.instanceValue,
+        drawing: exp.drawing && typeof exp.drawing === 'object' ? exp.drawing : null
+      };
+    }
+    function normalizeGengaLayer(layer) {
+      layer = layer && typeof layer === 'object' ? layer : {};
+      let opacity = Number(layer.opacity);
+      if (!isFinite(opacity)) opacity = 1;
+      opacity = Math.max(0, Math.min(1, opacity));
+      return {
+        id: typeof layer.id === 'string' && layer.id ? layer.id : ('genga-layer-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)),
+        name: typeof layer.name === 'string' ? layer.name : 'Layer',
+        color: typeof layer.color === 'string' ? layer.color : '#888888',
+        opacity: opacity,
+        visible: layer.visible !== false,
+        locked: Boolean(layer.locked),
+        onion: Boolean(layer.onion),
+        exposures: Array.isArray(layer.exposures) ? layer.exposures.map(normalizeGengaExposure) : []
+      };
+    }
+    function normalizeGengaTimeline(project) {
+      const gt = project.gengaTimeline && typeof project.gengaTimeline === 'object' ? project.gengaTimeline : {};
+      const cam = gt.camera && typeof gt.camera === 'object' ? gt.camera : {};
+      const pap = gt.paper && typeof gt.paper === 'object' ? gt.paper : {};
+      const camW = Math.max(1, Math.round(Number(cam.w) || 1920));
+      const camH = Math.max(1, Math.round(Number(cam.h) || 1080));
+      const paperW = Math.max(camW, Math.round(Number(pap.w) || camW));
+      const paperH = Math.max(camH, Math.round(Number(pap.h) || camH));
+      let camX = Math.round(Number(cam.x));
+      if (!isFinite(camX)) camX = Math.round((paperW - camW) / 2);
+      let camY = Math.round(Number(cam.y));
+      if (!isFinite(camY)) camY = Math.round((paperH - camH) / 2);
+      camX = Math.max(0, Math.min(camX, paperW - camW));
+      camY = Math.max(0, Math.min(camY, paperH - camH));
+      const layers = Array.isArray(gt.layers) ? gt.layers.map(normalizeGengaLayer) : [];
+      let maxFrame = 1;
+      layers.forEach(function(l) { l.exposures.forEach(function(e) { maxFrame = Math.max(maxFrame, e.startFrame + e.holdFrames - 1); }); });
+      project.gengaTimeline = {
+        fps: Math.max(1, Math.round(Number(gt.fps) || project.fps || 24)),
+        paper: { w: paperW, h: paperH },
+        camera: { x: camX, y: camY, w: camW, h: camH },
+        totalFrames: Math.max(1, Math.round(Number(gt.totalFrames) || 1), maxFrame),
+        layers: layers
+      };
+    }
+    async function finalizeNewProject(title, kind, opts) {
       // Genga projects never use a working folder — kept in-memory + IndexedDB (like the no-FS path), exported via ZIP/JSON.
       const useFolder = kind !== 'genga' && fileSystemAccessAvailable() && !mobileOrTabletRuntime();
       if (useFolder) {
@@ -10530,6 +10608,7 @@
         state.project.title = title;
         state.project.projectId = generateProjectId();
         state.project.kind = kind || 'conte';
+        if (kind === 'genga') applyGengaCreateResolution(state.project, opts && opts.camW, opts && opts.camH);
         state.project.settings = state.project.settings || {};
         state.project.settings.indexedDbAutosaveEnabled = true;
         normalizeProject(state.project);
@@ -10554,9 +10633,9 @@
     async function startNewGengaProject() {
       try {
         if (!(await confirmDiscardUnsavedForNew())) return;
-        const name = await askGengaProjectName();
-        if (name === null) return;
-        await finalizeNewProject(name, 'genga');
+        const res = await askGengaProjectName();
+        if (res === null) return;
+        await finalizeNewProject(res.name, 'genga', { camW: res.camW, camH: res.camH });
       } catch (error) {
         console.error('[new-genga] failed', error);
         alert('新規原画プロジェクト作成に失敗: ' + (error && error.message ? error.message : error));
@@ -10570,37 +10649,63 @@
         const ep = document.getElementById('gengaEpInput');
         const cut = document.getElementById('gengaCutInput');
         const suf = document.getElementById('gengaSuffixSelect');
+        const camPreset = document.getElementById('gengaCamPreset');
+        const camCustomRow = document.getElementById('gengaCamCustomRow');
+        const camW = document.getElementById('gengaCamW');
+        const camH = document.getElementById('gengaCamH');
         const hint = document.getElementById('gengaCreateHint');
-        if (!dialog || !form || !work || !ep || !cut || !suf) { resolve(null); return; }
-        work.value = ''; ep.value = ''; cut.value = ''; suf.value = '';
+        if (!dialog || !form || !work || !ep || !cut || !suf || !camPreset) { resolve(null); return; }
+        work.value = 'untitled'; ep.value = '00'; cut.value = '000'; suf.value = '';
+        camPreset.value = '1920x1080';
+        if (camW) camW.value = ''; if (camH) camH.value = '';
+        if (camCustomRow) camCustomRow.style.display = 'none';
         if (hint) { hint.textContent = '例: BW_01_002_LO'; hint.classList.remove('error'); }
-        const build = function() {
+        const buildName = function() {
           const w = work.value.trim(), e = ep.value.trim(), c = cut.value.trim(), s = suf.value;
           if (!w || !e || !c) return '';
           return w + '_' + e + '_' + c + (s ? ('_' + s) : '');
+        };
+        const buildSize = function() {
+          if (camPreset.value === 'custom') {
+            const w = Math.round(Number(camW && camW.value));
+            const h = Math.round(Number(camH && camH.value));
+            if (!(w > 0) || !(h > 0)) return null;
+            return { w: w, h: h };
+          }
+          const parts = String(camPreset.value).split('x');
+          return { w: parseInt(parts[0], 10), h: parseInt(parts[1], 10) };
         };
         let done = false;
         const cleanup = function() {
           form.removeEventListener('submit', onSubmit);
           dialog.removeEventListener('cancel', onCancel);
           dialog.removeEventListener('close', onClose);
+          camPreset.removeEventListener('change', onPreset);
         };
         const finish = function(value) { if (done) return; done = true; cleanup(); if (dialog.open) dialog.close(); resolve(value); };
+        const onPreset = function() {
+          const custom = camPreset.value === 'custom';
+          if (camCustomRow) camCustomRow.style.display = custom ? 'flex' : 'none';
+          if (custom && camW) { try { camW.focus(); } catch (error) {} }
+        };
         const onSubmit = function(event) {
           event.preventDefault();
           if ((event.submitter && event.submitter.value) !== 'create') { finish(null); return; }
-          const name = build();
+          const name = buildName();
           if (!name) { if (hint) { hint.textContent = '作品名・話数・カット番号は必須です。'; hint.classList.add('error'); } return; }
-          finish(name);
+          const size = buildSize();
+          if (!size) { if (hint) { hint.textContent = 'カメラサイズ（幅・高さ）を入力してください。'; hint.classList.add('error'); } return; }
+          finish({ name: name, camW: size.w, camH: size.h });
         };
         const onCancel = function(event) { event.preventDefault(); finish(null); };
         const onClose = function() { if (!done) finish(null); };
         form.addEventListener('submit', onSubmit);
         dialog.addEventListener('cancel', onCancel);
         dialog.addEventListener('close', onClose);
+        camPreset.addEventListener('change', onPreset);
         dialog.returnValue = '';
         dialog.showModal();
-        setTimeout(function() { try { work.focus(); } catch (error) {} }, 30);
+        setTimeout(function() { try { work.focus(); work.select(); } catch (error) {} }, 30);
       });
     }
 
