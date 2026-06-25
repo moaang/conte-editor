@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver160</title>
+  <title>Conte Editor Prototype ver161</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7205,7 +7205,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver160</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver161</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7376,7 +7376,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '160';
+    const APP_DISPLAY_VERSION = '161';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17966,6 +17966,9 @@
           '<label class="le-row"><span class="le-label">音量</span>' +
             '<div class="le-slider" data-af-prop="volume" data-min="0" data-max="200" data-step="1" role="slider"><div class="le-knob"></div></div>' +
             '<span class="le-val" data-af-volval></span></label>' +
+          '<label class="le-row"><span class="le-label">エコー</span>' +
+            '<div class="le-slider" data-af-prop="echo" data-min="0" data-max="100" data-step="1" role="slider"><div class="le-knob"></div></div>' +
+            '<span class="le-val" data-af-echoval></span></label>' +
         '</div>';
       document.body.appendChild(win);
       bindLayerEffectWindowDrag(win);
@@ -18003,6 +18006,10 @@
       const vsl = win.querySelector('[data-af-prop="volume"]');
       if (vsl) vsl.style.setProperty('--le-fill', (vpct / 200 * 100) + '%');
       txt('[data-af-volval]', Math.round(vpct) + '%');
+      const epct = Math.max(0, Math.min(100, fx.echo * 100));
+      const esl = win.querySelector('[data-af-prop="echo"]');
+      if (esl) esl.style.setProperty('--le-fill', epct + '%');
+      txt('[data-af-echoval]', Math.round(epct) + '%');
       txt('[data-af-title]', (clip.characterName || 'Audio') + (clip.text ? (' / ' + String(clip.text).slice(0, 14)) : ''));
     }
     function bindAudioFxControls(win) {
@@ -18037,32 +18044,38 @@
           window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
         });
       });
-      const vsl = win.querySelector('[data-af-prop="volume"]');
-      if (vsl) vsl.addEventListener('pointerdown', function(e) {
-        if (e.button && e.button !== 0) return;
-        e.preventDefault();
-        const clip = audioFxTargetClip(); if (!clip) return;
-        let vol = Number(clip.volume) || 1;
-        try { vsl.setPointerCapture(e.pointerId); } catch (err) {}
-        const apply = function(clientX) {
-          const r = vsl.getBoundingClientRect();
-          const t = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0;
-          vol = Math.round(t * 200) / 100;
-          vsl.style.setProperty('--le-fill', (t * 100) + '%');
-          const vv = win.querySelector('[data-af-volval]'); if (vv) vv.textContent = Math.round(vol * 100) + '%';
-        };
-        apply(e.clientX);
-        const mv = function(ev) { apply(ev.clientX); };
-        const up = function() {
-          window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
-          const fid = clip.id, val = vol;
-          runCommand('Audio volume', function(project) {
-            const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
-            if (c) c.volume = clampAudioClipVolume(val);
-          });
-          syncAudioFxWindow();
-        };
-        window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+      [
+        { prop: 'volume', label: 'volval', name: 'Audio volume', toVal: function(t) { return Math.round(t * 200) / 100; }, set: function(c, v) { c.volume = clampAudioClipVolume(v); } },
+        { prop: 'echo', label: 'echoval', name: 'Audio echo', toVal: function(t) { return Math.round(t * 100) / 100; }, set: function(c, v) { c.audioFx = normalizeAudioFx(c.audioFx); c.audioFx.echo = v; } }
+      ].forEach(function(spec) {
+        const sl = win.querySelector('[data-af-prop="' + spec.prop + '"]');
+        if (!sl) return;
+        sl.addEventListener('pointerdown', function(e) {
+          if (e.button && e.button !== 0) return;
+          e.preventDefault();
+          const clip = audioFxTargetClip(); if (!clip) return;
+          let v = 0;
+          try { sl.setPointerCapture(e.pointerId); } catch (err) {}
+          const apply = function(clientX) {
+            const r = sl.getBoundingClientRect();
+            const t = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0;
+            v = spec.toVal(t);
+            sl.style.setProperty('--le-fill', (t * 100) + '%');
+            const lab = win.querySelector('[data-af-' + spec.label + ']'); if (lab) lab.textContent = Math.round(v * 100) + '%';
+          };
+          apply(e.clientX);
+          const mv = function(ev) { apply(ev.clientX); };
+          const up = function() {
+            window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+            const fid = clip.id, val = v;
+            runCommand(spec.name, function(project) {
+              const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
+              if (c) spec.set(c, val);
+            });
+            syncAudioFxWindow();
+          };
+          window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+        });
       });
     }
 
@@ -27860,7 +27873,7 @@
         const playDuration = Math.max(0.01, Math.min(trimDuration - offsetInClipSeconds, buffer.duration - offsetSeconds));
         const source = ctx.createBufferSource();
         source.buffer = buffer;
-        connectAudioSourceForClip(source, ctx, clip);
+        connectAudioSourceForClip(source, ctx, clip, ctx.currentTime + delaySeconds, playDuration);
         state.playbackAudioSources.push(source);
         const activate = function() {
           state.activeSpeechClipId = clip.id;
@@ -27884,32 +27897,47 @@
       }
     }
 
-    function connectAudioSourceForClip(source, ctx, clip) {
+    // Shared audio graph for a clip's buffer source: volume + fade(in/out) + pan + echo. Used by both
+    // playback (ctx.destination) and export (Offline/realtime, custom destination). startTime/duration are
+    // in the ctx's own time base so fades can be scheduled; pass duration=0 to skip fades.
+    function wireAudioClipGraph(ctx, source, clip, startTime, duration, destination) {
+      const dest = destination || ctx.destination;
       const effect = dialogAudioEffectSettings(clip);
+      const fx = audioClipFx(clip);
+      const vol = Math.max(0, Math.min(4, effect.volume));
+      const st = Number.isFinite(startTime) ? startTime : (Number(ctx.currentTime) || 0);
+      const dur = Number.isFinite(duration) && duration > 0 ? duration : 0;
+      const fps = fpsForProject(state.project);
       const gain = ctx.createGain();
-      gain.gain.value = effect.volume;
+      const fi = dur > 0 ? Math.min(Math.max(0, fx.fadeInFrames) / fps, dur) : 0;
+      const fo = dur > 0 ? Math.min(Math.max(0, fx.fadeOutFrames) / fps, dur) : 0;
+      if (fi > 0 || fo > 0) {
+        gain.gain.setValueAtTime(fi > 0 ? 0.0001 : vol, st);
+        if (fi > 0) gain.gain.linearRampToValueAtTime(vol, st + fi);
+        if (fo > 0) { gain.gain.setValueAtTime(vol, Math.max(st, st + dur - fo)); gain.gain.linearRampToValueAtTime(0.0001, st + dur); }
+      } else { gain.gain.value = vol; }
       source.connect(gain);
       let output = gain;
       if (effect.pan && ctx.createStereoPanner) {
         const panner = ctx.createStereoPanner();
         panner.pan.value = effect.pan;
-        output.connect(panner);
-        output = panner;
+        output.connect(panner); output = panner;
       }
-      output.connect(ctx.destination);
-      if (effect.echoDelay > 0 && effect.echoWet > 0) {
+      output.connect(dest);
+      const echoWet = Math.max(effect.echoWet, fx.echo);             // per-clip echo OR tag-driven, stronger wins
+      const echoDelay = fx.echo > 0 ? 0.18 : effect.echoDelay;
+      if (echoDelay > 0 && echoWet > 0 && ctx.createDelay) {
         const delay = ctx.createDelay(1);
         const feedback = ctx.createGain();
         const wet = ctx.createGain();
-        delay.delayTime.value = effect.echoDelay;
-        feedback.gain.value = effect.echoFeedback;
-        wet.gain.value = effect.echoWet;
-        source.connect(delay);
-        delay.connect(feedback);
-        feedback.connect(delay);
-        delay.connect(wet);
-        wet.connect(ctx.destination);
+        delay.delayTime.value = echoDelay;
+        feedback.gain.value = Math.min(0.65, fx.echo > 0 ? (0.4 * fx.echo + effect.echoFeedback) : effect.echoFeedback);
+        wet.gain.value = echoWet;
+        gain.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(wet); wet.connect(dest);
       }
+    }
+    function connectAudioSourceForClip(source, ctx, clip, startTime, duration) {
+      wireAudioClipGraph(ctx, source, clip, startTime, duration, ctx.destination);
     }
 
     function clipAudioTrimStartSeconds(clip, fps) {
@@ -38432,10 +38460,8 @@
           if (bufOffset >= s.buffer.duration) return;
           let playDur = Math.min(trimDurSec - skip, recEndSec - Math.max(0, offsetSec), s.buffer.duration - bufOffset);
           if (playDur <= 0.02) return;
-          let vol = 1; try { vol = dialogAudioEffectSettings(s.clip).volume; } catch (e) { vol = Number(s.clip.volume) || 1; }
           const src = audioCtx.createBufferSource(); src.buffer = s.buffer;
-          const g = audioCtx.createGain(); g.gain.value = Math.max(0, Math.min(4, vol));
-          src.connect(g); g.connect(audioDest);
+          wireAudioClipGraph(audioCtx, src, s.clip, when, playDur, audioDest);
           try { src.start(when, bufOffset, playDur); } catch (e) {}
         });
       }
@@ -38500,19 +38526,8 @@
         if (bufOffset >= buf.duration) continue;
         const playDur = Math.min(trimDurSec - skip, durationSec - when, buf.duration - bufOffset);
         if (playDur <= 0.02) continue;
-        let vol = 1; try { vol = dialogAudioEffectSettings(clip).volume; } catch (e) { vol = Number(clip.volume) || 1; }
-        vol = Math.max(0, Math.min(4, vol));
         const src = octx.createBufferSource(); src.buffer = buf;
-        const g = octx.createGain();
-        const afx = normalizeAudioFx(clip.audioFx);
-        const fiSec = Math.min(Math.max(0, afx.fadeInFrames) / fps, playDur);
-        const foSec = Math.min(Math.max(0, afx.fadeOutFrames) / fps, playDur);
-        if (fiSec > 0 || foSec > 0) {
-          g.gain.setValueAtTime(fiSec > 0 ? 0.0001 : vol, when);
-          if (fiSec > 0) g.gain.linearRampToValueAtTime(vol, when + fiSec);
-          if (foSec > 0) { g.gain.setValueAtTime(vol, Math.max(when, when + playDur - foSec)); g.gain.linearRampToValueAtTime(0.0001, when + playDur); }
-        } else { g.gain.value = vol; }
-        src.connect(g); g.connect(octx.destination);
+        wireAudioClipGraph(octx, src, clip, when, playDur, octx.destination);
         try { src.start(when, bufOffset, playDur); } catch (e) {}
       }
       try { return await octx.startRendering(); } catch (e) { return null; }
