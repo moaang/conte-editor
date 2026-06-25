@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver174</title>
+  <title>Conte Editor Prototype ver175</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7219,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver174</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver175</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7390,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '174';
+    const APP_DISPLAY_VERSION = '175';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17838,10 +17838,23 @@
       if (state.videoEditMode) renderVideoPreviewIfChanged(videoTimelineDisplayTotalFrames(state.project));
     }
 
-    // Re-render the timeline so the camera lane swaps green camera keyframes <-> red layer-effect
-    // keyframes (and updates red diamond positions when keys are added/removed).
+    // Update ONLY the camera lane (green camera keys <-> red layer-effect diamonds, and diamond positions
+    // on key add/remove) in place. A full renderTimingDashboard here would rebuild every conte-layer
+    // thumbnail = a bulk thumbnail flash on every keyframe op and on opening/closing the effect window.
     function refreshLayerEffectKeyframeTrack() {
-      guardedRender('timing', renderTimingDashboard);
+      if (state.videoEditMode) {
+        const root = document.getElementById('timingDashboard');
+        const timeline = root ? root.querySelector('.video-editor-timeline') : null;
+        const inner = timeline ? timeline.querySelector('.timeline-stack-inner.timeline-inner') : null;
+        if (inner && inner.querySelector('.conte-camera-track')) {
+          const totalFrames = videoTimelineDisplayTotalFrames(state.project);
+          if (replaceTimelineElementHtml(inner, '.conte-camera-track', cameraTimelineTrackHtml(totalFrames))) {
+            bindCameraTimeline(inner, totalFrames);
+            return;
+          }
+        }
+      }
+      guardedRender('timing', renderTimingDashboard); // fallback: non-video mode or timeline not built yet
     }
 
     // Returns the effect object to write transform props onto: the keyframe at the playhead (created if
