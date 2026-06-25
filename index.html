@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver155</title>
+  <title>Conte Editor Prototype ver156</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5675,7 +5675,15 @@
     .layer-effect-window .le-body { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 7px; }
     .layer-effect-window .le-row { display: grid; grid-template-columns: 52px 1fr 46px; align-items: center; gap: 8px; font-size: 12px; }
     .layer-effect-window .le-label { color: rgba(238, 241, 245, 0.72); }
-    .layer-effect-window .le-row input[type="range"] { width: 100%; }
+    .layer-effect-window .le-row input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 6px; margin: 0; cursor: pointer;
+      border-radius: 999px; background: rgba(255, 255, 255, 0.16);
+      background-image: linear-gradient(#4a8bff, #4a8bff); background-repeat: no-repeat; background-size: var(--le-fill, 0%) 100%;
+    }
+    .layer-effect-window .le-row input[type="range"]::-webkit-slider-runnable-track { -webkit-appearance: none; height: 6px; border-radius: 999px; background: transparent; }
+    .layer-effect-window .le-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; cursor: pointer; }
+    .layer-effect-window .le-row input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: transparent; }
+    .layer-effect-window .le-row input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; cursor: pointer; }
     .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
     .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
     .layer-effect-window .le-title-stack { display: flex; flex-direction: column; line-height: 1.2; gap: 1px; min-width: 0; }
@@ -7194,7 +7202,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver155</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver156</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7365,7 +7373,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '155';
+    const APP_DISPLAY_VERSION = '156';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18004,6 +18012,11 @@
         const input = win.querySelector('[data-le-prop="' + prop + '"]');
         const val = win.querySelector('[data-le-val="' + prop + '"]');
         if (input && document.activeElement !== input) input.value = value;
+        if (input && input.type === 'range') {
+          // fill the track edge-to-edge by value (0 = left edge, max = right edge) for an intuitive slider
+          const mn = Number(input.min) || 0, mx = Number(input.max) || 100, cur = Number(input.value);
+          input.style.setProperty('--le-fill', (mx > mn ? Math.max(0, Math.min(100, (cur - mn) / (mx - mn) * 100)) : 0) + '%');
+        }
         if (val) val.textContent = label;
       };
       set('opacity', Math.round(e.opacity * 100), Math.round(e.opacity * 100) + '%');
