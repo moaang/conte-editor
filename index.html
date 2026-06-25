@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver181</title>
+  <title>Conte Editor Prototype ver182</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7234,7 +7234,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver181</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver182</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7405,7 +7405,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '181';
+    const APP_DISPLAY_VERSION = '182';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -19386,7 +19386,7 @@
           };
           replaceWorkspaceObjectUrl('audio', clip.id, recordedFile);
         } else {
-          await saveAudioBlobInline(clip, recordedFile, mime);
+          await storeAudioBlobInIndexedDb(clip, recordedFile, mime); // no folder → IndexedDB blob (light editing; save pulls inline)
         }
         sortAudioClips(state.project);
         writeAudioTimelineTrack(state.project);
@@ -30527,6 +30527,24 @@
       return clip.audioStorage;
     }
 
+    // iPad / no-folder: store the audio blob as a separate IndexedDB record and keep only a REF on the clip
+    // (audioDataUrl=''), so the base64 never rides in state.project → editing stays light. The file/export
+    // pulls it back to inline (self-contained). The blob persists across reloads under indexedDbAudioStorageKey.
+    async function storeAudioBlobInIndexedDb(clip, blob, mime) {
+      if (!clip || !clip.id || !blob) return false;
+      const key = indexedDbAudioStorageKey(clip.id);
+      const audioMime = mime || blob.type || clip.audioMime || 'audio/webm';
+      const size = Math.round(Number(blob.size) || 0);
+      const savedAt = new Date().toISOString();
+      await putWorkspaceDbValue(key, { blob: blob, mime: audioMime, size: size, savedAt: savedAt });
+      clip.audioMime = audioMime;
+      clip.audioFileName = '';
+      clip.audioDataUrl = '';
+      clip.audioStorage = { kind: 'indexeddb', key: key, mime: audioMime, size: size, savedAt: savedAt };
+      replaceWorkspaceObjectUrl('audio', clip.id, blob);
+      return true;
+    }
+
     async function readAudioBlobFromIndexedDb(clip) {
       const key = audioClipIndexedDbStorageKey(clip);
       if (!key || !indexedDbAutosaveAvailable()) return null;
@@ -31313,29 +31331,27 @@
       for (let index = 0; index < clips.length; index += 1) {
         const clip = clips[index];
         if (!clip || state.workspaceObjectUrls.audio[clip.id]) continue;
-        // Inline audio (A) → build the playback object URL from the embedded base64.
+        // Inline audio: on iPad (no working folder) move it OUT to an IndexedDB blob so editing stays light
+        // (base64 never rides in state.project). With a working folder, keep it inline for the folder/save path.
         if (clip.audioDataUrl) {
           stats.checked += 1;
           try {
-            replaceWorkspaceObjectUrl('audio', clip.id, dataUrlToBlob(clip.audioDataUrl));
+            const blob = dataUrlToBlob(clip.audioDataUrl);
+            if (!state.workspaceHandle && indexedDbAutosaveAvailable()) {
+              await storeAudioBlobInIndexedDb(clip, blob, clip.audioMime);
+            } else {
+              replaceWorkspaceObjectUrl('audio', clip.id, blob);
+            }
             stats.found += 1;
           } catch (error) { stats.missing += 1; }
           continue;
         }
-        // Legacy IndexedDB-blob audio → migrate to inline so the project becomes self-contained.
+        // IndexedDB-blob audio → keep it in IndexedDB (light); just build the playback object URL.
         if (audioClipHasIndexedDbStorage(clip) && indexedDbAutosaveAvailable()) {
           stats.checked += 1;
           try {
             const blob = await readAudioBlobFromIndexedDb(clip);
             if (!blob) { stats.missing += 1; continue; }
-            clip.audioDataUrl = await blobToDataUrl(blob);
-            clip.audioFileName = '';
-            clip.audioStorage = {
-              kind: 'inline',
-              mime: clip.audioMime || blob.type || 'audio/webm',
-              size: Math.round(Number(blob.size) || 0),
-              savedAt: new Date().toISOString()
-            };
             replaceWorkspaceObjectUrl('audio', clip.id, blob);
             stats.found += 1;
           } catch (error) { stats.missing += 1; }
@@ -31549,11 +31565,7 @@
       };
       const liveById = function(list, id) { return (list || []).find(function(x) { return x && x.id === id; }) || null; };
       if (copy.video && Array.isArray(copy.video.clips)) {
-        for (let i = 0; i < copy.video.clips.length; i += 1) {
-          const c = copy.video.clips[i];
-          const live = liveById(state.project.video && state.project.video.clips, c.id);
-          c.mediaDataUrl = await toInline(live ? live.mediaDataUrl : c.mediaDataUrl);
-        }
+        copy.video.clips.forEach(function(c) { c.mediaDataUrl = ''; }); // video is NOT embedded (too large); keep only the file ref
       }
       if (copy.audio && Array.isArray(copy.audio.clips)) {
         for (let i = 0; i < copy.audio.clips.length; i += 1) {
@@ -31684,7 +31696,8 @@
     }
 
     async function saveJsonShare() {
-      const payload = serializedProjectJson();
+      // Mobile "Save JSON" = self-contained file (pull IndexedDB/blob media → inline) so it also opens on desktop.
+      const payload = JSON.stringify(await projectForSelfContainedExport());
       const fileName = projectJsonFileNameForTitle(state.project.title || state.project.projectId || 'project');
       await deliverJsonFile(payload, fileName);
       state.workspaceStatus = '書き出し\n' + fileName;
