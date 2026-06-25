@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver186</title>
+  <title>Conte Editor Prototype ver187</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7062,6 +7062,11 @@
                   <button id="cleanupEmptyPanelsBtn" type="button">空パネル整理</button>
                 </div>
                 <div id="cleanupEmptyPanelsStatus" class="stage-settings-status"></div>
+                <div class="stage-settings-divider"></div>
+                <div class="stage-settings-actions">
+                  <button id="compressWorkspaceAudioBtn" type="button">音声を圧縮 (WAV→AAC・元削除)</button>
+                </div>
+                <div id="compressWorkspaceAudioStatus" class="stage-settings-status"></div>
               </div>
             </div>
             <div class="stage-onion-skin-wrap">
@@ -7234,7 +7239,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver186</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver187</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7405,7 +7410,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '186';
+    const APP_DISPLAY_VERSION = '187';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31692,6 +31697,65 @@
       muxer.finalize();
       return { bytes: new Uint8Array(muxer.target.buffer), ext: wantMp4 ? '.m4a' : '.webm', mime: wantMp4 ? 'audio/mp4' : 'audio/webm' };
     }
+    // Settings-panel action: compress the big WAV sources in the WORKING FOLDER in place (re-encode → write
+    // .m4a/.webm → update refs → delete the original WAV → save). Unlike the ZIP export (originals kept), this
+    // permanently replaces them (lossy). Small clips (voice) and already-compressed files are left untouched.
+    async function compressWorkspaceAudio() {
+      const statusEl = document.getElementById('compressWorkspaceAudioStatus');
+      const setStatus = function(t) { if (statusEl) statusEl.textContent = t; };
+      if (!state.workspaceHandle) { setStatus('作業フォルダを接続してください'); return; }
+      if (typeof AudioEncoder === 'undefined') { setStatus('この環境では音声圧縮に非対応です'); return; }
+      if (!window.confirm('作業フォルダの大きな音声(BGM等のWAV)をAAC/Opusに圧縮し、元のWAVを削除します。元に戻せません。続けますか？')) return;
+      try {
+        const clips = (state.project.audio && state.project.audio.clips) || [];
+        const audioDir = (state.project.settings && state.project.settings.localWorkspace && state.project.settings.localWorkspace.audioDir) || 'assets/audio';
+        const MIN = 800 * 1024;
+        const done = {}, skip = {};
+        const del = new Set();
+        let count = 0, savedBytes = 0;
+        setStatus('圧縮中…');
+        for (let i = 0; i < clips.length; i += 1) {
+          const clip = clips[i];
+          const old = clip.audioFileName;
+          if (!old || skip[old]) continue;
+          if (!done[old]) {
+            if (/\.(m4a|aac|opus|mp3|ogg|webm)$/i.test(old)) { skip[old] = 1; continue; } // already compressed
+            let blob = null;
+            try { blob = await readBlobFromWorkspace(audioDir, old); } catch (e) {}
+            if (!blob || blob.size <= MIN) { skip[old] = 1; continue; } // missing or small (voice) → leave
+            let enc = null;
+            try { const buf = await audioExportDecodeCtx().decodeAudioData(await blob.arrayBuffer()); enc = await encodeAudioBufferToFileBytes(buf, 160000); }
+            catch (e) { skip[old] = 1; continue; }
+            const newName = old.replace(/\.[^.]+$/, '') + enc.ext;
+            const newBlob = new Blob([enc.bytes], { type: enc.mime });
+            await writeBlobToWorkspace(audioDir, newName, newBlob);
+            done[old] = { name: newName, mime: enc.mime, blob: newBlob };
+            if (newName.toLowerCase() !== old.toLowerCase()) del.add(old);
+            count += 1; savedBytes += Math.max(0, blob.size - enc.bytes.length);
+            setStatus('圧縮中… ' + count + '件');
+          }
+          const e = done[old];
+          clip.audioFileName = e.name; clip.audioMime = e.mime; clip.audioDataUrl = '';
+          clip.audioStorage = { kind: 'workspace', dir: audioDir, fileName: e.name };
+          try { replaceWorkspaceObjectUrl('audio', clip.id, e.blob); } catch (er) {}
+        }
+        if (del.size) {
+          try {
+            const dir = await getWorkspaceDirectory(audioDir, false);
+            const names = Array.from(del);
+            for (let k = 0; k < names.length; k += 1) { try { if (typeof dir.removeEntry === 'function') await dir.removeEntry(names[k]); } catch (e) {} }
+          } catch (e) {}
+        }
+        bumpAudioCycle();
+        writeAudioTimelineTrack(state.project);
+        await saveProjectToWorkspace();
+        markProjectSavedBaseline();
+        refresh();
+        setStatus(count ? ('完了: ' + count + '件、約' + Math.round(savedBytes / 1048576) + 'MB削減') : '圧縮対象なし（大きなWAVなし）');
+      } catch (error) {
+        setStatus('失敗: ' + (error && error.message ? error.message : error));
+      }
+    }
     // Project JSON with media as REFS (small → no string-length limit) + the media blobs to write alongside
     // (audio + layer bitmaps; video not bundled). Names match what importConteFolderZip re-inlines by basename.
     async function buildConteFolderBundle() {
@@ -40683,6 +40747,8 @@
           cleanupEmptyPanels();
         });
       }
+      const compressWorkspaceAudioBtn = document.getElementById('compressWorkspaceAudioBtn');
+      if (compressWorkspaceAudioBtn) compressWorkspaceAudioBtn.addEventListener('click', function(event) { event.preventDefault(); compressWorkspaceAudio(); });
       document.getElementById('workspaceAutosaveToggle').addEventListener('change', function(event) {
         const settings = workspaceAutosaveSettings();
         settings.autosaveEnabled = Boolean(event.currentTarget.checked);
