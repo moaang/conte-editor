@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver143</title>
+  <title>Conte Editor Prototype ver144</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7145,7 +7145,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver143</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver144</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7316,7 +7316,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '143';
+    const APP_DISPLAY_VERSION = '144';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17745,7 +17745,7 @@
       };
       win.innerHTML =
         '<div class="ol-window-header" data-le-drag="true">' +
-          '<span class="ol-window-title">レイヤーエフェクト</span>' +
+          '<span class="ol-window-title" data-le-title>レイヤーエフェクト</span>' +
           '<button type="button" data-le-action="reset">リセット</button>' +
           '<button type="button" data-le-action="close">×</button>' +
         '</div>' +
@@ -17830,6 +17830,15 @@
       state.layerEffectOriginal = fastClone(normalizeLayerEffect(ref.layer.effect));
       const win = layerEffectWindowEl();
       win.hidden = false;
+      const titleEl = win.querySelector('[data-le-title]');
+      if (titleEl) {
+        let layerName = '';
+        try { layerName = conteLayerDisplayNameMap(ref.ownerCut.conteLayers || []).get(String(layerId)) || ref.layer.canonicalLayerName || ''; }
+        catch (e) { layerName = ref.layer.canonicalLayerName || ''; }
+        const cutNo = ref.ownerCut && ref.ownerCut.cutNo ? String(ref.ownerCut.cutNo) : '';
+        const tag = [cutNo ? ('カット' + cutNo) : '', layerName].filter(Boolean).join(' / ');
+        titleEl.textContent = 'レイヤーエフェクト' + (tag ? ' — ' + tag : '');
+      }
       syncLayerEffectWindowControls();
     }
 
