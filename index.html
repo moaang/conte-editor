@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver163</title>
+  <title>Conte Editor Prototype ver164</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver163</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver164</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '163';
+    const APP_DISPLAY_VERSION = '164';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -25162,16 +25162,6 @@
       const e = layerEffectAtFrame(layer, lf);
       return e.blur > 0 ? (e.blur * LAYER_DRAWING_WIDTH / VIDEO_PREVIEW_BASE_WIDTH) : 0;
     }
-    function layerEffectInlineStyle(layer, localFrame) {
-      if (!layer || !layerEffectIsAnimatedOrActive(layer)) return '';
-      const e = layerEffectAtFrame(layer, localFrame || 0);
-      const parts = [];
-      if (e.opacity < 0.999) parts.push('opacity:' + e.opacity);
-      const xf = layerEffectTransformParts(e);
-      if (xf.length) { parts.push('transform:' + xf.join(' ')); parts.push('transform-origin:center'); }
-      if (e.blur > 0) parts.push('filter:blur(' + e.blur + 'px)');
-      return parts.length ? (parts.join(';') + ';') : '';
-    }
     function applyLayerEffectStyleToEl(el, layer, localFrame, k) {
       if (!el) return;
       if (!layerEffectIsAnimatedOrActive(layer)) {
@@ -25194,10 +25184,6 @@
       else if (prop === 'rot') obj.rot = v;
       else if (prop === 'tx') obj.tx = v;
       else if (prop === 'ty') obj.ty = v;
-    }
-    function previewLocalFrameForCut(cutId) {
-      const slot = videoSlotAtFrame(state.project, state.videoPlayheadFrames);
-      return (slot && slot.cut && slot.cut.id === cutId) ? cameraLocalFrameForSlot(slot, state.videoPlayheadFrames) : 0;
     }
     function updateLayerEffectsPreview(stageEl) {
       try {
