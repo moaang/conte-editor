@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver195</title>
+  <title>Conte Editor Prototype ver196</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver195</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver196</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7314,7 +7314,9 @@
     body.project-locked .workspace { pointer-events: none; }
     body.genga-active .stage-mode-switch,
     body.genga-active .paper-edit-controls,
-    body.genga-active #timingDashboard { display: none !important; }
+    body.genga-active #timingDashboard,
+    body.genga-active #scenarioBoardToggleBtn,
+    body.genga-active #scenarioBoardWindow { display: none !important; }
     .genga-stage { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; padding: 10px; box-sizing: border-box; overflow: hidden; }
     .genga-stage[hidden] { display: none; }
     .genga-info { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: #333; }
@@ -7337,6 +7339,11 @@
     .genga-lane { height: 34px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, transparent 0, transparent 21px, rgba(0,0,0,0.05) 21px, rgba(0,0,0,0.05) 22px); }
     .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 5px; background: #2f6fd1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; box-sizing: border-box; }
     .genga-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e03b3b; pointer-events: none; }
+    .genga-col-head { justify-content: space-between; }
+    .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+    .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; flex: none; }
+    .genga-del-layer:hover { color: #e03b3b; }
+    .genga-lname { cursor: default; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
     #projectCreateTitleInput, #gengaCreateDialog input[type="text"], #gengaCreateDialog select {
       display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
@@ -7475,7 +7482,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '195';
+    const APP_DISPLAY_VERSION = '196';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40386,6 +40393,47 @@
       });
     }
 
+    // genga layer ops (genga-native — NOT the conte +レイヤー button). runCommand → normalizeProject
+    // (normalizes gengaTimeline) → refresh (re-renders the genga view) + undo, all shared with conte.
+    function gengaLayerColor(index) {
+      const palette = ['#5aa0d8', '#d8b24a', '#8a8f96', '#c879b9', '#6cc07a', '#d8865a'];
+      return palette[((index % palette.length) + palette.length) % palette.length];
+    }
+    function addGengaLayer() {
+      if (!state.project || state.project.kind !== 'genga' || !state.project.gengaTimeline) return;
+      runCommand('原画レイヤー追加', function(p) {
+        const gt = p.gengaTimeline; if (!gt) return;
+        gt.layers = Array.isArray(gt.layers) ? gt.layers : [];
+        const n = gt.layers.length;
+        gt.layers.push({
+          id: 'genga-layer-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          name: 'Layer ' + (n + 1),
+          color: gengaLayerColor(n),
+          opacity: 1, visible: true, locked: false, onion: false,
+          exposures: []
+        });
+      });
+    }
+    function deleteGengaLayer(id) {
+      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
+      runCommand('原画レイヤー削除', function(p) {
+        const gt = p.gengaTimeline; if (!gt || !Array.isArray(gt.layers)) return;
+        gt.layers = gt.layers.filter(function(l) { return String(l.id) !== id; });
+      });
+    }
+    function renameGengaLayer(id) {
+      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
+      const gt = state.project.gengaTimeline; if (!gt || !Array.isArray(gt.layers)) return;
+      const layer = gt.layers.find(function(l) { return String(l.id) === id; });
+      if (!layer) return;
+      const next = window.prompt('レイヤー名', layer.name || 'Layer');
+      if (next === null) return;
+      const name = String(next).trim(); if (!name) return;
+      runCommand('原画レイヤー名変更', function(p) {
+        const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === id; });
+        if (l) l.name = name;
+      });
+    }
     // P1-b: render the genga dope-sheet shell (layers × 1-frame timeline). Display-only for now —
     // drawing / editing / scrubbing come in later phases. Reads project.gengaTimeline; reuses escapeHtml.
     function renderGengaView(stageEl) {
@@ -40409,10 +40457,11 @@
         rowsLane = '<div class="genga-lane"></div>';
       } else {
         layers.forEach(function(l) {
-          rowsHead += '<div class="genga-layer-head">' +
+          rowsHead += '<div class="genga-layer-head" data-genga-layer="' + escapeHtml(l.id) + '">' +
             '<span class="genga-sw" style="background:' + escapeHtml(l.color || '#888888') + '"></span>' +
-            '<span class="genga-lname">' + escapeHtml(l.name || 'Layer') + '</span>' +
+            '<span class="genga-lname" data-genga-layer="' + escapeHtml(l.id) + '">' + escapeHtml(l.name || 'Layer') + '</span>' +
             '<span class="genga-lop">' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%</span>' +
+            '<button class="genga-del-layer" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="削除" aria-label="レイヤー削除">×</button>' +
             '</div>';
           let blocks = '';
           (l.exposures || []).forEach(function(e) {
@@ -40433,7 +40482,7 @@
         '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
-            '<div class="genga-col-head">レイヤー</div>' + rowsHead +
+            '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + rowsHead +
           '</div>' +
           '<div class="genga-timeline-wrap">' +
             '<div class="genga-ruler" style="width:' + laneWidth + 'px">' + ruler + '</div>' +
@@ -40442,6 +40491,14 @@
             '</div>' +
           '</div>' +
         '</div>';
+      const addBtn = stageEl.querySelector('.genga-add-layer');
+      if (addBtn) addBtn.addEventListener('click', addGengaLayer);
+      stageEl.querySelectorAll('.genga-del-layer').forEach(function(b) {
+        b.addEventListener('click', function() { deleteGengaLayer(b.getAttribute('data-genga-layer')); });
+      });
+      stageEl.querySelectorAll('.genga-lname').forEach(function(n) {
+        n.addEventListener('dblclick', function() { renameGengaLayer(n.getAttribute('data-genga-layer')); });
+      });
     }
 
     // APP: UTILITIES
