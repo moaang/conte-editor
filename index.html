@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver175</title>
+  <title>Conte Editor Prototype ver176</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5688,11 +5688,11 @@
     .audio-fx-window .af-fade-handle.fo { left: calc(100% - var(--af-fo, 0%)); }
     .audio-fx-window .af-fade-row { display: flex; justify-content: space-between; font-size: 11px; color: rgba(238, 241, 245, 0.6); margin-bottom: 6px; }
     .audio-fx-window .af-map-label { font-size: 11px; color: rgba(238, 241, 245, 0.6); margin: 2px 0 3px; }
-    .audio-fx-window .af-map { position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 150px; background: radial-gradient(circle at 50% 50%, rgba(74, 139, 255, 0.16), rgba(255, 255, 255, 0.03)); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; margin-bottom: 6px; touch-action: none; overflow: hidden; cursor: crosshair; }
-    .audio-fx-window .af-map-ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, 0.14); transform: translate(-50%, -50%); pointer-events: none; }
-    .audio-fx-window .af-map-ring.r1 { width: 50%; height: 50%; }
-    .audio-fx-window .af-map-ring.r2 { width: 100%; height: 100%; }
-    .audio-fx-window .af-map-cam { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(-90deg); background: no-repeat center / 22px 22px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3.2' y='7' width='12.4' height='10' rx='2.1' fill='%234a8bff'/%3E%3Cpath d='M22 8.4 16.8 12 22 15.6Z' fill='%234a8bff'/%3E%3C/svg%3E"); pointer-events: none; }
+    .audio-fx-window .af-map { position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 150px; background: radial-gradient(circle at 50% 100%, rgba(74, 139, 255, 0.2), rgba(255, 255, 255, 0.03)); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; margin-bottom: 6px; touch-action: none; overflow: hidden; cursor: crosshair; }
+    .audio-fx-window .af-map-ring { position: absolute; left: 0; width: 100%; height: 0; border-top: 1px dashed rgba(255, 255, 255, 0.12); pointer-events: none; } /* horizontal distance guides (camera at bottom) */
+    .audio-fx-window .af-map-ring.r1 { top: 66%; }
+    .audio-fx-window .af-map-ring.r2 { top: 33%; }
+    .audio-fx-window .af-map-cam { position: absolute; left: 50%; bottom: 3px; width: 24px; height: 24px; transform: translate(-50%, 0) rotate(-90deg); background: no-repeat center / 22px 22px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3.2' y='7' width='12.4' height='10' rx='2.1' fill='%234a8bff'/%3E%3Cpath d='M22 8.4 16.8 12 22 15.6Z' fill='%234a8bff'/%3E%3C/svg%3E"); pointer-events: none; }
     .audio-fx-window .af-map-src { position: absolute; left: var(--af-src-x, 50%); top: var(--af-src-y, 50%); width: 15px; height: 15px; border-radius: 50%; background: #ffcf3f; border: 2px solid #1b1f27; transform: translate(-50%, -50%); cursor: grab; z-index: 3; }
     .audio-fx-window .af-map-kf { position: absolute; width: 15px; height: 15px; border-radius: 50%; background: rgba(74, 139, 255, 0.5); border: 2px solid #4a8bff; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
     .audio-fx-window .af-map-kf.current { background: #4a8bff; }
@@ -7219,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver175</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver176</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7390,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '175';
+    const APP_DISPLAY_VERSION = '176';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18017,9 +18017,9 @@
       const box = audioClipFxDurationFrames(clip);
       return Math.max(0, Math.min(box, Math.round(Number(state.videoPlayheadFrames) || 0) - Math.round(Number(clip && clip.startFrame) || 0)));
     }
-    function audioFxMapXY(pan, distance) { // map fraction 0..1; vertical reconstructed from distance (front)
+    function audioFxMapXY(pan, distance) { // map fraction 0..1; camera at the BOTTOM (y=1), source in the front field above: x=pan, higher=farther
       const p = Math.max(-1, Math.min(1, pan)), d = Math.max(0, Math.min(1, distance));
-      return { x: 0.5 + p / 2, y: 0.5 + Math.sqrt(Math.max(0, d * d - p * p)) / 2 };
+      return { x: 0.5 + p / 2, y: 1 - d };
     }
     function updateAudioFxLive() {
       const win = document.getElementById('audioFxWindow');
@@ -18059,7 +18059,7 @@
             '<div class="le-slider" data-af-speed data-min="50" data-max="200" data-step="5" role="slider"><div class="le-knob"></div></div>' +
             '<span class="le-val" data-af-speedval></span></label>' +
           '<label class="le-row af-pitch-row"><span class="le-label">ピッチ維持</span><input type="checkbox" data-af-pitch><span class="le-val"></span></label>' +
-          '<div class="af-map-label">空間（カメラ↑＝上向き / ●＝音源：右なら右から）</div>' +
+          '<div class="af-map-label">空間（下＝カメラ・上向き / 上ほど遠い / ●＝音源：右なら右から）</div>' +
           '<div class="af-map" data-af-map>' +
             '<span class="af-map-ring r2"></span><span class="af-map-ring r1"></span>' +
             '<span class="af-map-cam" aria-hidden="true"></span>' +
@@ -18262,9 +18262,8 @@
           const r = map.getBoundingClientRect();
           const cx = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0.5;
           const cy = r.height > 0 ? Math.max(0, Math.min(1, (clientY - r.top) / r.height)) : 0.5;
-          const dx = (cx - 0.5) * 2, dy = (cy - 0.5) * 2;
-          pan = Math.max(-1, Math.min(1, dx));
-          distance = Math.max(0, Math.min(1, Math.hypot(dx, dy)));
+          pan = Math.max(-1, Math.min(1, (cx - 0.5) * 2)); // horizontal = L/R pan
+          distance = Math.max(0, Math.min(1, 1 - cy));      // vertical = distance (bottom: at the camera, top: far)
           win.style.setProperty('--af-src-x', (cx * 100) + '%');
           win.style.setProperty('--af-src-y', (cy * 100) + '%');
         };
