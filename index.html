@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver151</title>
+  <title>Conte Editor Prototype ver152</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5603,6 +5603,12 @@
       font-weight: 900;
     }
 
+    .conte-layer-context-menu .ctx-sep {
+      height: 1px;
+      margin: 3px 4px;
+      background: rgba(38, 44, 52, 0.14);
+    }
+
     .ol-timeline-window {
       position: fixed;
       left: var(--ol-window-left, 120px);
@@ -7185,7 +7191,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver151</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver152</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7356,7 +7362,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '151';
+    const APP_DISPLAY_VERSION = '152';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -19017,12 +19023,17 @@
       // BG role and "draw outside canvas" are mutually exclusive: only show each toggle when the
       // other is not active, so a koma can never be both at once.
       menu.innerHTML = [
+        // --- \u7a2e\u5225\u30fb\u30ea\u30f3\u30af (layer role & link; unlink sits under BG since it is the BG-side action) ---
         (expandableActive ? '' : '<button type="button" class="' + (bgActive ? 'active' : '') + '" aria-pressed="' + (bgActive ? 'true' : 'false') + '" data-conte-layer-menu-action="bg">' + bgLabel + '</button>'),
-        (bgActive ? '' : '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>'),
-        '<button type="button" data-conte-layer-menu-action="add">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
-        '<button type="button" data-conte-layer-menu-action="effect">\u30ec\u30a4\u30e4\u30fc\u30a8\u30d5\u30a7\u30af\u30c8</button>',
         '<button type="button" data-conte-layer-menu-action="unlink">\u30ea\u30f3\u30af\u89e3\u9664</button>',
+        (bgActive ? '' : '<button type="button" class="' + (expandableActive ? 'active' : '') + '" aria-pressed="' + (expandableActive ? 'true' : 'false') + '" data-conte-layer-menu-action="expandable">' + expandableLabel + '</button>'),
+        '<div class="ctx-sep" role="separator"></div>',
+        // --- \u7de8\u96c6 (edit) ---
+        '<button type="button" data-conte-layer-menu-action="effect">\u30ec\u30a4\u30e4\u30fc\u30a8\u30d5\u30a7\u30af\u30c8</button>',
         '<button type="button" data-conte-layer-menu-action="rename">\u30ec\u30a4\u30e4\u30fc\u540d\u5909\u66f4</button>',
+        '<button type="button" data-conte-layer-menu-action="add">\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0</button>',
+        '<div class="ctx-sep" role="separator"></div>',
+        // --- \u524a\u9664 (delete) ---
         '<button type="button" data-conte-layer-menu-action="delete-layer">\u30ec\u30a4\u30e4\u30fc\u524a\u9664</button>',
         '<button type="button" data-conte-layer-menu-action="delete">\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u524a\u9664</button>'
       ].join('');
@@ -19097,11 +19108,9 @@
           }
         });
       });
-      const x = Math.min(window.innerWidth - 170, Math.max(8, event.clientX));
-      const y = Math.min(window.innerHeight - 110, Math.max(8, event.clientY));
-      menu.style.left = x + 'px';
-      menu.style.top = y + 'px';
       menu.hidden = false;
+      // measure the real menu size (it grows with the grouped items + separators) so it never spills off-screen
+      positionContextMenuNearPointer(menu, event, menu.offsetWidth || 170, menu.offsetHeight || 280);
     }
 
     function selectTimelinePanelForContextAction(root, cutId) {
