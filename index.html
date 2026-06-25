@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver154</title>
+  <title>Conte Editor Prototype ver155</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5685,6 +5685,9 @@
     .layer-effect-window .le-kf-row button { border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: inherit; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
     .layer-effect-window .le-kf-row button:hover { filter: brightness(1.15); }
     .layer-effect-window .le-kf-status { margin-left: auto; font-size: 11px; color: rgba(238, 241, 245, 0.55); }
+    .layer-effect-window .le-blurtype-row { margin: 2px 0 2px; }
+    .layer-effect-window .le-blurtype-row button { width: 100%; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: inherit; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+    .layer-effect-window .le-blurtype-row button:hover { filter: brightness(1.15); }
     .le-gizmo-box { position: absolute; box-sizing: border-box; border: 1.5px solid #e2453d; background: rgba(226, 69, 61, 0.06); pointer-events: auto; cursor: move; z-index: 7; touch-action: none; }
     .le-gizmo-box .le-gizmo-handle { position: absolute; width: 12px; height: 12px; margin: -7px 0 0 -7px; background: #fff; border: 1.5px solid #e2453d; border-radius: 2px; pointer-events: auto; }
     .le-gizmo-box .le-gizmo-handle[data-le-handle="nw"] { left: 0; top: 0; cursor: nwse-resize; }
@@ -7191,7 +7194,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver154</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver155</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7362,7 +7365,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '154';
+    const APP_DISPLAY_VERSION = '155';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17938,6 +17941,7 @@
         '<div class="le-body">' +
           row('opacity', '透明度', 0, 100, 1, 'range') +
           row('blur', 'ぼかし', 0, 40, 1, 'range') +
+          '<div class="le-blurtype-row"><button type="button" data-le-action="blurtype" data-le-blurtype-btn>ぼかし: ガウス</button></div>' +
           row('scale', '拡大', 0.1, 4, 0.01, 'number') +
           row('rot', '回転', -180, 180, 1, 'number') +
           row('tx', '位置X', -940, 940, 1, 'number') +
@@ -17956,6 +17960,7 @@
           if (a === 'reset') resetLayerEffect();
           else if (a === 'addkey') addLayerEffectKeyframe();
           else if (a === 'delkey') removeLayerEffectKeyframe();
+          else if (a === 'blurtype') toggleLayerBlurType();
           else closeLayerEffectWindow();
         });
       });
@@ -17980,6 +17985,15 @@
       return (slot && slot.cut && slot.cut.id === ref.ownerCut.id) ? cameraLocalFrameForSlot(slot, state.videoPlayheadFrames) : 0;
     }
 
+    function toggleLayerBlurType() {
+      const layer = layerEffectTargetLayer();
+      if (!layer) return;
+      if (!layer.effect) layer.effect = normalizeLayerEffect(null);
+      layer.effect.blurType = (layer.effect.blurType === 'bokeh') ? 'gaussian' : 'bokeh';
+      syncLayerEffectWindowControls();
+      forceVideoPreviewRebuild();
+      commitLayerEffectEdit();
+    }
     function syncLayerEffectWindowControls() {
       const win = document.getElementById('layerEffectWindow');
       const layer = layerEffectTargetLayer();
@@ -17994,6 +18008,8 @@
       };
       set('opacity', Math.round(e.opacity * 100), Math.round(e.opacity * 100) + '%');
       set('blur', Math.round(e.blur), Math.round(e.blur) + 'px');
+      const btBtn = win.querySelector('[data-le-blurtype-btn]');
+      if (btBtn) btBtn.textContent = 'ぼかし: ' + ((layer.effect && layer.effect.blurType === 'bokeh') ? '玉ボケ（出力）' : 'ガウス');
       set('scale', Math.round(e.scale * 100) / 100, Math.round(e.scale * 100) + '%');
       set('rot', Math.round(e.rot), Math.round(e.rot) + '°');
       set('tx', Math.round(e.tx), '');
@@ -24772,6 +24788,7 @@
       const kfs = Array.isArray(eff.keyframes) ? eff.keyframes : [];
       if (!kfs.length && !layerEffectIsActive(eff)) return undefined;
       const out = normalizeLayerEffect(eff);
+      if (eff.blurType === 'bokeh') out.blurType = 'bokeh'; // disc/aperture bokeh flag (gaussian is the default)
       if (kfs.length) {
         out.keyframes = kfs.map(function(k) {
           const e = normalizeLayerEffect(k);
@@ -24815,6 +24832,34 @@
       if (e.rot !== 0) xf.push('rotate(' + e.rot + 'deg)');
       if (Math.abs(e.scale - 1) > 0.0001) xf.push('scale(' + e.scale + ')');
       return xf;
+    }
+    // 玉ボケ (disc/aperture bokeh): sample points evenly over a filled disc of radius R (Vogel spiral).
+    function discBokehOffsets(R, n) {
+      n = Math.max(8, Math.round(n || 48));
+      const out = [];
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      for (let i = 0; i < n; i += 1) {
+        const rad = R * Math.sqrt((i + 0.5) / n);
+        const ang = i * golden;
+        out.push([Math.cos(ang) * rad, Math.sin(ang) * rad]);
+      }
+      return out;
+    }
+    // Average the image over that disc via progressive-alpha accumulation on a padded transparent
+    // canvas (== true disc convolution): a bright point spreads into a filled aperture circle.
+    function discBokehCanvas(img, dw, dh, R, n) {
+      const pad = Math.ceil(Math.max(0, R));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(dw + pad * 2));
+      c.height = Math.max(1, Math.round(dh + pad * 2));
+      const ctx = c.getContext('2d');
+      const offs = discBokehOffsets(R, n);
+      for (let i = 0; i < offs.length; i += 1) {
+        ctx.globalAlpha = 1 / (i + 1);
+        ctx.drawImage(img, pad + offs[i][0], pad + offs[i][1], dw, dh);
+      }
+      ctx.globalAlpha = 1;
+      return c;
     }
     function layerEffectInlineStyle(layer, localFrame) {
       if (!layer || !layerEffectIsAnimatedOrActive(layer)) return '';
@@ -38002,8 +38047,13 @@
               octx.rotate(e.rot * Math.PI / 180);
               octx.scale(e.scale, e.scale);
               octx.translate(-lcx, -lcy);
-              if (e.blur > 0) octx.filter = 'blur(' + (e.blur * k) + 'px)';
-              octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+              if (e.blur > 0 && layer.effect && layer.effect.blurType === 'bokeh') {
+                const R = e.blur * k, pad = Math.ceil(R);
+                octx.drawImage(discBokehCanvas(img, rect.w * sx, rect.h * sx, R, 48), rect.x * sx - pad, rect.y * sx - pad);
+              } else {
+                if (e.blur > 0) octx.filter = 'blur(' + (e.blur * k) + 'px)';
+                octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
+              }
               octx.restore();
             } else if (img) {
               octx.drawImage(img, rect.x * sx, rect.y * sx, rect.w * sx, rect.h * sx);
