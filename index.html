@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver144</title>
+  <title>Conte Editor Prototype ver145</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5648,6 +5648,9 @@
     .layer-effect-window .le-row input[type="range"] { width: 100%; }
     .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
     .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
+    .layer-effect-window .le-title-stack { display: flex; flex-direction: column; line-height: 1.2; gap: 1px; min-width: 0; }
+    .layer-effect-window .le-title-main { font-weight: 800; }
+    .layer-effect-window .le-title-target { font-size: 11px; font-weight: 600; color: rgba(238, 241, 245, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7145,7 +7148,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver144</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver145</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7316,7 +7319,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '144';
+    const APP_DISPLAY_VERSION = '145';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17745,7 +17748,7 @@
       };
       win.innerHTML =
         '<div class="ol-window-header" data-le-drag="true">' +
-          '<span class="ol-window-title" data-le-title>レイヤーエフェクト</span>' +
+          '<span class="ol-window-title le-title-stack"><span class="le-title-main">レイヤーエフェクト</span><span class="le-title-target" data-le-title></span></span>' +
           '<button type="button" data-le-action="reset">リセット</button>' +
           '<button type="button" data-le-action="close">×</button>' +
         '</div>' +
@@ -17836,8 +17839,7 @@
         try { layerName = conteLayerDisplayNameMap(ref.ownerCut.conteLayers || []).get(String(layerId)) || ref.layer.canonicalLayerName || ''; }
         catch (e) { layerName = ref.layer.canonicalLayerName || ''; }
         const cutNo = ref.ownerCut && ref.ownerCut.cutNo ? String(ref.ownerCut.cutNo) : '';
-        const tag = [cutNo ? ('カット' + cutNo) : '', layerName].filter(Boolean).join(' / ');
-        titleEl.textContent = 'レイヤーエフェクト' + (tag ? ' — ' + tag : '');
+        titleEl.textContent = [cutNo ? ('カット' + cutNo) : '', layerName].filter(Boolean).join(' / ');
       }
       syncLayerEffectWindowControls();
     }
