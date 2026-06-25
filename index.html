@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver152</title>
+  <title>Conte Editor Prototype ver153</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7191,7 +7191,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver152</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver153</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7362,7 +7362,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '152';
+    const APP_DISPLAY_VERSION = '153';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -11065,7 +11065,7 @@
           const menu = conteLayerContextMenuEl();
           menu.innerHTML = names.length
             ? names.map(function(n) { return '<button type="button" data-charpick="' + escapeAttr(n) + '">' + escapeHtml(n) + '</button>'; }).join('')
-            : '<button type="button" disabled>등록된 캐릭터 없음</button>';
+            : '<button type="button" disabled>登録キャラなし</button>';
           menu.querySelectorAll('[data-charpick]').forEach(function(b) {
             b.addEventListener('click', function(ev) {
               ev.preventDefault(); ev.stopPropagation(); hideConteLayerContextMenu();
@@ -11082,12 +11082,12 @@
           const menu = conteLayerContextMenuEl();
           const opts = [{ v: '', l: 'なし' }, { v: 'off', l: 'OFF' }, { v: 'monologue', l: 'M' }, { v: 'flashback', l: '回想' }];
           menu.innerHTML = opts.map(function(o) { return '<button type="button" data-suffixpick="' + o.v + '">' + escapeHtml(o.l) + '</button>'; }).join('') +
-            '<button type="button" data-suffixpick="__custom">직접입력…</button>';
+            '<button type="button" data-suffixpick="__custom">直接入力…</button>';
           menu.querySelectorAll('[data-suffixpick]').forEach(function(b) {
             b.addEventListener('click', function(ev) {
               ev.preventDefault(); ev.stopPropagation(); hideConteLayerContextMenu();
               let val = b.dataset.suffixpick;
-              if (val === '__custom') { const t = prompt('서픽스 직접입력', ''); if (t == null) return; val = String(t).trim(); }
+              if (val === '__custom') { const t = prompt('サフィックス入力', ''); if (t == null) return; val = String(t).trim(); }
               editBlocks('Set dialog suffix', function(blocks) {
                 const bb = findBlock(blocks, id); if (!bb) return;
                 bb.suffix = val; bb.tags = val ? normalizeDialogTags(val) : [];
@@ -11134,8 +11134,8 @@
         e.preventDefault();
         const menu = conteLayerContextMenuEl();
         menu.innerHTML =
-          '<button type="button" data-add-kind="dialog">대사 블록</button>' +
-          '<button type="button" data-add-kind="free">자유 블록</button>';
+          '<button type="button" data-add-kind="dialog">台詞ブロック</button>' +
+          '<button type="button" data-add-kind="free">自由ブロック</button>';
         menu.querySelectorAll('[data-add-kind]').forEach(function(b) {
           b.addEventListener('click', function(ev) {
             ev.preventDefault(); ev.stopPropagation(); hideConteLayerContextMenu();
@@ -17682,7 +17682,7 @@
       const menu = conteLayerContextMenuEl();
       menu.innerHTML = [
         '<button type="button" data-audio-recording-menu-action="start"' + (reason ? ' disabled title="' + escapeAttr(reason) + '"' : '') + '>録音開始</button>',
-        '<button type="button" data-audio-recording-menu-action="delete">レイヤー削除</button>'
+        '<button type="button" data-audio-recording-menu-action="delete">音声トラック削除</button>'
       ].join('');
       menu.querySelectorAll('button[data-audio-recording-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
@@ -17713,7 +17713,7 @@
       const id = String(trackId || 'video-media-main');
       const disabled = videoMediaDisabledOnThisDevice();
       const menu = conteLayerContextMenuEl();
-      menu.innerHTML = '<button type="button" data-video-track-menu-action="delete"' + (disabled ? ' disabled title="' + escapeAttr(videoMediaDisabledReason()) + '"' : '') + '>レイヤー削除</button>';
+      menu.innerHTML = '<button type="button" data-video-track-menu-action="delete"' + (disabled ? ' disabled title="' + escapeAttr(videoMediaDisabledReason()) + '"' : '') + '>映像トラック削除</button>';
       menu.querySelectorAll('button[data-video-track-menu-action]').forEach(function(button) {
         button.addEventListener('click', function(clickEvent) {
           clickEvent.preventDefault();
@@ -17735,9 +17735,13 @@
     // buttons, wires click (preventDefault/stopPropagation/hide + action), positions and shows the menu.
     function openSimpleContextMenu(event, items, opts) {
       opts = opts || {};
-      const list = (items || []).filter(function(it) { return it && !it.hidden; });
+      let list = (items || []).filter(function(it) { return it && !it.hidden; });
+      // Support { separator: true } group dividers; drop ones left dangling by hidden items.
+      list = list.filter(function(it, i) { return !it.separator || (i > 0 && list[i - 1] && !list[i - 1].separator); });
+      while (list.length && list[list.length - 1] && list[list.length - 1].separator) list.pop();
       const menu = conteLayerContextMenuEl();
       menu.innerHTML = list.map(function(it, idx) {
+        if (it.separator) return '<div class="ctx-sep" role="separator"></div>';
         return '<button type="button" data-ctx-menu-idx="' + idx + '"' + (it.disabled ? ' disabled' : '') + '>' + escapeHtml(String(it.label == null ? '' : it.label)) + '</button>';
       }).join('');
       menu.querySelectorAll('button[data-ctx-menu-idx]').forEach(function(button) {
@@ -17749,8 +17753,9 @@
           if (it && typeof it.action === 'function') it.action();
         });
       });
-      positionContextMenuNearPointer(menu, event, opts.width || 170, opts.height || 140);
       menu.hidden = false;
+      // measure the real size so grouped/long menus never spill off-screen (opts.* are fallbacks)
+      positionContextMenuNearPointer(menu, event, menu.offsetWidth || opts.width || 170, menu.offsetHeight || opts.height || 140);
     }
 
     function showAudioClipContextMenu(event, clipId, root) {
@@ -19294,10 +19299,13 @@
       openSimpleContextMenu(event, [
         { label: '\u30ab\u30c3\u30c8\u8ffd\u52a0', action: function() { addConteCutAfterSelection(); } },
         { label: '\u30ab\u30c3\u30c8\u524a\u9664', disabled: !canDelete, action: function() { deletePrimarySelectedPicturePanel(); } },
+        { separator: true },
         { label: prevMerge ? ('\u2190 \u30ab\u30c3\u30c8' + prevMerge.neighborCutNo + '\u306b\u7d50\u5408') : '', hidden: !prevMerge, action: function() { mergeCutIntoNeighbor(targetCutId, 'prev'); } },
         { label: nextMerge ? ('\u30ab\u30c3\u30c8' + nextMerge.neighborCutNo + '\u306b\u7d50\u5408 \u2192') : '', hidden: !nextMerge, action: function() { mergeCutIntoNeighbor(targetCutId, 'next'); } },
+        { separator: true },
         { label: 'OL \u4f5c\u6210', action: function() { openOlWindowForCut(targetCutId); } },
         { label: 'OL \u89e3\u9664', hidden: !hasOl, action: function() { releaseOlForCut(targetCutId); } },
+        { separator: true },
         { label: '\u30ab\u30c3\u30c8\u756a\u53f7\u632f\u308a\u76f4\u3057', action: function() { renumberContentCuts(); } }
       ], { width: 170, height: 140 });
     }
@@ -19317,7 +19325,7 @@
       selectConteLayerCellFromTimeline(root, cutId, rowIndex, anchorLayerId, false);
       openSimpleContextMenu(event, [
         { label: '\u30ec\u30a4\u30e4\u30fc\u30b3\u30de\u8ffd\u52a0', action: function() { addConteLayerToSelection('panel'); } },
-        { label: '\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0', action: function() { addConteLayerBelowSelectionLine(cutId, lineKey); } },
+        { label: '\u30ec\u30a4\u30e4\u30fc\u8ffd\u52a0', action: function() { addConteLayerToSelection('cut'); } },
         { label: '\u30d1\u30cd\u30eb\u8ffd\u52a0', action: function() { addPicturePanelAfterCutPreserveLayerSelection(cutId); } },
         { label: '\u30ec\u30a4\u30e4\u30fc\u524a\u9664', hidden: !anchorLayerId, action: function() {
             const ownerCutIds = conteLayerOwnerCutIdsForLayerIds(state.project, [anchorLayerId]);
