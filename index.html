@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver166</title>
+  <title>Conte Editor Prototype ver167</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver166</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver167</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '166';
+    const APP_DISPLAY_VERSION = '167';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -22613,6 +22613,12 @@
       if (!state.playbackAudioContext) state.playbackAudioContext = new AudioContextCtor();
       if (state.playbackAudioContext.state === 'suspended') await state.playbackAudioContext.resume();
       return state.playbackAudioContext;
+    }
+    // iOS/Safari suspends the WebAudio context on interruptions/lock/inactivity (and a resume() outside a user
+    // gesture is ignored), which makes voice-clip playback cut in and out. Resume it from gesture/foreground.
+    function resumePlaybackAudioContextIfNeeded() {
+      const ctx = state.playbackAudioContext;
+      if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') { try { ctx.resume(); } catch (e) {} }
     }
 
     function playbackElapsedFrames(fps, now) {
@@ -38172,7 +38178,10 @@
       window.addEventListener('blur', cancelMemoSpacePan);
       document.addEventListener('visibilitychange', function() {
         if (document.visibilityState === 'hidden') flushIndexedDbAutosave();
+        else resumePlaybackAudioContextIfNeeded(); // iOS suspends the AudioContext in the background → re-arm on return
       });
+      document.addEventListener('pointerdown', resumePlaybackAudioContextIfNeeded, true);
+      document.addEventListener('touchend', resumePlaybackAudioContextIfNeeded, true);
       window.addEventListener('pagehide', flushIndexedDbAutosave);
       bindShortcutControls();
       if (window.ResizeObserver) {
