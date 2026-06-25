@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver158</title>
+  <title>Conte Editor Prototype ver159</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5676,9 +5676,9 @@
     .layer-effect-window .le-row { display: grid; grid-template-columns: 52px 1fr 46px; align-items: center; gap: 8px; font-size: 12px; }
     .layer-effect-window .le-label { color: rgba(238, 241, 245, 0.72); }
     .layer-effect-window .le-slider { position: relative; height: 16px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
-    .layer-effect-window .le-slider::before { content: ''; position: absolute; left: 0; right: 0; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); }
-    .layer-effect-window .le-slider::after { content: ''; position: absolute; left: 0; height: 6px; border-radius: 999px; background: #4a8bff; width: var(--le-fill, 0%); }
-    .layer-effect-window .le-knob { position: absolute; left: var(--le-fill, 0%); top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; pointer-events: none; }
+    .layer-effect-window .le-slider::before { content: ''; position: absolute; left: 0; right: 0; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); z-index: 0; }
+    .layer-effect-window .le-slider::after { content: ''; position: absolute; left: 0; height: 6px; border-radius: 999px; background: #4a8bff; width: var(--le-fill, 0%); z-index: 1; }
+    .layer-effect-window .le-knob { position: absolute; left: var(--le-fill, 0%); top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; pointer-events: none; z-index: 2; }
     .layer-effect-window .le-row input[type="number"] { width: 100%; box-sizing: border-box; background: rgba(255, 255, 255, 0.08); color: inherit; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 5px; padding: 3px 6px; }
     .layer-effect-window .le-val { text-align: right; color: rgba(238, 241, 245, 0.55); font-size: 11px; }
     .layer-effect-window .le-title-stack { display: flex; flex-direction: column; line-height: 1.2; gap: 1px; min-width: 0; }
@@ -7197,7 +7197,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver158</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver159</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7368,7 +7368,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '158';
+    const APP_DISPLAY_VERSION = '159';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
