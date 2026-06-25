@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver149</title>
+  <title>Conte Editor Prototype ver150</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5679,8 +5679,15 @@
     .layer-effect-window .le-kf-row button { border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: inherit; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
     .layer-effect-window .le-kf-row button:hover { filter: brightness(1.15); }
     .layer-effect-window .le-kf-status { margin-left: auto; font-size: 11px; color: rgba(238, 241, 245, 0.55); }
-    .le-gizmo-overlay { position: absolute; inset: 0; z-index: 90; cursor: move; touch-action: none; background: transparent; }
-    .le-gizmo-overlay::after { content: 'ドラッグでレイヤー移動'; position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(226, 69, 61, 0.88); padding: 2px 7px; border-radius: 4px; pointer-events: none; }
+    .le-gizmo-box { position: absolute; box-sizing: border-box; border: 1.5px solid #e2453d; background: rgba(226, 69, 61, 0.06); pointer-events: auto; cursor: move; z-index: 7; touch-action: none; }
+    .le-gizmo-box .le-gizmo-handle { position: absolute; width: 12px; height: 12px; margin: -7px 0 0 -7px; background: #fff; border: 1.5px solid #e2453d; border-radius: 2px; pointer-events: auto; }
+    .le-gizmo-box .le-gizmo-handle[data-le-handle="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+    .le-gizmo-box .le-gizmo-handle[data-le-handle="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+    .le-gizmo-box .le-gizmo-handle[data-le-handle="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+    .le-gizmo-box .le-gizmo-handle[data-le-handle="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+    .le-gizmo-box .le-gizmo-rotline { position: absolute; left: 50%; top: -22px; width: 0; height: 22px; border-left: 1.5px solid #e2453d; pointer-events: none; }
+    .le-gizmo-box .le-gizmo-rot { position: absolute; left: 50%; top: -22px; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #fff; border: 1.5px solid #e2453d; border-radius: 50%; pointer-events: auto; cursor: grab; }
+    .video-preview-screen.le-editing .video-memo-canvas { pointer-events: none !important; }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7178,7 +7185,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver149</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver150</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7349,7 +7356,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '149';
+    const APP_DISPLAY_VERSION = '150';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17785,27 +17792,83 @@
       return layer.effect;
     }
 
-    // D-1 gizmo: while a layer-effect window is open, an overlay covers the preview (also blocking memo
-    // drawing); dragging it moves the layer (tx/ty). Mid-drag uses updateLayerEffectsPreview (no full
-    // rebuild) so the overlay we are dragging isn't destroyed.
-    function bindLayerGizmoOverlay(stageEl) {
-      const overlay = stageEl ? stageEl.querySelector('[data-le-gizmo]') : null;
-      if (!overlay) return;
-      overlay.addEventListener('pointerdown', function(e) {
+    // D-2 gizmo: while a layer-effect window is open, a transform BOX overlays the edited layer (fit to the
+    // drawn image). It lives INSIDE the camera-target and simply copies the layer element's offset rect +
+    // CSS transform, so it tracks zoom/camera/effect with no coordinate math. Drag the body to MOVE, a corner
+    // to SCALE (uniform, from center), the top knob to ROTATE (Shift = snap 15deg). Memo drawing is blocked
+    // via .le-editing on the screen. Mid-drag uses updateLayerEffectsPreview (no full rebuild).
+    function ensureLayerGizmoBox(stageEl) {
+      const ct = stageEl ? stageEl.querySelector('.video-preview-camera-target') : null;
+      if (!ct) return null;
+      let box = ct.querySelector(':scope > .le-gizmo-box');
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'le-gizmo-box';
+        box.innerHTML =
+          '<div class="le-gizmo-handle" data-le-handle="nw"></div>' +
+          '<div class="le-gizmo-handle" data-le-handle="ne"></div>' +
+          '<div class="le-gizmo-handle" data-le-handle="sw"></div>' +
+          '<div class="le-gizmo-handle" data-le-handle="se"></div>' +
+          '<div class="le-gizmo-rotline"></div>' +
+          '<div class="le-gizmo-rot" data-le-handle="rot" title="回転"></div>';
+        ct.appendChild(box);
+        bindLayerGizmo(box, stageEl);
+      }
+      return box;
+    }
+    function updateLayerGizmoBox(stageEl) {
+      if (!stageEl) return;
+      const ct = stageEl.querySelector('.video-preview-camera-target');
+      if (!ct) return;
+      const existing = ct.querySelector(':scope > .le-gizmo-box');
+      if (!state.layerEffectId) { if (existing) existing.style.display = 'none'; return; }
+      let layerEl = null;
+      const nodes = ct.querySelectorAll('[data-conte-layer-id]');
+      for (let i = 0; i < nodes.length; i += 1) { if (nodes[i].dataset.conteLayerId === state.layerEffectId) { layerEl = nodes[i]; break; } }
+      if (!layerEl) { if (existing) existing.style.display = 'none'; return; }
+      const box = ensureLayerGizmoBox(stageEl);
+      if (!box) return;
+      box.style.display = '';
+      box.style.left = layerEl.offsetLeft + 'px';
+      box.style.top = layerEl.offsetTop + 'px';
+      box.style.width = layerEl.offsetWidth + 'px';
+      box.style.height = layerEl.offsetHeight + 'px';
+      box.style.transform = layerEl.style.transform || '';
+      box.style.transformOrigin = 'center';
+    }
+    function bindLayerGizmo(box, stageEl) {
+      box.addEventListener('pointerdown', function(e) {
         if (e.button && e.button !== 0) return;
         const layer = layerEffectTargetLayer();
         if (!layer) return;
+        const handleEl = e.target && e.target.closest ? e.target.closest('[data-le-handle]') : null;
+        const mode = handleEl ? handleEl.dataset.leHandle : 'move';
         e.preventDefault(); e.stopPropagation();
         const camTarget = stageEl.querySelector('.video-preview-camera-target');
-        const width = camTarget ? (camTarget.getBoundingClientRect().width || VIDEO_PREVIEW_BASE_WIDTH) : VIDEO_PREVIEW_BASE_WIDTH;
-        const factor = VIDEO_PREVIEW_BASE_WIDTH / Math.max(1, width);
+        const ctWidth = camTarget ? (camTarget.getBoundingClientRect().width || VIDEO_PREVIEW_BASE_WIDTH) : VIDEO_PREVIEW_BASE_WIDTH;
+        const moveFactor = VIDEO_PREVIEW_BASE_WIDTH / Math.max(1, ctWidth);
         const target = layerEffectWriteTarget(layer);
         const cur = normalizeLayerEffect(target);
-        const startTx = cur.tx, startTy = cur.ty, startX = e.clientX, startY = e.clientY;
-        try { overlay.setPointerCapture(e.pointerId); } catch (err) {}
+        const boxRect = box.getBoundingClientRect();
+        const cx = boxRect.left + boxRect.width / 2, cy = boxRect.top + boxRect.height / 2;
+        const startX = e.clientX, startY = e.clientY;
+        const startTx = cur.tx, startTy = cur.ty, startScale = cur.scale, startRot = cur.rot;
+        const startDist = Math.max(1, Math.hypot(startX - cx, startY - cy));
+        const startAng = Math.atan2(startY - cy, startX - cx);
+        try { box.setPointerCapture(e.pointerId); } catch (err) {}
         const move = makeRafThrottled(function(me) {
-          target.tx = Math.round(startTx + (me.clientX - startX) * factor);
-          target.ty = Math.round(startTy + (me.clientY - startY) * factor);
+          if (mode === 'rot') {
+            const d = (Math.atan2(me.clientY - cy, me.clientX - cx) - startAng) * 180 / Math.PI;
+            let r = Math.round(startRot + d);
+            if (me.shiftKey) r = Math.round(r / 15) * 15;
+            target.rot = r;
+          } else if (mode === 'nw' || mode === 'ne' || mode === 'sw' || mode === 'se') {
+            const ratio = Math.hypot(me.clientX - cx, me.clientY - cy) / startDist;
+            target.scale = Math.max(0.05, Math.round(startScale * ratio * 100) / 100);
+          } else {
+            target.tx = Math.round(startTx + (me.clientX - startX) * moveFactor);
+            target.ty = Math.round(startTy + (me.clientY - startY) * moveFactor);
+          }
           updateLayerEffectsPreview(stageEl);
           syncLayerEffectWindowControls();
         });
@@ -23803,11 +23866,10 @@
       const screenClass = videoPreviewScreenClassName();
       const screenStyle = paperFrameCssVars(state.project);
       stageEl.innerHTML = [
-        '<div class="video-preview-screen' + screenClass + (previewInteractionActive ? ' memo-active' : '') + '"' + (screenStyle ? ' style="' + escapeAttr(screenStyle) + '"' : '') + '>',
+        '<div class="video-preview-screen' + screenClass + (previewInteractionActive ? ' memo-active' : '') + (state.layerEffectId ? ' le-editing' : '') + '"' + (screenStyle ? ' style="' + escapeAttr(screenStyle) + '"' : '') + '>',
           mediaHtml,
           overlayHtml,
           '<canvas id="videoMemoCanvas" class="video-memo-canvas' + (memoInteractionActive() ? ' memo-active' : '') + '" aria-label="Video memo layer"></canvas>',
-          (state.layerEffectId ? '<div class="le-gizmo-overlay" data-le-gizmo></div>' : ''),
         '</div>'
       ].join('');
       updateVideoPreviewZoomDom(stageEl);
@@ -23818,7 +23880,6 @@
       drawVideoPreviewLayerCanvases(stageEl);
       drawOnionSkinLayerCanvases(stageEl);
       bindVideoMemoCanvas(stageEl);
-      bindLayerGizmoOverlay(stageEl);
       bindMobilePreviewPanelFlip(stageEl);
       redrawVideoMemoCanvas();
       renderCameraFrameOverlay(stageEl);
@@ -24766,6 +24827,7 @@
           const ref = findConteLayerById(state.project, nodes[i].dataset.conteLayerId || '');
           if (ref && ref.layer) applyLayerEffectStyleToEl(nodes[i], ref.layer, localFrame, k);
         }
+        updateLayerGizmoBox(stageEl);
         if (state.layerEffectId) syncLayerEffectWindowControls();
       } catch (e) {}
     }
