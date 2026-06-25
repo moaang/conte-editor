@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver194</title>
+  <title>Conte Editor Prototype ver195</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7135,6 +7135,7 @@
             <canvas id="memoCanvas" class="memo-overlay-canvas" aria-label="Memo layer"></canvas>
           </div>
           <div id="videoPreviewStage" class="video-preview-stage" hidden></div>
+          <div id="gengaStage" class="genga-stage" hidden></div>
         </div>
       </section>
 
@@ -7239,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver194</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver195</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7311,6 +7312,31 @@
     .project-start-btn.primary { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .project-start-btn.primary:hover { background: #2a62ba; }
     body.project-locked .workspace { pointer-events: none; }
+    body.genga-active .stage-mode-switch,
+    body.genga-active .paper-edit-controls,
+    body.genga-active #timingDashboard { display: none !important; }
+    .genga-stage { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; padding: 10px; box-sizing: border-box; overflow: hidden; }
+    .genga-stage[hidden] { display: none; }
+    .genga-info { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: #333; }
+    .genga-info strong { font-size: 14px; }
+    .genga-info .genga-note { margin-left: auto; opacity: 0.6; font-size: 12px; }
+    .genga-dopesheet { display: flex; flex: 1; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
+    .genga-layers-col { width: 150px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
+    .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #555; }
+    .genga-layer-head { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 13px; box-sizing: border-box; }
+    .genga-sw { width: 13px; height: 13px; border-radius: 3px; flex: none; }
+    .genga-lname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .genga-lop { font-size: 11px; opacity: 0.6; }
+    .genga-ph { color: #999; font-style: italic; }
+    .genga-timeline-wrap { flex: 1; overflow: auto; position: relative; }
+    .genga-ruler { position: relative; height: 24px; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; }
+    .genga-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(0,0,0,0.07); }
+    .genga-tick.major { border-left-color: rgba(0,0,0,0.22); }
+    .genga-tick.major span { position: absolute; top: 4px; left: 3px; font-size: 10px; color: #777; }
+    .genga-lanes { position: relative; }
+    .genga-lane { height: 34px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, transparent 0, transparent 21px, rgba(0,0,0,0.05) 21px, rgba(0,0,0,0.05) 22px); }
+    .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 5px; background: #2f6fd1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; box-sizing: border-box; }
+    .genga-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e03b3b; pointer-events: none; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
     #projectCreateTitleInput, #gengaCreateDialog input[type="text"], #gengaCreateDialog select {
       display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
@@ -7449,7 +7475,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '194';
+    const APP_DISPLAY_VERSION = '195';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -23837,6 +23863,15 @@
       const pageEl = document.getElementById('contePage');
       const videoEl = document.getElementById('videoPreviewStage');
       if (!pageEl || !videoEl) return;
+      const gengaEl = document.getElementById('gengaStage');
+      // Genga projects have their OWN stage (the dope sheet) — no paper / video-edit mode applies.
+      if (state.project && state.project.kind === 'genga') {
+        pageEl.hidden = true;
+        videoEl.hidden = true;
+        if (gengaEl) { gengaEl.hidden = false; renderGengaView(gengaEl); }
+        return;
+      }
+      if (gengaEl) gengaEl.hidden = true;
       if (state.videoEditMode) {
         pageEl.hidden = true;
         videoEl.hidden = false;
@@ -40351,6 +40386,64 @@
       });
     }
 
+    // P1-b: render the genga dope-sheet shell (layers × 1-frame timeline). Display-only for now —
+    // drawing / editing / scrubbing come in later phases. Reads project.gengaTimeline; reuses escapeHtml.
+    function renderGengaView(stageEl) {
+      stageEl = stageEl || document.getElementById('gengaStage');
+      if (!stageEl) return;
+      const project = state.project;
+      const gt = project && project.gengaTimeline;
+      if (!gt) { stageEl.innerHTML = '<div class="genga-info"><span class="genga-ph">原画タイムラインがありません</span></div>'; return; }
+      const layers = Array.isArray(gt.layers) ? gt.layers : [];
+      const fps = gt.fps || 24;
+      const total = Math.max(24, gt.totalFrames || 1);
+      const cellW = 22;
+      let ruler = '';
+      for (let f = 1; f <= total; f++) {
+        const major = (f === 1 || f % 5 === 0);
+        ruler += '<div class="genga-tick' + (major ? ' major' : '') + '" style="left:' + ((f - 1) * cellW) + 'px">' + (major ? ('<span>' + f + '</span>') : '') + '</div>';
+      }
+      let rowsHead = '', rowsLane = '';
+      if (!layers.length) {
+        rowsHead = '<div class="genga-layer-head genga-ph">レイヤーなし</div>';
+        rowsLane = '<div class="genga-lane"></div>';
+      } else {
+        layers.forEach(function(l) {
+          rowsHead += '<div class="genga-layer-head">' +
+            '<span class="genga-sw" style="background:' + escapeHtml(l.color || '#888888') + '"></span>' +
+            '<span class="genga-lname">' + escapeHtml(l.name || 'Layer') + '</span>' +
+            '<span class="genga-lop">' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%</span>' +
+            '</div>';
+          let blocks = '';
+          (l.exposures || []).forEach(function(e) {
+            const lab = (e.instanceValue != null ? String(e.instanceValue) : '');
+            blocks += '<div class="genga-exp" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px"><span>' + escapeHtml(lab) + '</span></div>';
+          });
+          rowsLane += '<div class="genga-lane">' + blocks + '</div>';
+        });
+      }
+      const laneWidth = total * cellW;
+      stageEl.innerHTML =
+        '<div class="genga-info">' +
+          '<strong>' + escapeHtml(project.title || '(無題)') + '</strong>' +
+          '<span>カメラ ' + gt.camera.w + '×' + gt.camera.h + '</span>' +
+          '<span>作画用紙 ' + gt.paper.w + '×' + gt.paper.h + '</span>' +
+          '<span>' + fps + ' fps</span>' +
+          '<span class="genga-note">原画タイムライン — 表示のみ（描画・編集は今後）</span>' +
+        '</div>' +
+        '<div class="genga-dopesheet">' +
+          '<div class="genga-layers-col">' +
+            '<div class="genga-col-head">レイヤー</div>' + rowsHead +
+          '</div>' +
+          '<div class="genga-timeline-wrap">' +
+            '<div class="genga-ruler" style="width:' + laneWidth + 'px">' + ruler + '</div>' +
+            '<div class="genga-lanes" style="width:' + laneWidth + 'px">' + rowsLane +
+              '<div class="genga-playhead" style="left:0px"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
+
     // APP: UTILITIES
     function clampNumber(value, min, max, fallback) {
       const number = Number(value);
@@ -40592,6 +40685,7 @@
         videoModeButton.textContent = '映像編集';
       }
       if (document.body) document.body.classList.toggle('video-edit-active-runtime', state.videoEditMode);
+      if (document.body) document.body.classList.toggle('genga-active', !!(state.project && state.project.kind === 'genga'));
       const workspace = document.querySelector('.workspace');
       if (workspace) workspace.classList.toggle('video-edit-active', state.videoEditMode);
       const zoomHeader = document.getElementById('videoPreviewZoomHeader');
