@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver147</title>
+  <title>Conte Editor Prototype ver148</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5679,6 +5679,8 @@
     .layer-effect-window .le-kf-row button { border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: inherit; border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
     .layer-effect-window .le-kf-row button:hover { filter: brightness(1.15); }
     .layer-effect-window .le-kf-status { margin-left: auto; font-size: 11px; color: rgba(238, 241, 245, 0.55); }
+    .le-gizmo-overlay { position: absolute; inset: 0; z-index: 90; cursor: move; touch-action: none; background: transparent; }
+    .le-gizmo-overlay::after { content: 'ドラッグでレイヤー移動'; position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(226, 69, 61, 0.88); padding: 2px 7px; border-radius: 4px; pointer-events: none; }
     .ol-clip {
       position: absolute;
       height: 24px;
@@ -7176,7 +7178,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver147</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver148</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7347,7 +7349,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '147';
+    const APP_DISPLAY_VERSION = '148';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17766,6 +17768,58 @@
       guardedRender('timing', renderTimingDashboard);
     }
 
+    // Returns the effect object to write transform props onto: the keyframe at the playhead (created if
+    // needed) when keyframed, else the static effect. Used by the on-preview move gizmo.
+    function layerEffectWriteTarget(layer) {
+      if (!layer) return null;
+      if (!layer.effect) layer.effect = normalizeLayerEffect(null);
+      const kfs = Array.isArray(layer.effect.keyframes) ? layer.effect.keyframes : null;
+      if (kfs && kfs.length) {
+        const lf = layerEffectCurrentLocalFrame();
+        for (let i = 0; i < kfs.length; i += 1) { if (Math.round(Number(kfs[i].frame) || 0) === lf) return kfs[i]; }
+        const kf = Object.assign({ frame: lf }, layerEffectAtFrame(layer, lf));
+        kfs.push(kf); kfs.sort(function(a, b) { return (Number(a.frame) || 0) - (Number(b.frame) || 0); });
+        refreshLayerEffectKeyframeTrack();
+        return kf;
+      }
+      return layer.effect;
+    }
+
+    // D-1 gizmo: while a layer-effect window is open, an overlay covers the preview (also blocking memo
+    // drawing); dragging it moves the layer (tx/ty). Mid-drag uses updateLayerEffectsPreview (no full
+    // rebuild) so the overlay we are dragging isn't destroyed.
+    function bindLayerGizmoOverlay(stageEl) {
+      const overlay = stageEl ? stageEl.querySelector('[data-le-gizmo]') : null;
+      if (!overlay) return;
+      overlay.addEventListener('pointerdown', function(e) {
+        if (e.button && e.button !== 0) return;
+        const layer = layerEffectTargetLayer();
+        if (!layer) return;
+        e.preventDefault(); e.stopPropagation();
+        const screen = stageEl.querySelector('.video-preview-screen');
+        const width = screen ? (screen.getBoundingClientRect().width || VIDEO_PREVIEW_BASE_WIDTH) : VIDEO_PREVIEW_BASE_WIDTH;
+        const factor = VIDEO_PREVIEW_BASE_WIDTH / Math.max(1, width);
+        const target = layerEffectWriteTarget(layer);
+        const cur = normalizeLayerEffect(target);
+        const startTx = cur.tx, startTy = cur.ty, startX = e.clientX, startY = e.clientY;
+        try { overlay.setPointerCapture(e.pointerId); } catch (err) {}
+        const move = makeRafThrottled(function(me) {
+          target.tx = Math.round(startTx + (me.clientX - startX) * factor);
+          target.ty = Math.round(startTy + (me.clientY - startY) * factor);
+          updateLayerEffectsPreview(stageEl);
+          syncLayerEffectWindowControls();
+        });
+        const up = function() {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+      });
+    }
+
     function bindLayerEffectWindowDrag(win) {
       const header = win.querySelector('[data-le-drag="true"]');
       if (!header) return;
@@ -23740,6 +23794,7 @@
           mediaHtml,
           overlayHtml,
           '<canvas id="videoMemoCanvas" class="video-memo-canvas' + (memoInteractionActive() ? ' memo-active' : '') + '" aria-label="Video memo layer"></canvas>',
+          (state.layerEffectId ? '<div class="le-gizmo-overlay" data-le-gizmo></div>' : ''),
         '</div>'
       ].join('');
       updateVideoPreviewZoomDom(stageEl);
@@ -23750,6 +23805,7 @@
       drawVideoPreviewLayerCanvases(stageEl);
       drawOnionSkinLayerCanvases(stageEl);
       bindVideoMemoCanvas(stageEl);
+      bindLayerGizmoOverlay(stageEl);
       bindMobilePreviewPanelFlip(stageEl);
       redrawVideoMemoCanvas();
       renderCameraFrameOverlay(stageEl);
