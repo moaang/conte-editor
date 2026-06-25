@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver168</title>
+  <title>Conte Editor Prototype ver169</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -5681,9 +5681,9 @@
     .layer-effect-window .le-knob { position: absolute; left: var(--le-fill, 0%); top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; pointer-events: none; z-index: 2; }
     .audio-fx-window .af-clipbar { position: relative; height: 46px; border-radius: 6px; background: rgba(120, 160, 255, 0.28); overflow: hidden; margin: 2px 0 6px; }
     .audio-fx-window .af-fade-tri { position: absolute; top: 0; bottom: 0; pointer-events: none; }
-    .audio-fx-window .af-fade-tri.fi { left: 0; width: var(--af-fi, 0%); background: linear-gradient(to right, rgba(8, 12, 20, 0.55), rgba(8, 12, 20, 0)); }
-    .audio-fx-window .af-fade-tri.fo { right: 0; width: var(--af-fo, 0%); background: linear-gradient(to left, rgba(8, 12, 20, 0.55), rgba(8, 12, 20, 0)); }
-    .audio-fx-window .af-fade-handle { position: absolute; top: -4px; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #4a8bff; cursor: ew-resize; transform: translateX(-50%); z-index: 2; touch-action: none; }
+    .audio-fx-window .af-fade-tri.fi { left: 0; width: var(--af-fi, 0%); background: linear-gradient(to right, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0.06)); }
+    .audio-fx-window .af-fade-tri.fo { right: 0; width: var(--af-fo, 0%); background: linear-gradient(to left, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0.06)); }
+    .audio-fx-window .af-fade-handle { position: absolute; top: 0; bottom: 0; width: 4px; margin-left: -2px; background: rgba(255, 138, 76, 0.95); border-radius: 2px; cursor: ew-resize; z-index: 2; touch-action: none; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
     .audio-fx-window .af-fade-handle.fi { left: var(--af-fi, 0%); }
     .audio-fx-window .af-fade-handle.fo { left: calc(100% - var(--af-fo, 0%)); }
     .audio-fx-window .af-fade-row { display: flex; justify-content: space-between; font-size: 11px; color: rgba(238, 241, 245, 0.6); margin-bottom: 6px; }
@@ -7212,7 +7212,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver168</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver169</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7383,7 +7383,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '168';
+    const APP_DISPLAY_VERSION = '169';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -17951,6 +17951,11 @@
     function audioClipFxDurationFrames(clip) {
       return Math.max(1, Math.round(Number(clip && (clip.audioTrimDurationFrames || clip.durationFrames)) || 1));
     }
+    function audioFxFramesLabel(frames) { // 秒+コマ "SS+FF"
+      const fps = Math.max(1, Math.round(fpsForProject(state.project)));
+      const f = Math.max(0, Math.round(Number(frames) || 0));
+      return String(Math.floor(f / fps)).padStart(2, '0') + '+' + String(f % fps).padStart(2, '0');
+    }
     function audioFxWindowEl() {
       let win = document.getElementById('audioFxWindow');
       if (win) return win;
@@ -17969,7 +17974,7 @@
             '<span class="af-fade-handle fi" data-af-fade="in" title="フェードイン"></span>' +
             '<span class="af-fade-handle fo" data-af-fade="out" title="フェードアウト"></span>' +
           '</div>' +
-          '<div class="af-fade-row"><span>FI <b data-af-val="in">0</b>f</span><span>FO <b data-af-val="out">0</b>f</span></div>' +
+          '<div class="af-fade-row"><span>FI <b data-af-val="in">00+00</b></span><span>FO <b data-af-val="out">00+00</b></span></div>' +
           '<label class="le-row"><span class="le-label">音量</span>' +
             '<div class="le-slider" data-af-prop="volume" data-min="0" data-max="200" data-step="1" role="slider"><div class="le-knob"></div></div>' +
             '<span class="le-val" data-af-volval></span></label>' +
@@ -18017,8 +18022,8 @@
       win.style.setProperty('--af-fi', Math.max(0, Math.min(100, fx.fadeInFrames / total * 100)) + '%');
       win.style.setProperty('--af-fo', Math.max(0, Math.min(100, fx.fadeOutFrames / total * 100)) + '%');
       const txt = function(sel, t) { const el = win.querySelector(sel); if (el) el.textContent = t; };
-      txt('[data-af-val="in"]', fx.fadeInFrames);
-      txt('[data-af-val="out"]', fx.fadeOutFrames);
+      txt('[data-af-val="in"]', audioFxFramesLabel(fx.fadeInFrames));
+      txt('[data-af-val="out"]', audioFxFramesLabel(fx.fadeOutFrames));
       const vpct = Math.max(0, Math.min(200, (Number(clip.volume) || 1) * 100));
       const vsl = win.querySelector('[data-af-prop="volume"]');
       if (vsl) vsl.style.setProperty('--le-fill', (vpct / 200 * 100) + '%');
@@ -18058,7 +18063,7 @@
             const frac = which === 'out' ? (1 - t) : t;
             frames = Math.max(0, Math.min(Math.round(frac * total), total - otherFrames));
             win.style.setProperty(which === 'out' ? '--af-fo' : '--af-fi', (frames / total * 100) + '%');
-            const vEl = win.querySelector('[data-af-val="' + which + '"]'); if (vEl) vEl.textContent = frames;
+            const vEl = win.querySelector('[data-af-val="' + which + '"]'); if (vEl) vEl.textContent = audioFxFramesLabel(frames);
           };
           const up = function() {
             window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
