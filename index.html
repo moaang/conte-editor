@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver153</title>
+  <title>Conte Editor Prototype ver154</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7191,7 +7191,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver153</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver154</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7362,7 +7362,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '153';
+    const APP_DISPLAY_VERSION = '154';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -10854,7 +10854,7 @@
       const clipId = block && block.audioClipId;
       const hasClip = clipId && ((project.audio && project.audio.clips) || []).some(function(c) { return c.id === clipId; });
       let alsoDeleteClip = false;
-      if (hasClip) alsoDeleteClip = confirm('연결된 음성 클립도 함께 삭제할까요?\n확인 = 음성도 삭제 / 취소 = 대사 블록만 삭제(링크 해제)');
+      if (hasClip) alsoDeleteClip = confirm('リンクされた音声クリップも一緒に削除しますか？\n確認 = 音声も削除 / キャンセル = 台詞ブロックのみ削除（リンク解除）');
       runCommand('Delete dialog block', function(p) {
         const tcut = p.cuts.find(function(c) { return c.id === cutId; });
         if (!tcut) return;
@@ -10904,7 +10904,9 @@
         const tags = normalizeDialogTags([rawLine, srcBlock && srcBlock.modifier, srcBlock && srcBlock.subtype].filter(Boolean).join(' '));
         const body = cleanDialogForSpeech(rawLine, speaker) || rawLine;
         blocks.push(normalizeDialogBlock({
-          id: newDialogBlockId(project), kind: 'dialog',
+          // Deterministic id (cut + line index) so display and materialize produce the SAME ids;
+          // otherwise the first edit's findBlock(id) misses (random ids) and only refreshes.
+          id: 'dlgblk-' + String(cut && cut.id || 'cut') + '-' + idx, kind: 'dialog',
           speaker: speaker, tags: tags, body: body,
           sourceBlockId: srcBlock ? srcBlock.id : ''
         }));
@@ -10997,22 +10999,22 @@
       const hasAudio = block.audioClipId && clips.some(function(c) { return c.id === block.audioClipId; });
       const hasScenario = Boolean(block.sourceBlockId);
       let linkBits = '';
-      if (hasAudio) linkBits += '<span class="dlgblk-link-chip audio" title="음성클립 연결됨">♪</span>';
-      if (hasScenario) linkBits += '<span class="dlgblk-link-chip scn" title="시나리오블록 연결됨">S</span>';
+      if (hasAudio) linkBits += '<span class="dlgblk-link-chip audio" title="音声クリップ連携">♪</span>';
+      if (hasScenario) linkBits += '<span class="dlgblk-link-chip scn" title="シナリオブロック連携">S</span>';
       const suffixSet = Boolean(block.suffix);
       const head = isFree
-        ? '<span class="dlgblk-kind">자유</span>'
-        : '<input type="text" class="dlgblk-speaker" data-field="speaker" placeholder="화자" value="' + escapeAttr(block.speaker || '') + '" />' +
-          '<button type="button" class="dlgblk-charsel" data-charsel title="캐릭터 선택">▼</button>' +
-          '<button type="button" class="dlgblk-suffix' + (suffixSet ? ' set' : '') + '" data-suffix title="서픽스">' + escapeHtml(dialogBlockSuffixLabel(block.suffix)) + '</button>' +
+        ? '<span class="dlgblk-kind">自由</span>'
+        : '<input type="text" class="dlgblk-speaker" data-field="speaker" placeholder="話者" value="' + escapeAttr(block.speaker || '') + '" />' +
+          '<button type="button" class="dlgblk-charsel" data-charsel title="キャラクター選択">▼</button>' +
+          '<button type="button" class="dlgblk-suffix' + (suffixSet ? ' set' : '') + '" data-suffix title="サフィックス">' + escapeHtml(dialogBlockSuffixLabel(block.suffix)) + '</button>' +
           '<span class="dlgblk-link">' + linkBits + '</span>';
       return '<div class="dialog-block' + (isFree ? ' free' : '') + '" data-dlgblk-id="' + escapeAttr(block.id) + '">' +
         '<div class="dlgblk-head">' +
-          '<span class="dlgblk-drag" title="드래그 핸들(순서 변경)" aria-hidden="true">⋮⋮</span>' +
+          '<span class="dlgblk-drag" title="ドラッグハンドル（並べ替え）" aria-hidden="true">⋮⋮</span>' +
           head +
-          '<button type="button" class="dlgblk-del" title="삭제">×</button>' +
+          '<button type="button" class="dlgblk-del" title="削除">×</button>' +
         '</div>' +
-        '<textarea class="dlgblk-body" data-field="body" rows="2" placeholder="' + (isFree ? '자유 텍스트' : '대사 본문') + '">' + escapeHtml(block.body || '') + '</textarea>' +
+        '<textarea class="dlgblk-body" data-field="body" rows="2" placeholder="' + (isFree ? '自由テキスト' : '台詞本文') + '">' + escapeHtml(block.body || '') + '</textarea>' +
       '</div>';
     }
 
@@ -11020,9 +11022,9 @@
       const blocks = dialogBlocksForDisplay(project, cut);
       const rows = blocks.map(function(b) { return renderDialogBlockRowHtml(b, project); }).join('');
       return '<div class="dialog-blocks" data-cut-id="' + escapeAttr(cut.id) + '">' +
-        (rows || '<div class="dialog-blocks-empty">대사 블록 없음</div>') +
+        (rows || '<div class="dialog-blocks-empty">台詞ブロックなし</div>') +
         '<div class="dialog-blocks-add">' +
-          '<button type="button" class="dialog-block-add-btn" data-add-menu="1" title="블록 추가">＋</button>' +
+          '<button type="button" class="dialog-block-add-btn" data-add-menu="1" title="ブロック追加">＋</button>' +
         '</div>' +
       '</div>';
     }
@@ -11200,7 +11202,7 @@
       if (!cut) return;
       const block = materializeDialogBlocks(project, cut).find(function(b) { return b.id === blockId; });
       if (!block || block.kind !== 'dialog') return;
-      if (!String(block.body || '').trim()) { alert('대사 본문이 비어 있습니다.'); return; }
+      if (!String(block.body || '').trim()) { alert('台詞本文が空です。'); return; }
       project.audio = project.audio || { clips: [] };
       project.audio.clips = Array.isArray(project.audio.clips) ? project.audio.clips : [];
       const clips = project.audio.clips;
@@ -24542,7 +24544,8 @@
       return (activeClips || []).filter(function(clip) {
         return clip && String(clip.text || '').trim();
       }).map(function(clip) {
-        const name = clip.characterName || 'Dialog';
+        const name = String(clip.characterName || '').trim();
+        if (!name) return ''; // no generic 'Dialog' tag for clips without a speaker (redundant with the subtitle)
         const key = scenarioMetaKey(name) || name;
         if (seen.has(key)) return '';
         seen.add(key);
