@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver170</title>
+  <title>Conte Editor Prototype ver171</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7219,7 +7219,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver170</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver171</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7390,7 +7390,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '170';
+    const APP_DISPLAY_VERSION = '171';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -18028,24 +18028,25 @@
             '<span class="af-map-cam" aria-hidden="true"></span>' +
             '<span class="af-map-src" data-af-src aria-hidden="true"></span>' +
           '</div>' +
-          '<div class="af-kf-row"><button type="button" data-af-action="spatkey-add">◆ キー追加</button><button type="button" data-af-action="spatkey-del">キー削除</button><span class="af-kf-status" data-af-kf-status></span></div>' +
+          '<div class="af-kf-row"><button type="button" data-af-action="spatkey-add">◆ キー追加</button><button type="button" data-af-action="spatkey-del">キー削除</button><button type="button" data-af-action="spat-reset">リセット</button><span class="af-kf-status" data-af-kf-status></span></div>' +
         '</div>';
       document.body.appendChild(win);
       bindLayerEffectWindowDrag(win);
       const closeBtn = win.querySelector('[data-af-action="close"]');
       if (closeBtn) closeBtn.addEventListener('click', function(e) { e.preventDefault(); closeAudioFxWindow(); });
-      win.querySelectorAll('[data-af-action="spatkey-add"], [data-af-action="spatkey-del"]').forEach(function(btn) {
+      win.querySelectorAll('[data-af-action="spatkey-add"], [data-af-action="spatkey-del"], [data-af-action="spat-reset"]').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
           e.preventDefault();
           const clip = audioFxTargetClip(); if (!clip) return;
-          const add = btn.dataset.afAction === 'spatkey-add';
+          const action = btn.dataset.afAction;
           const fid = clip.id, frame = audioFxCurrentClipFrame(clip), cur = audioFxSpatialAt(audioClipFx(clip), frame);
-          runCommand(add ? 'Audio spatial key' : 'Audio spatial key delete', function(project) {
+          runCommand(action === 'spat-reset' ? 'Audio spatial reset' : (action === 'spatkey-add' ? 'Audio spatial key' : 'Audio spatial key delete'), function(project) {
             const c = ((project.audio && project.audio.clips) || []).find(function(x) { return x.id === fid; });
             if (!c) return;
             c.audioFx = normalizeAudioFx(c.audioFx);
+            if (action === 'spat-reset') { c.audioFx.pan = 0; c.audioFx.distance = 0; c.audioFx.spatialKeyframes = []; return; } // 音源位置＋キー全消去
             const sk = c.audioFx.spatialKeyframes.filter(function(k) { return k.frame !== frame; });
-            if (add) sk.push({ frame: frame, pan: cur.pan, distance: cur.distance });
+            if (action === 'spatkey-add') sk.push({ frame: frame, pan: cur.pan, distance: cur.distance });
             sk.sort(function(a, b) { return a.frame - b.frame; });
             c.audioFx.spatialKeyframes = sk;
           });
