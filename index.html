@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver188</title>
+  <title>Conte Editor Prototype ver189</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6738,7 +6738,7 @@
       <div class="brand">
         <div id="appBrandTitle" class="brand-title version-info-trigger" role="button" tabindex="0" aria-haspopup="dialog" title="Version Info">Conte Editor</div>
         <div class="brand-json-actions" aria-label="JSON file actions">
-          <button id="newProjectBtn" class="json-icon-btn" type="button" aria-label="New Project" title="New Project">
+          <button id="newProjectBtn" class="json-icon-btn" type="button" aria-haspopup="menu" aria-label="プロジェクト" title="プロジェクト（新規 / 編集）">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M6 4h9l3 3v13H6Z"></path>
               <path d="M15 4v4h3"></path>
@@ -7239,7 +7239,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver188</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver189</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7410,7 +7410,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '188';
+    const APP_DISPLAY_VERSION = '189';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -10390,14 +10390,17 @@
     }
 
     // Title-input modal for a brand-new project. Resolves to the trimmed title, or null if cancelled.
-    function askNewProjectTitle() {
+    function askNewProjectTitle(defaultValue, mode) {
       return new Promise(function(resolve) {
         const dialog = document.getElementById('projectCreateDialog');
         const form = dialog ? dialog.querySelector('form') : null;
         const input = document.getElementById('projectCreateTitleInput');
         const hint = document.getElementById('projectCreateHint');
         if (!dialog || !form || !input) { resolve(null); return; }
-        input.value = '';
+        const rename = mode === 'rename';
+        const h2 = dialog.querySelector('h2'); if (h2) h2.textContent = rename ? 'プロジェクト名の編集' : '新規プロジェクト';
+        const createBtn = dialog.querySelector('button[value="create"]'); if (createBtn) createBtn.textContent = rename ? '変更' : '作成';
+        input.value = String(defaultValue || '');
         if (hint) { hint.textContent = ''; hint.classList.remove('error'); }
         let done = false;
         const cleanup = function() {
@@ -10515,6 +10518,29 @@
         console.error('[new-project] failed', error);
         alert('New Project failed: ' + (error && error.message ? error.message : error));
       }
+    }
+
+    // プロジェクト編集 = rename the project (title only; New Project only sets the title). Persists via the
+    // working-folder save / IndexedDB autosave. The on-disk file name is left as-is (title is metadata).
+    async function editProjectName() {
+      if (!state.projectActive) return;
+      const cur = String(state.project.title || '');
+      const name = await askNewProjectTitle(cur, 'rename');
+      if (name === null) return;
+      const next = String(name).trim();
+      if (!next || next === cur) return;
+      state.project.title = next;
+      try {
+        if (state.workspaceHandle) { await saveProjectToWorkspace(); }
+        else { markProjectSavedBaseline(); scheduleIndexedDbAutosave(0); }
+      } catch (error) { console.error('[rename] save failed', error); }
+      refresh();
+    }
+    // Top-bar プロジェクト button → dropdown: 新規プロジェクト / プロジェクト名の編集 (edit only when a project is open).
+    function openProjectMenu(event) {
+      const items = [{ label: '新規プロジェクト', action: startNewProject }];
+      if (state.projectActive) items.push({ label: 'プロジェクト名の編集', action: editProjectName });
+      openSimpleContextMenu(event, items, { width: 190, height: state.projectActive ? 76 : 44 });
     }
 
     function stopWorkspaceAutosaveTimer() {
@@ -40735,7 +40761,7 @@
       const opsBtn = document.getElementById('opsControlModeBtn');
       if (opsBtn) opsBtn.addEventListener('click', toggleOpsControlMode);
       updateOpsControlUI();
-      document.getElementById('newProjectBtn').addEventListener('click', startNewProject);
+      document.getElementById('newProjectBtn').addEventListener('click', openProjectMenu);
       document.getElementById('saveJsonBtn').addEventListener('click', saveJson);
       const exportBundleBtn = document.getElementById('exportBundleBtn');
       if (exportBundleBtn) exportBundleBtn.addEventListener('click', exportConteFolderZip);
