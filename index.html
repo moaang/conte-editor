@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver199</title>
+  <title>Conte Editor Prototype ver200</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver199</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver200</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7493,7 +7493,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '199';
+    const APP_DISPLAY_VERSION = '200';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -32056,7 +32056,9 @@
       try {
         // Mobile (no File System Access): export a self-contained ZIP (compressed media) — sidesteps the inline
         // single-JSON ~512MB string limit. exportConteFolderZip delivers it via the OS share sheet / download.
-        if (!fileSystemAccessAvailable()) {
+        // Genga projects use NO working folder, so Save = the same self-contained file export (drawings are
+        // inline). The durable copy is that file; the IndexedDB autosave is just an evictable convenience cache.
+        if (!fileSystemAccessAvailable() || (state.project && state.project.kind === 'genga')) {
           await exportConteFolderZip();
           return true;
         }
