@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver213</title>
+  <title>Conte Editor Prototype ver214</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver213</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver214</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7359,7 +7359,7 @@
     .genga-exp-resize-left { position: absolute; left: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
     .genga-tl-content { position: relative; }
     .genga-tl-content .genga-ruler, .genga-tl-content .genga-lanes { width: 100%; }
-    .genga-playhead { position: absolute; top: 0; bottom: 0; width: 22px; box-sizing: border-box; background: rgba(224,59,59,0.10); border-left: 2px solid #e03b3b; border-right: 2px solid #e03b3b; pointer-events: none; z-index: 5; }
+    .genga-playhead { position: absolute; top: 0; bottom: 0; width: 22px; box-sizing: border-box; background: rgba(224,59,59,0.10); border-left: 1px solid rgba(224,59,59,0.55); border-right: 1px solid rgba(224,59,59,0.55); pointer-events: none; z-index: 5; }
     .genga-playhead-handle { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 9px solid #e03b3b; pointer-events: auto; cursor: ew-resize; }
     .genga-col-head { justify-content: space-between; }
     .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
@@ -7518,7 +7518,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '213';
+    const APP_DISPLAY_VERSION = '214';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40947,7 +40947,7 @@
       gengaPlayRaf = requestAnimationFrame(tick);
     }
     function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
-    // P2a/ver213: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
+    // P2a/ver214: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
     // + dope sheet (the genga timeline). Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
