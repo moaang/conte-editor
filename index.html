@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver208</title>
+  <title>Conte Editor Prototype ver209</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver208</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver209</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7345,11 +7345,11 @@
     .genga-tick.major span { position: absolute; top: 4px; left: 3px; font-size: 10px; color: #777; }
     .genga-lanes { position: relative; }
     .genga-lane { height: 34px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, transparent 0, transparent 21px, rgba(0,0,0,0.05) 21px, rgba(0,0,0,0.05) 22px); }
-    .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 6px; background: #dbe6f7; color: #2f6fd1; display: flex; align-items: center; gap: 4px; padding: 0 4px; font-size: 11px; box-sizing: border-box; cursor: grab; user-select: none; overflow: hidden; }
+    .genga-exp { position: absolute; top: 3px; height: 28px; border-radius: 6px; background: #dbe6f7; display: flex; flex-direction: column; align-items: stretch; gap: 1px; padding: 2px; box-sizing: border-box; cursor: grab; user-select: none; overflow: hidden; }
     .genga-exp:active { cursor: grabbing; }
-    .genga-exp-thumb { width: 18px; height: 18px; background: #fff; border-radius: 3px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
-    .genga-exp-num { font-weight: 600; flex: none; }
-    .genga-exp-koma { margin-left: auto; font-size: 10px; opacity: 0.6; flex: none; padding-right: 5px; }
+    .genga-exp-thumb { flex: 1; min-height: 0; width: 100%; background: #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
+    .genga-exp-num { font-size: 10px; line-height: 1; text-align: center; color: #9aa0a6; white-space: nowrap; overflow: hidden; flex: none; }
+    .genga-exp-num.valued { color: #2f6fd1; font-weight: 500; }
     .genga-exp-resize { position: absolute; right: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
     .genga-tl-content { position: relative; }
     .genga-tl-content .genga-ruler, .genga-tl-content .genga-lanes { width: 100%; }
@@ -7360,8 +7360,9 @@
     .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; flex: none; }
     .genga-del-layer:hover { color: #e03b3b; }
     .genga-lname { cursor: default; }
-    .genga-eye, .genga-lock { border: none; background: transparent; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; flex: none; color: #555; }
-    .genga-eye.off { opacity: 0.3; }
+    .genga-eye, .genga-lock { border: none; background: transparent; cursor: pointer; line-height: 0; padding: 0 2px; flex: none; color: #555; display: inline-flex; align-items: center; }
+    .genga-eye svg, .genga-lock svg { display: block; }
+    .genga-eye.off { opacity: 0.32; }
     .genga-lock.on { color: #c0392b; }
     .genga-layer-head { cursor: default; }
     .genga-layer-head.dragging { opacity: 0.6; background: rgba(47,111,209,0.18); }
@@ -7511,7 +7512,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '208';
+    const APP_DISPLAY_VERSION = '209';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40432,6 +40433,14 @@
 
     // genga layer ops (genga-native — NOT the conte +レイヤー button). runCommand → normalizeProject
     // (normalizes gengaTimeline) → refresh (re-renders the genga view) + undo, all shared with conte.
+    // pretty inline-SVG eye / lock icons (the app has no Tabler webfont; the visualize mockup used ti-*).
+    function gengaEyeIconSvg() {
+      return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+    }
+    function gengaLockIconSvg(locked) {
+      const base = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/>';
+      return base + (locked ? '<path d="M8 11V7a4 4 0 0 1 8 0v4"/>' : '<path d="M8 11V7a4 4 0 0 1 7-1.2"/>') + '</svg>';
+    }
     function gengaLayerColor(index) {
       const palette = ['#5aa0d8', '#d8b24a', '#8a8f96', '#c879b9', '#6cc07a', '#d8865a'];
       return palette[((index % palette.length) + palette.length) % palette.length];
@@ -40866,7 +40875,7 @@
       gengaPlayRaf = requestAnimationFrame(tick);
     }
     function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
-    // P2a/ver208: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
+    // P2a/ver209: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
     // + dope sheet (the genga timeline). Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
@@ -40895,17 +40904,17 @@
           rowsHead += '<div class="genga-layer-head' + sel + '" data-genga-layer="' + escapeHtml(l.id) + '">' +
             '<span class="genga-sw" style="background:' + escapeHtml(l.color || '#888888') + '"></span>' +
             '<span class="genga-lname" data-genga-layer="' + escapeHtml(l.id) + '">' + escapeHtml(l.name || 'Layer') + '</span>' +
-            '<button class="genga-eye' + (l.visible === false ? ' off' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="表示/非表示" aria-label="表示切替">' + (l.visible === false ? '◌' : '◉') + '</button>' +
-            '<button class="genga-lock' + (l.locked ? ' on' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="ロック" aria-label="ロック切替">' + (l.locked ? '■' : '□') + '</button>' +
+            '<button class="genga-eye' + (l.visible === false ? ' off' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="表示/非表示" aria-label="表示切替">' + gengaEyeIconSvg() + '</button>' +
+            '<button class="genga-lock' + (l.locked ? ' on' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="ロック" aria-label="ロック切替">' + gengaLockIconSvg(l.locked) + '</button>' +
             '<button class="genga-del-layer" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="削除" aria-label="レイヤー削除">×</button>' +
             '</div>';
           let blocks = '';
           (l.exposures || []).forEach(function(e, ei) {
-            const num = (e.instanceValue != null ? e.instanceValue : (ei + 1));
+            const valued = (e.instanceValue !== null && e.instanceValue !== undefined && e.instanceValue !== '');
+            const numText = valued ? String(e.instanceValue) : String(ei + 1);
             blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px">' +
               '<span class="genga-exp-thumb"></span>' +
-              '<span class="genga-exp-num">#' + escapeHtml(num) + '</span>' +
-              (e.holdFrames > 1 ? '<span class="genga-exp-koma">' + e.holdFrames + 'k</span>' : '') +
+              '<span class="genga-exp-num' + (valued ? ' valued' : '') + '">' + escapeHtml(numText) + '</span>' +
               '<span class="genga-exp-resize"></span></div>';
           });
           rowsLane += '<div class="genga-lane">' + blocks + '</div>';
