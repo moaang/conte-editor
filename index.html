@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver202</title>
+  <title>Conte Editor Prototype ver203</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver202</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver203</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7322,6 +7322,10 @@
     .genga-info { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: #333; }
     .genga-info strong { font-size: 14px; }
     .genga-info .genga-note { margin-left: auto; opacity: 0.6; font-size: 12px; }
+    .genga-topbar { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; font-size: 12px; color: #333; padding: 2px 0; }
+    .genga-tl-label { font-weight: 600; }
+    .genga-frame-readout { font-variant-numeric: tabular-nums; opacity: 0.8; }
+    .genga-info-mini { margin-left: auto; opacity: 0.55; font-size: 11px; }
     .genga-dopesheet { display: flex; flex: 1; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
     .genga-layers-col { width: 172px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
     .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #555; }
@@ -7498,7 +7502,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '202';
+    const APP_DISPLAY_VERSION = '203';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40759,8 +40763,54 @@
         layer.exposures = layer.exposures.filter(function(e) { return String(e.id) !== String(expId); });
       });
     }
-    // P2a: genga workspace = info bar (+ frame stepper) + preview (paper/camera) + dope sheet (layers ×
-    // 1-frame). Layer add/select + frame scrub; drawing/compositing come next. Reads project.gengaTimeline.
+    // genga transport bar — mirrors the conte video-edit playback bar (reuses timelineIconHtml so the icons
+    // match), but WITHOUT the 音声生成/音声初期化 voice buttons. rAF loop advances gengaFrame at fps.
+    let gengaPlayRaf = 0, gengaPlayStartTime = 0, gengaPlayStartFrame = 1;
+    function gengaTransportControlsHtml() {
+      return '<span class="timeline-control-row">' +
+        '<button id="gengaGoStartBtn" type="button" title="先頭へ" aria-label="先頭へ">' + timelineIconHtml('go-start') + '</button>' +
+        '<button id="gengaStepBackBtn" type="button" title="1コマ戻る" aria-label="1コマ戻る">' + timelineIconHtml('step-back') + '</button>' +
+        '<button id="gengaPlayPauseBtn" class="' + (state.gengaPlaying ? 'primary' : '') + '" type="button" title="' + (state.gengaPlaying ? 'Pause' : 'Play') + '" aria-label="再生/一時停止">' + timelineIconHtml(state.gengaPlaying ? 'pause' : 'play') + '</button>' +
+        '<button id="gengaStepForwardBtn" type="button" title="1コマ進む" aria-label="1コマ進む">' + timelineIconHtml('step-forward') + '</button>' +
+        '<button id="gengaRepeatBtn" class="' + (state.gengaRepeat ? 'active' : '') + '" type="button" title="リピート" aria-label="リピート" aria-pressed="' + (state.gengaRepeat ? 'true' : 'false') + '">' + timelineIconHtml('repeat') + '</button>' +
+      '</span>';
+    }
+    function updateGengaPlayPauseBtn() {
+      const b = document.getElementById('gengaPlayPauseBtn'); if (!b) return;
+      b.classList.toggle('primary', !!state.gengaPlaying);
+      b.innerHTML = timelineIconHtml(state.gengaPlaying ? 'pause' : 'play');
+      b.title = state.gengaPlaying ? 'Pause' : 'Play';
+    }
+    function stopGengaPlayback() {
+      state.gengaPlaying = false;
+      if (gengaPlayRaf) { cancelAnimationFrame(gengaPlayRaf); gengaPlayRaf = 0; }
+      updateGengaPlayPauseBtn();
+    }
+    function startGengaPlayback() {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const fps = Math.max(1, gt.fps || 24);
+      const total = Math.max(1, gt.totalFrames || 1);
+      if (total <= 1) return;
+      state.gengaPlaying = true;
+      gengaPlayStartFrame = gengaCurrentFrame() >= total ? 1 : gengaCurrentFrame();
+      gengaPlayStartTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      updateGengaPlayPauseBtn();
+      const tick = function() {
+        if (!state.gengaPlaying) return;
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        let f = gengaPlayStartFrame + Math.floor((now - gengaPlayStartTime) / 1000 * fps);
+        if (f > total) {
+          if (state.gengaRepeat) { gengaPlayStartFrame = 1; gengaPlayStartTime = now; f = 1; }
+          else { setGengaFrame(total); stopGengaPlayback(); return; }
+        }
+        setGengaFrame(f);
+        gengaPlayRaf = requestAnimationFrame(tick);
+      };
+      gengaPlayRaf = requestAnimationFrame(tick);
+    }
+    function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
+    // P2a/ver203: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
+    // + dope sheet (the genga timeline). Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
       if (!stageEl) return;
@@ -40802,17 +40852,13 @@
       }
       const laneWidth = total * cellW;
       stageEl.innerHTML =
-        '<div class="genga-info">' +
-          '<strong>' + escapeHtml(project.title || '(無題)') + '</strong>' +
-          '<span>カメラ ' + gt.camera.w + '×' + gt.camera.h + '</span>' +
-          '<span>作画用紙 ' + gt.paper.w + '×' + gt.paper.h + '</span>' +
-          '<span>' + fps + ' fps</span>' +
-          '<span class="genga-frame-step"><button class="genga-fprev" type="button" aria-label="前のフレーム">◀</button>' +
-            'F<span id="gengaFrameNo">' + frame + '</span> / ' + total +
-            '<button class="genga-fnext" type="button" aria-label="次のフレーム">▶</button></span>' +
-          '<span class="genga-note">原画タイムライン — 描画は今後</span>' +
-        '</div>' +
         '<div class="genga-preview"><canvas id="gengaPreviewCanvas" class="genga-preview-canvas"></canvas></div>' +
+        '<div class="genga-topbar">' +
+          gengaTransportControlsHtml() +
+          '<span class="genga-tl-label">原画タイムライン</span>' +
+          '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
+          '<span class="genga-info-mini">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
+        '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
             '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + rowsHead +
@@ -40841,8 +40887,11 @@
       stageEl.querySelectorAll('.genga-layer-head[data-genga-layer]').forEach(function(h) {
         h.addEventListener('pointerdown', gengaLayerHeadPointerDown);
       });
-      const fprev = stageEl.querySelector('.genga-fprev'); if (fprev) fprev.addEventListener('click', function() { stepGengaFrame(-1); });
-      const fnext = stageEl.querySelector('.genga-fnext'); if (fnext) fnext.addEventListener('click', function() { stepGengaFrame(1); });
+      const goStart = stageEl.querySelector('#gengaGoStartBtn'); if (goStart) goStart.addEventListener('click', function() { stopGengaPlayback(); setGengaFrame(1); });
+      const sBack = stageEl.querySelector('#gengaStepBackBtn'); if (sBack) sBack.addEventListener('click', function() { stopGengaPlayback(); stepGengaFrame(-1); });
+      const playBtn = stageEl.querySelector('#gengaPlayPauseBtn'); if (playBtn) playBtn.addEventListener('click', toggleGengaPlayback);
+      const sFwd = stageEl.querySelector('#gengaStepForwardBtn'); if (sFwd) sFwd.addEventListener('click', function() { stopGengaPlayback(); stepGengaFrame(1); });
+      const rptBtn = stageEl.querySelector('#gengaRepeatBtn'); if (rptBtn) rptBtn.addEventListener('click', function() { state.gengaRepeat = !state.gengaRepeat; rptBtn.classList.toggle('active', state.gengaRepeat); });
       ['.genga-ruler', '.genga-lanes'].forEach(function(sel) {
         const el = stageEl.querySelector(sel);
         if (el) el.addEventListener('click', function(ev) {
