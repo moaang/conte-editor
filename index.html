@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver197</title>
+  <title>Conte Editor Prototype ver198</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver197</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver198</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7345,7 +7345,7 @@
     .genga-del-layer:hover { color: #e03b3b; }
     .genga-lname { cursor: default; }
     .genga-preview { flex: 1; min-height: 120px; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; background: #2b2b2b; overflow: hidden; position: relative; }
-    .genga-preview-canvas { display: block; width: 100%; height: 100%; }
+    .genga-preview-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
     .genga-dopesheet { flex: none; height: 240px; }
     .genga-frame-step { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
     .genga-frame-step button { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 1px 7px; font-size: 11px; line-height: 1.4; }
@@ -7490,7 +7490,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '197';
+    const APP_DISPLAY_VERSION = '198';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40466,8 +40466,38 @@
         h.classList.toggle('selected', h.getAttribute('data-genga-layer') === state.gengaSelectedLayerId);
       });
     }
-    // Preview = 作画用紙 (white paper) + camera-frame outline, fit into the preview area. P2b will composite
-    // each visible layer's drawing at the current frame on top of the paper before the camera outline.
+    // genga drawing (P2b first slice) — genga-native pen on the preview. A stroke draws onto a paper-res
+    // working canvas seeded from the (selected layer, current frame) exposure; committed to exposure.drawing
+    // on pointerup as ONE undo step. Stored INLINE (dataURL) for now — move to IndexedDB refs before heavy
+    // use (state.project is deep-cloned per edit). Preview composites each visible layer's drawing-at-frame.
+    const gengaImageCache = new Map();
+    let gengaPreviewXform = null;
+    let gengaDrawSession = null;
+    function gengaImageFor(dataUrl, onReady) {
+      if (!dataUrl) return null;
+      let img = gengaImageCache.get(dataUrl);
+      if (img) return img.complete ? img : null;
+      img = new Image();
+      img.onload = function() { if (onReady) onReady(); };
+      img.src = dataUrl;
+      gengaImageCache.set(dataUrl, img);
+      return img.complete ? img : null;
+    }
+    function gengaExposureAt(layer, frame) {
+      if (!layer || !Array.isArray(layer.exposures)) return null;
+      for (let i = 0; i < layer.exposures.length; i++) {
+        const e = layer.exposures[i];
+        if (frame >= e.startFrame && frame <= e.startFrame + e.holdFrames - 1) return e;
+      }
+      return null;
+    }
+    function gengaSelectedLayer() {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return null;
+      const layers = gt.layers || [];
+      let l = state.gengaSelectedLayerId ? layers.find(function(x) { return String(x.id) === String(state.gengaSelectedLayerId); }) : null;
+      if (!l && layers.length) { l = layers[0]; state.gengaSelectedLayerId = l.id; }
+      return l || null;
+    }
     function drawGengaPreview() {
       const canvas = document.getElementById('gengaPreviewCanvas');
       if (!canvas) return;
@@ -40482,14 +40512,100 @@
       const scale = Math.min((W - margin * 2) / pw, (H - margin * 2) / ph);
       const dw = pw * scale, dh = ph * scale;
       const ox = Math.round((W - dw) / 2), oy = Math.round((H - dh) / 2);
+      gengaPreviewXform = { ox: ox, oy: oy, scale: scale, pw: pw, ph: ph };
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(ox, oy, dw, dh);
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
-      ctx.strokeRect(ox + 0.5, oy + 0.5, Math.max(1, dw - 1), Math.max(1, dh - 1));
-      // TODO P2b: composite visible layers' drawings at gengaCurrentFrame() here.
+      // composite visible layers (layers[0] = top → drawn last). Active stroke uses the live working canvas.
+      const frame = gengaCurrentFrame();
+      const layers = gt.layers || [];
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const l = layers[i];
+        if (l.visible === false) continue;
+        let src = null;
+        if (gengaDrawSession && String(l.id) === String(gengaDrawSession.layerId)) {
+          src = gengaDrawSession.canvas;
+        } else {
+          const e = gengaExposureAt(l, frame);
+          if (e && e.drawing && e.drawing.dataUrl) src = gengaImageFor(e.drawing.dataUrl, drawGengaPreview);
+        }
+        if (src) {
+          ctx.globalAlpha = (l.opacity != null ? l.opacity : 1);
+          ctx.drawImage(src, ox, oy, dw, dh);
+          ctx.globalAlpha = 1;
+        }
+      }
       const cx = ox + gt.camera.x * scale, cy = oy + gt.camera.y * scale, cw = gt.camera.w * scale, ch = gt.camera.h * scale;
       ctx.strokeStyle = '#2f6fd1'; ctx.lineWidth = 1.5;
       ctx.strokeRect(cx, cy, cw, ch);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+      ctx.strokeRect(ox + 0.5, oy + 0.5, Math.max(1, dw - 1), Math.max(1, dh - 1));
+    }
+    function gengaPreviewPointerXY(ev) {
+      const canvas = document.getElementById('gengaPreviewCanvas');
+      if (!canvas || !gengaPreviewXform) return null;
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (ev.clientX - rect.left - gengaPreviewXform.ox) / gengaPreviewXform.scale,
+        y: (ev.clientY - rect.top - gengaPreviewXform.oy) / gengaPreviewXform.scale
+      };
+    }
+    function gengaDrawStart(ev) {
+      if (!state.project || state.project.kind !== 'genga') return;
+      const layer = gengaSelectedLayer();
+      if (!layer || layer.locked) return;
+      const p = gengaPreviewPointerXY(ev); if (!p) return;
+      const gt = state.project.gengaTimeline;
+      const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
+      const frame = gengaCurrentFrame();
+      const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
+      const c = cv.getContext('2d');
+      const existing = gengaExposureAt(layer, frame);
+      if (existing && existing.drawing && existing.drawing.dataUrl) {
+        const img = gengaImageCache.get(existing.drawing.dataUrl);
+        if (img && img.complete) c.drawImage(img, 0, 0, pw, ph);
+      }
+      c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#111111'; c.fillStyle = '#111111';
+      c.lineWidth = Math.max(1, Math.round(pw / 300));
+      gengaDrawSession = { layerId: layer.id, frame: frame, canvas: cv, ctx: c, lastX: p.x, lastY: p.y };
+      c.beginPath(); c.arc(p.x, p.y, c.lineWidth / 2, 0, Math.PI * 2); c.fill();
+      try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+      if (String(state.gengaSelectedLayerId) !== String(layer.id)) selectGengaLayer(layer.id);
+      drawGengaPreview();
+      ev.preventDefault();
+    }
+    function gengaDrawMove(ev) {
+      if (!gengaDrawSession) return;
+      const p = gengaPreviewPointerXY(ev); if (!p) return;
+      const c = gengaDrawSession.ctx;
+      c.beginPath(); c.moveTo(gengaDrawSession.lastX, gengaDrawSession.lastY); c.lineTo(p.x, p.y); c.stroke();
+      gengaDrawSession.lastX = p.x; gengaDrawSession.lastY = p.y;
+      drawGengaPreview();
+      ev.preventDefault();
+    }
+    function gengaDrawEnd(ev) {
+      if (!gengaDrawSession) return;
+      const sess = gengaDrawSession;
+      gengaDrawSession = null;
+      const dataUrl = sess.canvas.toDataURL('image/png');
+      const layerId = sess.layerId, frame = sess.frame, pw = sess.canvas.width, ph = sess.canvas.height;
+      gengaImageFor(dataUrl, drawGengaPreview);
+      runCommand('原画描画', function(proj) {
+        const gt = proj.gengaTimeline; if (!gt) return;
+        const layer = (gt.layers || []).find(function(x) { return String(x.id) === String(layerId); });
+        if (!layer) return;
+        layer.exposures = Array.isArray(layer.exposures) ? layer.exposures : [];
+        let e = null;
+        for (let i = 0; i < layer.exposures.length; i++) {
+          const x = layer.exposures[i];
+          if (frame >= x.startFrame && frame <= x.startFrame + x.holdFrames - 1) { e = x; break; }
+        }
+        if (!e) {
+          e = { id: 'genga-exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), startFrame: frame, holdFrames: 1, instanceValue: null, drawing: null };
+          layer.exposures.push(e);
+        }
+        e.drawing = { dataUrl: dataUrl, w: pw, h: ph };
+      });
+      try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
     }
     // P2a: genga workspace = info bar (+ frame stepper) + preview (paper/camera) + dope sheet (layers ×
     // 1-frame). Layer add/select + frame scrub; drawing/compositing come next. Reads project.gengaTimeline.
@@ -40576,6 +40692,13 @@
         });
       });
       drawGengaPreview();
+      const pv = stageEl.querySelector('#gengaPreviewCanvas');
+      if (pv) {
+        pv.addEventListener('pointerdown', gengaDrawStart);
+        pv.addEventListener('pointermove', gengaDrawMove);
+        pv.addEventListener('pointerup', gengaDrawEnd);
+        pv.addEventListener('pointercancel', gengaDrawEnd);
+      }
     }
 
     // APP: UTILITIES
