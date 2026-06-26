@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver201</title>
+  <title>Conte Editor Prototype ver202</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver201</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver202</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7323,7 +7323,7 @@
     .genga-info strong { font-size: 14px; }
     .genga-info .genga-note { margin-left: auto; opacity: 0.6; font-size: 12px; }
     .genga-dopesheet { display: flex; flex: 1; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
-    .genga-layers-col { width: 150px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
+    .genga-layers-col { width: 172px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
     .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #555; }
     .genga-layer-head { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 13px; box-sizing: border-box; }
     .genga-sw { width: 13px; height: 13px; border-radius: 3px; flex: none; }
@@ -7347,6 +7347,11 @@
     .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; flex: none; }
     .genga-del-layer:hover { color: #e03b3b; }
     .genga-lname { cursor: default; }
+    .genga-eye, .genga-lock { border: none; background: transparent; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; flex: none; color: #555; }
+    .genga-eye.off { opacity: 0.3; }
+    .genga-lock.on { color: #c0392b; }
+    .genga-layer-head { cursor: default; }
+    .genga-layer-head.dragging { opacity: 0.6; background: rgba(47,111,209,0.18); }
     .genga-preview { flex: 1; min-height: 120px; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; background: #2b2b2b; overflow: hidden; position: relative; }
     .genga-preview-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
     .genga-dopesheet { flex: none; height: 240px; }
@@ -7493,7 +7498,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '201';
+    const APP_DISPLAY_VERSION = '202';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40475,6 +40480,55 @@
     // working canvas seeded from the (selected layer, current frame) exposure; committed to exposure.drawing
     // on pointerup as ONE undo step. Stored INLINE (dataURL) for now — move to IndexedDB refs before heavy
     // use (state.project is deep-cloned per edit). Preview composites each visible layer's drawing-at-frame.
+    function toggleGengaLayerVisible(id) {
+      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
+      runCommand('原画レイヤー表示', function(p) { const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === id; }); if (l) l.visible = (l.visible === false); });
+    }
+    function toggleGengaLayerLock(id) {
+      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
+      runCommand('原画レイヤーロック', function(p) { const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === id; }); if (l) l.locked = !l.locked; });
+    }
+    function moveGengaLayer(id, insertIndex) {
+      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
+      runCommand('原画レイヤー並べ替え', function(p) {
+        const layers = p.gengaTimeline.layers; if (!Array.isArray(layers)) return;
+        const from = layers.findIndex(function(x) { return String(x.id) === id; });
+        if (from < 0) return;
+        let to = Math.max(0, Math.min(insertIndex, layers.length));
+        const moved = layers.splice(from, 1)[0];
+        if (from < to) to -= 1;
+        layers.splice(Math.max(0, Math.min(to, layers.length)), 0, moved);
+      });
+    }
+    let gengaLayerDrag = null;
+    function gengaLayerHeadPointerDown(ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+      const head = ev.currentTarget;
+      gengaLayerDrag = { id: head.getAttribute('data-genga-layer'), startY: ev.clientY, moved: false, head: head };
+      document.addEventListener('pointermove', gengaLayerHeadPointerMove);
+      document.addEventListener('pointerup', gengaLayerHeadPointerUp);
+    }
+    function gengaLayerHeadPointerMove(ev) {
+      const d = gengaLayerDrag; if (!d) return;
+      if (!d.moved && Math.abs(ev.clientY - d.startY) < 5) return;
+      d.moved = true;
+      if (d.head) d.head.classList.add('dragging');
+    }
+    function gengaLayerHeadPointerUp(ev) {
+      document.removeEventListener('pointermove', gengaLayerHeadPointerMove);
+      document.removeEventListener('pointerup', gengaLayerHeadPointerUp);
+      const d = gengaLayerDrag; gengaLayerDrag = null; if (!d) return;
+      if (d.head) d.head.classList.remove('dragging');
+      if (!d.moved) { selectGengaLayer(d.id); return; }
+      const heads = Array.from(document.querySelectorAll('#gengaStage .genga-layer-head[data-genga-layer]'));
+      let target = heads.length;
+      for (let i = 0; i < heads.length; i++) {
+        const r = heads[i].getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) { target = i; break; }
+      }
+      moveGengaLayer(d.id, target);
+    }
     const gengaImageCache = new Map();
     let gengaPreviewXform = null;
     let gengaDrawSession = null;
@@ -40734,7 +40788,8 @@
           rowsHead += '<div class="genga-layer-head' + sel + '" data-genga-layer="' + escapeHtml(l.id) + '">' +
             '<span class="genga-sw" style="background:' + escapeHtml(l.color || '#888888') + '"></span>' +
             '<span class="genga-lname" data-genga-layer="' + escapeHtml(l.id) + '">' + escapeHtml(l.name || 'Layer') + '</span>' +
-            '<span class="genga-lop">' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%</span>' +
+            '<button class="genga-eye' + (l.visible === false ? ' off' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="表示/非表示" aria-label="表示切替">' + (l.visible === false ? '◌' : '◉') + '</button>' +
+            '<button class="genga-lock' + (l.locked ? ' on' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="ロック" aria-label="ロック切替">' + (l.locked ? '■' : '□') + '</button>' +
             '<button class="genga-del-layer" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="削除" aria-label="レイヤー削除">×</button>' +
             '</div>';
           let blocks = '';
@@ -40777,8 +40832,14 @@
       stageEl.querySelectorAll('.genga-lname').forEach(function(n) {
         n.addEventListener('dblclick', function(ev) { ev.stopPropagation(); renameGengaLayer(n.getAttribute('data-genga-layer')); });
       });
+      stageEl.querySelectorAll('.genga-eye').forEach(function(b) {
+        b.addEventListener('click', function(ev) { ev.stopPropagation(); toggleGengaLayerVisible(b.getAttribute('data-genga-layer')); });
+      });
+      stageEl.querySelectorAll('.genga-lock').forEach(function(b) {
+        b.addEventListener('click', function(ev) { ev.stopPropagation(); toggleGengaLayerLock(b.getAttribute('data-genga-layer')); });
+      });
       stageEl.querySelectorAll('.genga-layer-head[data-genga-layer]').forEach(function(h) {
-        h.addEventListener('click', function() { selectGengaLayer(h.getAttribute('data-genga-layer')); });
+        h.addEventListener('pointerdown', gengaLayerHeadPointerDown);
       });
       const fprev = stageEl.querySelector('.genga-fprev'); if (fprev) fprev.addEventListener('click', function() { stepGengaFrame(-1); });
       const fnext = stageEl.querySelector('.genga-fnext'); if (fnext) fnext.addEventListener('click', function() { stepGengaFrame(1); });
