@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver203</title>
+  <title>Conte Editor Prototype ver204</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver203</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver204</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7326,6 +7326,8 @@
     .genga-tl-label { font-weight: 600; }
     .genga-frame-readout { font-variant-numeric: tabular-nums; opacity: 0.8; }
     .genga-info-mini { margin-left: auto; opacity: 0.55; font-size: 11px; }
+    .genga-onion-btn { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 11px; line-height: 1.4; }
+    .genga-onion-btn.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .genga-dopesheet { display: flex; flex: 1; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
     .genga-layers-col { width: 172px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
     .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #555; }
@@ -7502,7 +7504,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '203';
+    const APP_DISPLAY_VERSION = '204';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40561,6 +40563,44 @@
       if (!l && layers.length) { l = layers[0]; state.gengaSelectedLayerId = l.id; }
       return l || null;
     }
+    // composite all visible layers at `frame` → a paper-res offscreen canvas (live stroke uses the working canvas).
+    function gengaCompositeFrame(frame) {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return null;
+      const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
+      const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
+      const cx2 = cv.getContext('2d');
+      const layers = gt.layers || [];
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const l = layers[i];
+        if (l.visible === false) continue;
+        let src = null;
+        if (gengaDrawSession && String(l.id) === String(gengaDrawSession.layerId) && frame === gengaDrawSession.frame) {
+          src = gengaDrawSession.canvas;
+        } else {
+          const e = gengaExposureAt(l, frame);
+          if (e && e.drawing && e.drawing.dataUrl) src = gengaImageFor(e.drawing.dataUrl, drawGengaPreview);
+        }
+        if (src) { cx2.globalAlpha = (l.opacity != null ? l.opacity : 1); cx2.drawImage(src, 0, 0, pw, ph); cx2.globalAlpha = 1; }
+      }
+      return cv;
+    }
+    function gengaDrawOnionFrame(ctx, frame, ox, oy, dw, dh, opacity, tint) {
+      const c = gengaCompositeFrame(frame); if (!c) return;
+      const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
+      const tx = t.getContext('2d');
+      tx.drawImage(c, 0, 0);
+      tx.globalCompositeOperation = 'source-atop';
+      tx.globalAlpha = 0.6; tx.fillStyle = tint; tx.fillRect(0, 0, t.width, t.height);
+      ctx.globalAlpha = opacity; ctx.drawImage(t, ox, oy, dw, dh); ctx.globalAlpha = 1;
+    }
+    function toggleGengaOnion() {
+      const o = onionSkinSettings(state.project);
+      o.enabled = !o.enabled;
+      if (o.enabled && !o.previous && !o.next) { o.previous = true; o.next = true; }
+      try { localStorage.setItem(ONION_SKIN_STORAGE_KEY, JSON.stringify(state.onionSkin)); } catch (e) {}
+      const b = document.getElementById('gengaOnionBtn'); if (b) b.classList.toggle('active', o.enabled);
+      drawGengaPreview();
+    }
     function drawGengaPreview() {
       const canvas = document.getElementById('gengaPreviewCanvas');
       if (!canvas) return;
@@ -40578,25 +40618,16 @@
       gengaPreviewXform = { ox: ox, oy: oy, scale: scale, pw: pw, ph: ph };
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(ox, oy, dw, dh);
-      // composite visible layers (layers[0] = top → drawn last). Active stroke uses the live working canvas.
       const frame = gengaCurrentFrame();
-      const layers = gt.layers || [];
-      for (let i = layers.length - 1; i >= 0; i--) {
-        const l = layers[i];
-        if (l.visible === false) continue;
-        let src = null;
-        if (gengaDrawSession && String(l.id) === String(gengaDrawSession.layerId)) {
-          src = gengaDrawSession.canvas;
-        } else {
-          const e = gengaExposureAt(l, frame);
-          if (e && e.drawing && e.drawing.dataUrl) src = gengaImageFor(e.drawing.dataUrl, drawGengaPreview);
-        }
-        if (src) {
-          ctx.globalAlpha = (l.opacity != null ? l.opacity : 1);
-          ctx.drawImage(src, ox, oy, dw, dh);
-          ctx.globalAlpha = 1;
-        }
+      // onion skin (reuse conte state.onionSkin — 1 prev + 1 next, opacity). prev = red, next = blue tint.
+      const onion = state.onionSkin;
+      if (onion && onion.enabled) {
+        const oop = clampNumber(onion.opacity, 0, 100, 45) / 100;
+        if (onion.previous && frame > 1) gengaDrawOnionFrame(ctx, frame - 1, ox, oy, dw, dh, oop, '#e23b3b');
+        if (onion.next) gengaDrawOnionFrame(ctx, frame + 1, ox, oy, dw, dh, oop, '#2f8fd1');
       }
+      const composite = gengaCompositeFrame(frame);
+      if (composite) ctx.drawImage(composite, ox, oy, dw, dh);
       const cx = ox + gt.camera.x * scale, cy = oy + gt.camera.y * scale, cw = gt.camera.w * scale, ch = gt.camera.h * scale;
       ctx.strokeStyle = '#2f6fd1'; ctx.lineWidth = 1.5;
       ctx.strokeRect(cx, cy, cw, ch);
@@ -40809,7 +40840,7 @@
       gengaPlayRaf = requestAnimationFrame(tick);
     }
     function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
-    // P2a/ver203: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
+    // P2a/ver204: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
     // + dope sheet (the genga timeline). Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
@@ -40855,6 +40886,7 @@
         '<div class="genga-preview"><canvas id="gengaPreviewCanvas" class="genga-preview-canvas"></canvas></div>' +
         '<div class="genga-topbar">' +
           gengaTransportControlsHtml() +
+          '<button id="gengaOnionBtn" class="genga-onion-btn' + (state.onionSkin && state.onionSkin.enabled ? ' active' : '') + '" type="button" title="オニオンスキン（前後フレームの透かし）">オニオン</button>' +
           '<span class="genga-tl-label">原画タイムライン</span>' +
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
           '<span class="genga-info-mini">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
@@ -40892,6 +40924,7 @@
       const playBtn = stageEl.querySelector('#gengaPlayPauseBtn'); if (playBtn) playBtn.addEventListener('click', toggleGengaPlayback);
       const sFwd = stageEl.querySelector('#gengaStepForwardBtn'); if (sFwd) sFwd.addEventListener('click', function() { stopGengaPlayback(); stepGengaFrame(1); });
       const rptBtn = stageEl.querySelector('#gengaRepeatBtn'); if (rptBtn) rptBtn.addEventListener('click', function() { state.gengaRepeat = !state.gengaRepeat; rptBtn.classList.toggle('active', state.gengaRepeat); });
+      const onionBtn = stageEl.querySelector('#gengaOnionBtn'); if (onionBtn) onionBtn.addEventListener('click', toggleGengaOnion);
       ['.genga-ruler', '.genga-lanes'].forEach(function(sel) {
         const el = stageEl.querySelector(sel);
         if (el) el.addEventListener('click', function(ev) {
