@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver198</title>
+  <title>Conte Editor Prototype ver199</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver198</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver199</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7337,7 +7337,10 @@
     .genga-tick.major span { position: absolute; top: 4px; left: 3px; font-size: 10px; color: #777; }
     .genga-lanes { position: relative; }
     .genga-lane { height: 34px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, transparent 0, transparent 21px, rgba(0,0,0,0.05) 21px, rgba(0,0,0,0.05) 22px); }
-    .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 5px; background: #2f6fd1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; box-sizing: border-box; }
+    .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 5px; background: #2f6fd1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; box-sizing: border-box; cursor: grab; user-select: none; }
+    .genga-exp:active { cursor: grabbing; }
+    .genga-exp-lbl { pointer-events: none; }
+    .genga-exp-resize { position: absolute; right: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-right-radius: 5px; border-bottom-right-radius: 5px; }
     .genga-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e03b3b; pointer-events: none; }
     .genga-col-head { justify-content: space-between; }
     .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
@@ -7490,7 +7493,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '198';
+    const APP_DISPLAY_VERSION = '199';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40607,6 +40610,89 @@
       });
       try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
     }
+    // P3: exposure (instance) editing in the dope sheet — drag the right edge to change koma (holdFrames),
+    // drag the body to move (startFrame); right-click → 複製 (independent copy) / 削除. 1-frame snap.
+    let gengaExpDrag = null;
+    function gengaFindExposure(proj, layerId, expId) {
+      const gt = proj && proj.gengaTimeline; if (!gt) return null;
+      const layer = (gt.layers || []).find(function(l) { return String(l.id) === String(layerId); });
+      return layer ? (layer.exposures || []).find(function(e) { return String(e.id) === String(expId); }) : null;
+    }
+    function gengaExpPointerDown(ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      const block = ev.currentTarget;
+      const layerId = block.getAttribute('data-genga-layer');
+      const expId = block.getAttribute('data-genga-exp');
+      const exp = gengaFindExposure(state.project, layerId, expId);
+      if (!exp) return;
+      selectGengaLayer(layerId);
+      gengaExpDrag = {
+        block: block, layerId: layerId, expId: expId,
+        mode: (ev.target && ev.target.classList && ev.target.classList.contains('genga-exp-resize')) ? 'resize' : 'move',
+        startX: ev.clientX, origStart: exp.startFrame, origHold: exp.holdFrames,
+        nextStart: exp.startFrame, nextHold: exp.holdFrames
+      };
+      document.addEventListener('pointermove', gengaExpPointerMove);
+      document.addEventListener('pointerup', gengaExpPointerUp);
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    function gengaExpPointerMove(ev) {
+      const d = gengaExpDrag; if (!d) return;
+      const delta = Math.round((ev.clientX - d.startX) / GENGA_CELL_W);
+      if (d.mode === 'resize') {
+        d.nextHold = Math.max(1, d.origHold + delta);
+        d.block.style.width = (d.nextHold * GENGA_CELL_W - 2) + 'px';
+      } else {
+        d.nextStart = Math.max(1, d.origStart + delta);
+        d.block.style.left = ((d.nextStart - 1) * GENGA_CELL_W) + 'px';
+      }
+    }
+    function gengaExpPointerUp() {
+      document.removeEventListener('pointermove', gengaExpPointerMove);
+      document.removeEventListener('pointerup', gengaExpPointerUp);
+      const d = gengaExpDrag; gengaExpDrag = null; if (!d) return;
+      if (d.mode === 'resize' && d.nextHold !== d.origHold) {
+        runCommand('原画コマ変更', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (e) e.holdFrames = Math.max(1, d.nextHold); });
+      } else if (d.mode === 'move' && d.nextStart !== d.origStart) {
+        runCommand('原画インスタンス移動', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (e) e.startFrame = Math.max(1, d.nextStart); });
+      }
+    }
+    function gengaExpContextMenu(ev) {
+      const block = ev.currentTarget;
+      const layerId = block.getAttribute('data-genga-layer');
+      const expId = block.getAttribute('data-genga-exp');
+      if (!gengaFindExposure(state.project, layerId, expId)) return;
+      ev.preventDefault(); ev.stopPropagation();
+      openSimpleContextMenu(ev, [
+        { label: '複製', action: function() { duplicateGengaExposure(layerId, expId); } },
+        { label: '削除', action: function() { deleteGengaExposure(layerId, expId); } }
+      ], { width: 140, height: 76 });
+    }
+    function duplicateGengaExposure(layerId, expId) {
+      runCommand('原画インスタンス複製', function(proj) {
+        const gt = proj.gengaTimeline; if (!gt) return;
+        const layer = (gt.layers || []).find(function(l) { return String(l.id) === String(layerId); });
+        if (!layer) return;
+        const src = (layer.exposures || []).find(function(e) { return String(e.id) === String(expId); });
+        if (!src) return;
+        layer.exposures.push({
+          id: 'genga-exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          startFrame: src.startFrame + src.holdFrames,
+          holdFrames: src.holdFrames,
+          instanceValue: null,
+          drawing: src.drawing ? { dataUrl: src.drawing.dataUrl, w: src.drawing.w, h: src.drawing.h } : null
+        });
+      });
+    }
+    function deleteGengaExposure(layerId, expId) {
+      runCommand('原画インスタンス削除', function(proj) {
+        const gt = proj.gengaTimeline; if (!gt) return;
+        const layer = (gt.layers || []).find(function(l) { return String(l.id) === String(layerId); });
+        if (!layer || !Array.isArray(layer.exposures)) return;
+        layer.exposures = layer.exposures.filter(function(e) { return String(e.id) !== String(expId); });
+      });
+    }
     // P2a: genga workspace = info bar (+ frame stepper) + preview (paper/camera) + dope sheet (layers ×
     // 1-frame). Layer add/select + frame scrub; drawing/compositing come next. Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
@@ -40642,7 +40728,7 @@
           let blocks = '';
           (l.exposures || []).forEach(function(e) {
             const lab = (e.instanceValue != null ? String(e.instanceValue) : '');
-            blocks += '<div class="genga-exp" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px"><span>' + escapeHtml(lab) + '</span></div>';
+            blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px"><span class="genga-exp-lbl">' + escapeHtml(lab) + '</span><span class="genga-exp-resize"></span></div>';
           });
           rowsLane += '<div class="genga-lane">' + blocks + '</div>';
         });
@@ -40699,6 +40785,10 @@
         pv.addEventListener('pointerup', gengaDrawEnd);
         pv.addEventListener('pointercancel', gengaDrawEnd);
       }
+      stageEl.querySelectorAll('.genga-exp[data-genga-exp]').forEach(function(block) {
+        block.addEventListener('pointerdown', gengaExpPointerDown);
+        block.addEventListener('contextmenu', gengaExpContextMenu);
+      });
     }
 
     // APP: UTILITIES
