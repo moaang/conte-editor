@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver200</title>
+  <title>Conte Editor Prototype ver201</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver200</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver201</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7493,7 +7493,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '200';
+    const APP_DISPLAY_VERSION = '201';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40569,8 +40569,18 @@
         const img = gengaImageCache.get(existing.drawing.dataUrl);
         if (img && img.complete) c.drawImage(img, 0, 0, pw, ph);
       }
-      c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#111111'; c.fillStyle = '#111111';
-      c.lineWidth = Math.max(1, Math.round(pw / 300));
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      // Reuse the conte memo tool state (pen/eraser + color + size). memo size is 480-space px → scale to paper.
+      const eraser = (state.memoTool === 'eraser');
+      const memoSize = (typeof activeMemoSize === 'function' ? activeMemoSize() : 4);
+      c.lineWidth = Math.max(1, Math.round(memoSize * (pw / 480)));
+      if (eraser) {
+        c.globalCompositeOperation = 'destination-out';
+        c.strokeStyle = 'rgba(0,0,0,1)'; c.fillStyle = 'rgba(0,0,0,1)';
+      } else {
+        const memoCol = (typeof activeMemoColor === 'function' ? activeMemoColor() : '#111111');
+        c.strokeStyle = memoCol; c.fillStyle = memoCol;
+      }
       gengaDrawSession = { layerId: layer.id, frame: frame, canvas: cv, ctx: c, lastX: p.x, lastY: p.y };
       c.beginPath(); c.arc(p.x, p.y, c.lineWidth / 2, 0, Math.PI * 2); c.fill();
       try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
