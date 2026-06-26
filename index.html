@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver207</title>
+  <title>Conte Editor Prototype ver208</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver207</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver208</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7319,9 +7319,6 @@
     body.genga-active #scenarioBoardWindow { display: none !important; }
     body.genga-active .paper-stage { place-items: stretch; overflow: hidden; }
     body.genga-active .inspector-footer { display: none; }
-    .genga-inspector { padding: 4px; }
-    .genga-inspector-btn { width: 100%; padding: 7px; border: 1px solid rgba(0,0,0,0.2); border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
-    .genga-inspector-btn:hover { background: #f0f0ea; }
     .genga-stage { display: flex; flex-direction: column; gap: 10px; width: 100%; height: 100%; min-height: 0; padding: 10px; box-sizing: border-box; overflow: hidden; }
     .genga-stage[hidden] { display: none; }
     .genga-info { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: #333; }
@@ -7514,7 +7511,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '207';
+    const APP_DISPLAY_VERSION = '208';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -29621,10 +29618,8 @@
       const inspector = document.getElementById('inspector');
       if (!inspector) return;
       if (state.project && state.project.kind === 'genga') {
-        // genga: blank inspector for now — keep just the window + collapse (header) + a 変形 button.
-        inspector.innerHTML = '<div class="genga-inspector"><button id="gengaTransformBtn" type="button" class="genga-inspector-btn">変形</button></div>';
-        const tb = document.getElementById('gengaTransformBtn');
-        if (tb) tb.addEventListener('click', function() { if (typeof selectMemoEditTool === 'function') selectMemoEditTool('transform'); });
+        // genga: blank the inspector body for now — the window + its top-left collapse button are kept.
+        inspector.innerHTML = '';
         return;
       }
       const cut = state.project.cuts.find(function(item) { return item.id === currentPicturePanelId(); });
@@ -40871,7 +40866,7 @@
       gengaPlayRaf = requestAnimationFrame(tick);
     }
     function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
-    // P2a/ver207: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
+    // P2a/ver208: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
     // + dope sheet (the genga timeline). Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
