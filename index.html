@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver196</title>
+  <title>Conte Editor Prototype ver197</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver196</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver197</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7344,6 +7344,14 @@
     .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; flex: none; }
     .genga-del-layer:hover { color: #e03b3b; }
     .genga-lname { cursor: default; }
+    .genga-preview { flex: 1; min-height: 120px; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; background: #2b2b2b; overflow: hidden; position: relative; }
+    .genga-preview-canvas { display: block; width: 100%; height: 100%; }
+    .genga-dopesheet { flex: none; height: 240px; }
+    .genga-frame-step { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+    .genga-frame-step button { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 1px 7px; font-size: 11px; line-height: 1.4; }
+    .genga-frame-step button:hover { background: #f0f0ea; }
+    .genga-layer-head.selected { background: rgba(47,111,209,0.14); }
+    .genga-ruler, .genga-lanes { cursor: pointer; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
     #projectCreateTitleInput, #gengaCreateDialog input[type="text"], #gengaCreateDialog select {
       display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
@@ -7482,7 +7490,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '196';
+    const APP_DISPLAY_VERSION = '197';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40434,8 +40442,57 @@
         if (l) l.name = name;
       });
     }
-    // P1-b: render the genga dope-sheet shell (layers × 1-frame timeline). Display-only for now —
-    // drawing / editing / scrubbing come in later phases. Reads project.gengaTimeline; reuses escapeHtml.
+    // genga current-frame (1-based) + selected layer — transient UI state (not persisted in the project).
+    const GENGA_CELL_W = 22;
+    function gengaCurrentFrame() {
+      const f = Math.round(Number(state.gengaFrame) || 1);
+      return f >= 1 ? f : 1;
+    }
+    function setGengaFrame(n) {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const shown = Math.max(24, gt.totalFrames || 1);
+      n = Math.max(1, Math.min(Math.round(Number(n) || 1), shown));
+      state.gengaFrame = n;
+      const ph = document.querySelector('#gengaStage .genga-playhead');
+      if (ph) ph.style.left = ((n - 1) * GENGA_CELL_W) + 'px';
+      const lbl = document.getElementById('gengaFrameNo');
+      if (lbl) lbl.textContent = n;
+      drawGengaPreview();
+    }
+    function stepGengaFrame(delta) { setGengaFrame(gengaCurrentFrame() + delta); }
+    function selectGengaLayer(id) {
+      state.gengaSelectedLayerId = String(id || '') || null;
+      document.querySelectorAll('#gengaStage .genga-layer-head[data-genga-layer]').forEach(function(h) {
+        h.classList.toggle('selected', h.getAttribute('data-genga-layer') === state.gengaSelectedLayerId);
+      });
+    }
+    // Preview = 作画用紙 (white paper) + camera-frame outline, fit into the preview area. P2b will composite
+    // each visible layer's drawing at the current frame on top of the paper before the camera outline.
+    function drawGengaPreview() {
+      const canvas = document.getElementById('gengaPreviewCanvas');
+      if (!canvas) return;
+      const wrap = canvas.parentElement; if (!wrap) return;
+      const W = Math.max(40, wrap.clientWidth), H = Math.max(40, wrap.clientHeight);
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d'); if (!ctx) return;
+      ctx.clearRect(0, 0, W, H);
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
+      const margin = 14;
+      const scale = Math.min((W - margin * 2) / pw, (H - margin * 2) / ph);
+      const dw = pw * scale, dh = ph * scale;
+      const ox = Math.round((W - dw) / 2), oy = Math.round((H - dh) / 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(ox, oy, dw, dh);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+      ctx.strokeRect(ox + 0.5, oy + 0.5, Math.max(1, dw - 1), Math.max(1, dh - 1));
+      // TODO P2b: composite visible layers' drawings at gengaCurrentFrame() here.
+      const cx = ox + gt.camera.x * scale, cy = oy + gt.camera.y * scale, cw = gt.camera.w * scale, ch = gt.camera.h * scale;
+      ctx.strokeStyle = '#2f6fd1'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx, cy, cw, ch);
+    }
+    // P2a: genga workspace = info bar (+ frame stepper) + preview (paper/camera) + dope sheet (layers ×
+    // 1-frame). Layer add/select + frame scrub; drawing/compositing come next. Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
       if (!stageEl) return;
@@ -40445,7 +40502,9 @@
       const layers = Array.isArray(gt.layers) ? gt.layers : [];
       const fps = gt.fps || 24;
       const total = Math.max(24, gt.totalFrames || 1);
-      const cellW = 22;
+      const cellW = GENGA_CELL_W;
+      const frame = gengaCurrentFrame();
+      const selId = state.gengaSelectedLayerId || '';
       let ruler = '';
       for (let f = 1; f <= total; f++) {
         const major = (f === 1 || f % 5 === 0);
@@ -40457,7 +40516,8 @@
         rowsLane = '<div class="genga-lane"></div>';
       } else {
         layers.forEach(function(l) {
-          rowsHead += '<div class="genga-layer-head" data-genga-layer="' + escapeHtml(l.id) + '">' +
+          const sel = (String(l.id) === selId) ? ' selected' : '';
+          rowsHead += '<div class="genga-layer-head' + sel + '" data-genga-layer="' + escapeHtml(l.id) + '">' +
             '<span class="genga-sw" style="background:' + escapeHtml(l.color || '#888888') + '"></span>' +
             '<span class="genga-lname" data-genga-layer="' + escapeHtml(l.id) + '">' + escapeHtml(l.name || 'Layer') + '</span>' +
             '<span class="genga-lop">' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%</span>' +
@@ -40478,8 +40538,12 @@
           '<span>カメラ ' + gt.camera.w + '×' + gt.camera.h + '</span>' +
           '<span>作画用紙 ' + gt.paper.w + '×' + gt.paper.h + '</span>' +
           '<span>' + fps + ' fps</span>' +
-          '<span class="genga-note">原画タイムライン — 表示のみ（描画・編集は今後）</span>' +
+          '<span class="genga-frame-step"><button class="genga-fprev" type="button" aria-label="前のフレーム">◀</button>' +
+            'F<span id="gengaFrameNo">' + frame + '</span> / ' + total +
+            '<button class="genga-fnext" type="button" aria-label="次のフレーム">▶</button></span>' +
+          '<span class="genga-note">原画タイムライン — 描画は今後</span>' +
         '</div>' +
+        '<div class="genga-preview"><canvas id="gengaPreviewCanvas" class="genga-preview-canvas"></canvas></div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
             '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + rowsHead +
@@ -40487,18 +40551,31 @@
           '<div class="genga-timeline-wrap">' +
             '<div class="genga-ruler" style="width:' + laneWidth + 'px">' + ruler + '</div>' +
             '<div class="genga-lanes" style="width:' + laneWidth + 'px">' + rowsLane +
-              '<div class="genga-playhead" style="left:0px"></div>' +
+              '<div class="genga-playhead" style="left:' + ((frame - 1) * cellW) + 'px"></div>' +
             '</div>' +
           '</div>' +
         '</div>';
       const addBtn = stageEl.querySelector('.genga-add-layer');
       if (addBtn) addBtn.addEventListener('click', addGengaLayer);
       stageEl.querySelectorAll('.genga-del-layer').forEach(function(b) {
-        b.addEventListener('click', function() { deleteGengaLayer(b.getAttribute('data-genga-layer')); });
+        b.addEventListener('click', function(ev) { ev.stopPropagation(); deleteGengaLayer(b.getAttribute('data-genga-layer')); });
       });
       stageEl.querySelectorAll('.genga-lname').forEach(function(n) {
-        n.addEventListener('dblclick', function() { renameGengaLayer(n.getAttribute('data-genga-layer')); });
+        n.addEventListener('dblclick', function(ev) { ev.stopPropagation(); renameGengaLayer(n.getAttribute('data-genga-layer')); });
       });
+      stageEl.querySelectorAll('.genga-layer-head[data-genga-layer]').forEach(function(h) {
+        h.addEventListener('click', function() { selectGengaLayer(h.getAttribute('data-genga-layer')); });
+      });
+      const fprev = stageEl.querySelector('.genga-fprev'); if (fprev) fprev.addEventListener('click', function() { stepGengaFrame(-1); });
+      const fnext = stageEl.querySelector('.genga-fnext'); if (fnext) fnext.addEventListener('click', function() { stepGengaFrame(1); });
+      ['.genga-ruler', '.genga-lanes'].forEach(function(sel) {
+        const el = stageEl.querySelector(sel);
+        if (el) el.addEventListener('click', function(ev) {
+          const rect = el.getBoundingClientRect();
+          setGengaFrame(Math.floor((ev.clientX - rect.left) / cellW) + 1);
+        });
+      });
+      drawGengaPreview();
     }
 
     // APP: UTILITIES
