@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver204</title>
+  <title>Conte Editor Prototype ver205</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7240,7 +7240,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver204</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver205</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7343,11 +7343,13 @@
     .genga-tick.major span { position: absolute; top: 4px; left: 3px; font-size: 10px; color: #777; }
     .genga-lanes { position: relative; }
     .genga-lane { height: 34px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, transparent 0, transparent 21px, rgba(0,0,0,0.05) 21px, rgba(0,0,0,0.05) 22px); }
-    .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 5px; background: #2f6fd1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; box-sizing: border-box; cursor: grab; user-select: none; }
+    .genga-exp { position: absolute; top: 4px; height: 26px; border-radius: 6px; background: #dbe6f7; color: #2f6fd1; display: flex; align-items: center; gap: 4px; padding: 0 4px; font-size: 11px; box-sizing: border-box; cursor: grab; user-select: none; overflow: hidden; }
     .genga-exp:active { cursor: grabbing; }
-    .genga-exp-lbl { pointer-events: none; }
-    .genga-exp-resize { position: absolute; right: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-right-radius: 5px; border-bottom-right-radius: 5px; }
-    .genga-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #e03b3b; pointer-events: none; }
+    .genga-exp-thumb { width: 18px; height: 18px; background: #fff; border-radius: 3px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
+    .genga-exp-num { font-weight: 600; flex: none; }
+    .genga-exp-koma { margin-left: auto; font-size: 10px; opacity: 0.6; flex: none; padding-right: 5px; }
+    .genga-exp-resize { position: absolute; right: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+    .genga-playhead { position: absolute; top: 0; bottom: 0; width: 22px; box-sizing: border-box; background: rgba(224,59,59,0.10); border-left: 2px solid #e03b3b; border-right: 2px solid #e03b3b; pointer-events: none; }
     .genga-col-head { justify-content: space-between; }
     .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
     .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; flex: none; }
@@ -7504,7 +7506,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '204';
+    const APP_DISPLAY_VERSION = '205';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40840,7 +40842,7 @@
       gengaPlayRaf = requestAnimationFrame(tick);
     }
     function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
-    // P2a/ver204: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
+    // P2a/ver205: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
     // + dope sheet (the genga timeline). Reads project.gengaTimeline.
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
@@ -40874,9 +40876,13 @@
             '<button class="genga-del-layer" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="削除" aria-label="レイヤー削除">×</button>' +
             '</div>';
           let blocks = '';
-          (l.exposures || []).forEach(function(e) {
-            const lab = (e.instanceValue != null ? String(e.instanceValue) : '');
-            blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px"><span class="genga-exp-lbl">' + escapeHtml(lab) + '</span><span class="genga-exp-resize"></span></div>';
+          (l.exposures || []).forEach(function(e, ei) {
+            const num = (e.instanceValue != null ? e.instanceValue : (ei + 1));
+            blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px">' +
+              '<span class="genga-exp-thumb"></span>' +
+              '<span class="genga-exp-num">#' + escapeHtml(num) + '</span>' +
+              (e.holdFrames > 1 ? '<span class="genga-exp-koma">' + e.holdFrames + 'k</span>' : '') +
+              '<span class="genga-exp-resize"></span></div>';
           });
           rowsLane += '<div class="genga-lane">' + blocks + '</div>';
         });
@@ -40898,7 +40904,7 @@
           '<div class="genga-timeline-wrap">' +
             '<div class="genga-ruler" style="width:' + laneWidth + 'px">' + ruler + '</div>' +
             '<div class="genga-lanes" style="width:' + laneWidth + 'px">' + rowsLane +
-              '<div class="genga-playhead" style="left:' + ((frame - 1) * cellW) + 'px"></div>' +
+              '<div class="genga-playhead" style="left:' + ((frame - 1) * cellW) + 'px;width:' + cellW + 'px"></div>' +
             '</div>' +
           '</div>' +
         '</div>';
