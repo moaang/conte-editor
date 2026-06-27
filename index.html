@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver215</title>
+  <title>Conte Editor Prototype ver269</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7032,7 +7032,7 @@
               <div id="stageSettingsPopover" class="stage-settings-popover" hidden>
                 <label class="stage-settings-check">
                   <input id="videoAutoCreateLayerKomaToggle" type="checkbox" />
-                  <span>空パネル描画時にレイヤーコマを自動作成</span>
+                  <span id="autoCreateKomaLabel">空パネル描画時にレイヤーコマを自動作成</span>
                 </label>
                 <div class="stage-settings-divider"></div>
                 <label class="stage-settings-check">
@@ -7057,11 +7057,13 @@
                   </label>
                   <div id="workspaceAutosaveStatus" class="stage-settings-status"></div>
                 </div>
-                <div class="stage-settings-divider"></div>
-                <div class="stage-settings-actions">
-                  <button id="cleanupEmptyPanelsBtn" type="button">空パネル整理</button>
+                <div id="cleanupEmptyPanelsSection">
+                  <div class="stage-settings-divider"></div>
+                  <div class="stage-settings-actions">
+                    <button id="cleanupEmptyPanelsBtn" type="button">空パネル整理</button>
+                  </div>
+                  <div id="cleanupEmptyPanelsStatus" class="stage-settings-status"></div>
                 </div>
-                <div id="cleanupEmptyPanelsStatus" class="stage-settings-status"></div>
                 <div class="stage-settings-divider"></div>
                 <div class="stage-settings-actions">
                   <button id="compressWorkspaceAudioBtn" type="button">音声を圧縮 (WAV→AAC・元削除)</button>
@@ -7240,7 +7242,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver215</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver269</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7312,13 +7314,21 @@
     .project-start-btn.primary { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .project-start-btn.primary:hover { background: #2a62ba; }
     body.project-locked .workspace { pointer-events: none; }
-    body.genga-active .stage-mode-switch,
     body.genga-active .paper-edit-controls,
     body.genga-active #timingDashboard,
     body.genga-active #scenarioBoardToggleBtn,
     body.genga-active #scenarioBoardWindow { display: none !important; }
+    /* genga keeps the ⚙ settings + 💡 onion buttons in the top bar, but not the paper/video mode toggles */
+    body.genga-active .stage-mode-toggle { display: none !important; }
+    /* genga ⚙ popover: drop conte-only items (work-folder autosave, empty-panel cleanup); onion Basis = single layer option */
+    body.genga-active #workspaceAutosaveSettings,
+    body.genga-active #cleanupEmptyPanelsSection,
+    body.genga-active #onionSkinModePanelBtn { display: none !important; }
     body.genga-active .paper-stage { place-items: stretch; overflow: hidden; }
     body.genga-active .inspector-footer { display: none; }
+    /* top-bar Undo/Redo removed everywhere (Edit-window undo/redo + Ctrl+Z remain); page-nav hidden in genga only */
+    #paperNavUndoHost { display: none !important; }
+    body.genga-active #paperPageNavHost { display: none !important; }
     .genga-stage { display: flex; flex-direction: column; gap: 10px; width: 100%; height: 100%; min-height: 0; padding: 10px; box-sizing: border-box; overflow: hidden; }
     .genga-stage[hidden] { display: none; }
     .genga-info { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: #333; }
@@ -7361,6 +7371,50 @@
     .genga-tl-content .genga-ruler, .genga-tl-content .genga-lanes { width: 100%; }
     .genga-playhead { position: absolute; top: 0; bottom: 0; width: 22px; box-sizing: border-box; background: rgba(224,59,59,0.05); border-left: 1px solid rgba(224,59,59,0.35); border-right: 1px solid rgba(224,59,59,0.35); pointer-events: none; z-index: 5; }
     .genga-playhead-handle { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 9px solid #e03b3b; pointer-events: auto; cursor: ew-resize; }
+    .genga-merge-pop { position: fixed; z-index: 2147483600; background: #fff; border: 1px solid rgba(0,0,0,0.25); border-radius: 8px; box-shadow: 0 6px 22px rgba(0,0,0,0.22); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+    .genga-merge-pop .genga-merge-title { color: #555; font-size: 11px; padding: 0 2px 2px; }
+    .genga-merge-pop button { border: 1px solid rgba(0,0,0,0.2); background: #f6f6f2; border-radius: 5px; cursor: pointer; padding: 5px 9px; font-size: 12px; text-align: left; white-space: nowrap; }
+    .genga-merge-pop button:hover { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
+    .genga-create-dialog { max-width: none; width: min(94vw, 960px); }
+    .genga-create-cols { display: flex; gap: 18px; align-items: stretch; }
+    .genga-create-left { width: 300px; flex: none; display: flex; flex-direction: column; }
+    .genga-create-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .genga-wh-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .genga-wh-row input { flex: 1; min-width: 0; padding: 8px 9px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.22); box-sizing: border-box; }
+    .genga-wh-row span { opacity: 0.6; }
+    .genga-scan-row { display: flex; gap: 6px; margin-top: 8px; }
+    .genga-scan-load-btn { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.22); background: #f2f2ee; cursor: pointer; font-size: 13px; }
+    .genga-scan-clear-btn { flex: none; padding: 8px 12px; border-radius: 8px; border: 1px solid #c0392b; background: #c0392b; color: #fff; cursor: pointer; font-size: 13px; }
+    .genga-cp-readout { font-size: 12px; color: #555; font-variant-numeric: tabular-nums; }
+    .genga-cp-stagewrap { flex: 1; display: flex; justify-content: center; align-items: center; background: #2b2b2b; border-radius: 8px; padding: 12px; min-height: 320px; overflow: hidden; }
+    .genga-cp-stage { position: relative; background: #fff; background-repeat: no-repeat; background-position: center; background-size: 100% 100%; box-shadow: 0 0 0 1px rgba(0,0,0,0.4); touch-action: none; }
+    .genga-cp-cam { position: absolute; border: 2px solid #2f6fd1; background: rgba(47,111,209,0.10); box-sizing: border-box; cursor: ns-resize; }
+    .genga-cp-handle { position: absolute; width: 14px; height: 14px; right: -7px; bottom: -7px; background: #2f6fd1; border: 2px solid #fff; border-radius: 50%; cursor: nwse-resize; }
+    .genga-cp-cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+    .genga-cp-cross::before, .genga-cp-cross::after { content: ''; position: absolute; background: #e03b3b; }
+    .genga-cp-cross::before { width: 21px; height: 1px; left: -10px; top: 0; }
+    .genga-cp-cross::after { width: 1px; height: 21px; left: 0; top: -10px; }
+    .genga-cp-taps { position: absolute; inset: 0; pointer-events: none; }
+    .genga-cp-tap { position: absolute; box-sizing: border-box; border: 1px solid rgba(40,40,40,0.75); background: rgba(255,255,255,0.55); }
+    .genga-cp-tap.round { border-radius: 50%; }
+    .genga-cp-tap.slot { border-radius: 999px; }
+    .genga-cp-hint { margin-top: 4px; }
+    .genga-cp-stagewrap.dragover { outline: 2px dashed #2f6fd1; outline-offset: -4px; }
+    .genga-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+    .genga-tabs button { padding: 5px 8px; border: 1px solid rgba(0,0,0,0.22); border-radius: 6px; background: #f4f4f0; cursor: pointer; font-size: 12px; }
+    .genga-tabs button.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
+    .genga-tabs button:disabled { opacity: 0.4; cursor: default; }
+    .genga-paper-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .genga-paper-row .genga-tabs { margin-top: 0; }
+    .genga-seg-grp { display: inline-flex; align-items: stretch; border: 1px solid #b9b9ae; border-radius: 8px; overflow: hidden; background: #fff; }
+    .genga-seg-grp button.genga-seg { border: 0; border-radius: 0; min-height: 32px; margin: 0; padding: 0 12px; background: #fff; color: var(--ink); font-size: 12px; display: inline-flex; align-items: center; }
+    .genga-seg-grp button.genga-seg.active { background: #2f6fd1; color: #fff; }
+    .genga-seg-lbl { display: inline-flex; align-items: center; min-height: 32px; padding: 0 10px; font-size: 12px; color: #555; border-left: 1px solid #cfcfc6; }
+    #gengaCreateDialog #gengaPaperDpi { width: auto; min-width: 58px; min-height: 32px; margin: 0; border: 0; border-left: 1px solid #cfcfc6; border-radius: 0; padding: 0 8px; font-size: 12px; box-sizing: border-box; background: #fff; }
+    .genga-seg-grp:has(#gengaPaperDpi:disabled) { opacity: 0.5; }
+    .genga-seg-grp:has(#gengaPaperDpi:disabled) #gengaPaperDpi { background: #ececec; color: #999; }
+    #gengaPaperRatioTabs button[data-par="free"] { margin-left: 8px; }
+    .genga-wh-row input:disabled { background-color: #ececec; color: #999; cursor: default; }
     .genga-col-head { justify-content: space-between; }
     .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
     .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 16px; line-height: 0; padding: 0 2px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
@@ -7372,7 +7426,7 @@
     .genga-lock.on { color: #c0392b; }
     .genga-layer-head.dragging { opacity: 0.6; background: rgba(47,111,209,0.18); }
     .genga-preview { flex: 1; min-height: 120px; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; background: #2b2b2b; overflow: hidden; position: relative; }
-    .genga-preview-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+    .genga-preview-canvas { display: block; width: 100%; height: 100%; object-fit: contain; cursor: crosshair; touch-action: none; }
     .genga-frame-step { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
     .genga-frame-step button { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 1px 7px; font-size: 11px; line-height: 1.4; }
     .genga-frame-step button:hover { background: #f0f0ea; }
@@ -7447,41 +7501,97 @@
       </div>
     </form>
   </dialog>
-  <dialog id="gengaCreateDialog" class="choice-dialog">
+  <dialog id="gengaCreateDialog" class="choice-dialog genga-create-dialog">
     <form method="dialog">
-      <h2>新規原画プロジェクト</h2>
-      <label class="project-create-label">作品名<input id="gengaWorkInput" type="text" maxlength="40" placeholder="BW" autocomplete="off" /></label>
-      <label class="project-create-label">話数<input id="gengaEpInput" type="text" maxlength="8" placeholder="01" autocomplete="off" /></label>
-      <label class="project-create-label">カット番号<input id="gengaCutInput" type="text" maxlength="8" placeholder="002" autocomplete="off" /></label>
-      <label class="project-create-label">サフィックス（任意）
-        <select id="gengaSuffixSelect">
-          <option value="">なし</option>
-          <option value="LO">LO</option>
-          <option value="G">G</option>
-          <option value="LE">LE</option>
-          <option value="LS">LS</option>
-          <option value="GE">GE</option>
-          <option value="GS">GS</option>
-        </select>
-      </label>
-      <label class="project-create-label">カメラサイズ（出力解像度）
-        <select id="gengaCamPreset">
-          <option value="1920x1080">1920 × 1080</option>
-          <option value="1280x720">1280 × 720</option>
-          <option value="854x480">854 × 480</option>
-          <option value="480x270">480 × 270</option>
-          <option value="custom">自由入力</option>
-        </select>
-      </label>
-      <div id="gengaCamCustomRow" style="display:none; align-items:center; gap:8px; margin-top:6px;">
-        <input id="gengaCamW" type="number" min="1" max="8192" placeholder="幅" style="flex:1; min-width:0; padding:8px 9px; border-radius:8px; border:1px solid rgba(0,0,0,0.22); box-sizing:border-box;" autocomplete="off" />
-        <span style="opacity:0.6;">×</span>
-        <input id="gengaCamH" type="number" min="1" max="8192" placeholder="高さ" style="flex:1; min-width:0; padding:8px 9px; border-radius:8px; border:1px solid rgba(0,0,0,0.22); box-sizing:border-box;" autocomplete="off" />
-      </div>
-      <p id="gengaCreateHint" class="project-create-hint">例: BW_01_002_LO</p>
-      <div class="choice-dialog-actions">
-        <button type="submit" value="create" class="primary">作成</button>
-        <button type="submit" value="cancel">Cancel</button>
+      <div class="genga-create-cols">
+        <div class="genga-create-left">
+          <h2>新規原画プロジェクト</h2>
+          <label class="project-create-label">作品名<input id="gengaWorkInput" type="text" maxlength="40" placeholder="BW" autocomplete="off" /></label>
+          <label class="project-create-label">話数<input id="gengaEpInput" type="text" maxlength="8" placeholder="01" autocomplete="off" /></label>
+          <label class="project-create-label">カット番号<input id="gengaCutInput" type="text" maxlength="8" placeholder="002" autocomplete="off" /></label>
+          <label class="project-create-label">サフィックス（任意）
+            <select id="gengaSuffixSelect">
+              <option value="">なし</option>
+              <option value="LO">LO</option>
+              <option value="G">G</option>
+              <option value="LE">LE</option>
+              <option value="LS">LS</option>
+              <option value="GE">GE</option>
+              <option value="GS">GS</option>
+            </select>
+          </label>
+          <label class="project-create-label">作画用紙 比率</label>
+          <div class="genga-paper-row">
+            <div id="gengaPaperRatioTabs" class="genga-tabs">
+              <span class="genga-seg-grp">
+                <button type="button" class="genga-seg" data-par="1.41421356:1">標準</button>
+                <span class="genga-seg-lbl">DPI</span>
+                <select class="genga-seg" id="gengaPaperDpi">
+                  <option value="150" selected>150</option>
+                  <option value="200">200</option>
+                  <option value="300">300</option>
+                  <option value="400">400</option>
+                </select>
+              </span>
+              <button type="button" data-par="free">自由</button>
+            </div>
+          </div>
+          <label class="project-create-label">作画用紙サイズ</label>
+          <div class="genga-wh-row">
+            <input id="gengaPaperW" type="number" min="1" max="16384" placeholder="幅" autocomplete="off" />
+            <span>×</span>
+            <input id="gengaPaperH" type="number" min="1" max="16384" placeholder="高さ" autocomplete="off" />
+          </div>
+          <div class="genga-scan-row">
+            <button id="gengaScanLoadBtn" type="button" class="genga-scan-load-btn">作画用紙を読み込む</button>
+            <button id="gengaScanClearBtn" type="button" class="genga-scan-clear-btn" hidden>用紙クリア</button>
+          </div>
+          <input id="gengaScanFile" type="file" accept="image/*" hidden />
+          <p id="gengaScanLockNote" class="project-create-hint" style="display:none; color:#2f6fd1;">作画用紙はスキャンに固定中（カメラのみ調整）</p>
+          <label class="project-create-label">カメラ アスペクト比</label>
+          <div id="gengaArTabs" class="genga-tabs">
+            <button type="button" data-ar="4:3">4:3</button>
+            <button type="button" data-ar="16:9">16:9</button>
+            <button type="button" data-ar="2.39:1">2.39:1</button>
+            <button type="button" data-ar="1.85:1">1.85:1</button>
+            <button type="button" data-ar="1.66:1">1.66:1</button>
+            <button type="button" data-ar="free">自由</button>
+            <button type="button" data-ar="paper">用紙と同じ</button>
+          </div>
+          <div id="gengaArCustomRow" class="genga-wh-row" style="display:none;">
+            <input id="gengaArW" type="number" min="0" step="any" placeholder="比 W" autocomplete="off" />
+            <span>:</span>
+            <input id="gengaArH" type="number" min="0" step="any" placeholder="比 H" autocomplete="off" />
+          </div>
+          <label class="project-create-label">出力解像度（高さ基準 px）</label>
+          <div id="gengaSizeTabs" class="genga-tabs">
+            <button type="button" data-h="270">270</button>
+            <button type="button" data-h="480">480</button>
+            <button type="button" data-h="720">720</button>
+            <button type="button" data-h="1080">1080</button>
+            <button type="button" data-h="free">自由</button>
+          </div>
+          <div id="gengaSizeCustomRow" class="genga-wh-row" style="display:none;">
+            <input id="gengaSizeH" type="number" min="1" max="16384" placeholder="高さ px" autocomplete="off" />
+          </div>
+          <label class="project-create-label">カメラ枠（プレビューで調整・用紙比）</label>
+          <p id="gengaCropInfo" class="project-create-hint" style="margin-top:4px;">—</p>
+          <p id="gengaCreateHint" class="project-create-hint">例: BW_01_002_LO</p>
+          <div class="choice-dialog-actions">
+            <button type="submit" value="create" class="primary">作成</button>
+            <button type="submit" value="cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="genga-create-right">
+          <div class="genga-cp-readout"><span id="gengaCpReadout">用紙 — / カメラ —</span></div>
+          <div class="genga-cp-stagewrap">
+            <div id="gengaCpStage" class="genga-cp-stage">
+              <div id="gengaCpTaps" class="genga-cp-taps" hidden><span class="genga-cp-tap slot"></span><span class="genga-cp-tap round"></span><span class="genga-cp-tap slot"></span></div>
+              <div id="gengaCpCam" class="genga-cp-cam"><span class="genga-cp-cross"></span><span class="genga-cp-handle"></span></div>
+            </div>
+          </div>
+          <p class="project-create-hint genga-cp-hint">プレビューでカメラ枠を縦ドラッグで移動／右下ハンドルで拡縮（横は常に中央・縦は中央から下のみ）。作画用紙画像はここにドロップ／読み込みで用紙＝画像の原寸px。</p>
+        </div>
       </div>
     </form>
   </dialog>
@@ -7516,7 +7626,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '215';
+    const APP_DISPLAY_VERSION = '269';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -10612,7 +10722,7 @@
         state.project.title = title;
         state.project.projectId = generateProjectId();
         state.project.kind = kind || 'conte';
-        if (kind === 'genga') applyGengaCreateResolution(state.project, opts && opts.camW, opts && opts.camH);
+        if (kind === 'genga') applyGengaCreateResolution(state.project, opts && opts.camW, opts && opts.camH, opts && opts.paperW, opts && opts.paperH, opts && opts.camX, opts && opts.camY, opts && opts.outW, opts && opts.outH);
         state.project.settings = state.project.settings || {};
         state.project.settings.indexedDbAutosaveEnabled = true;
         normalizeProject(state.project);
@@ -23907,6 +24017,7 @@
       const gengaEl = document.getElementById('gengaStage');
       // Genga projects have their OWN stage (the dope sheet) — no paper / video-edit mode applies.
       if (state.project && state.project.kind === 'genga') {
+        state.videoEditMode = false; // genga is never in video-edit mode → keeps the conte video zoom header hidden
         pageEl.hidden = true;
         videoEl.hidden = true;
         if (gengaEl) { gengaEl.hidden = false; renderGengaView(gengaEl); }
@@ -30150,6 +30261,7 @@
     }
 
     function clearSelectedConteLayerDrawings() {
+      if (state.project && state.project.kind === 'genga') return gengaClearDrawing();
       const layerIds = selectedConteLayerIdArray();
       if (!layerIds.length) return false;
       const refs = uniqueLayerDrawingRefsForLayerIds(state.project, layerIds).filter(function(ref) {
@@ -36718,6 +36830,7 @@
     }
 
     function nudgeMemoDrawing(dxPx, dyPx) {
+      if (state.project && state.project.kind === 'genga') { gengaNudgeDrawing(dxPx, dyPx); return; }
       const dx = Number(dxPx) || 0;
       const dy = Number(dyPx) || 0;
       if (!dx && !dy) return;
@@ -37540,6 +37653,17 @@
       const undoBtn = document.getElementById('memoUndoBtn');
       const redoBtn = document.getElementById('memoRedoBtn');
       const clearBtn = document.getElementById('memoClearDrawingBtn');
+      // genga: undo/redo follow the genga command stacks; × enabled when the current koma has a drawing
+      if (state.project && state.project.kind === 'genga') {
+        if (undoBtn) undoBtn.disabled = state.undoStack.length === 0;
+        if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;
+        if (clearBtn) {
+          const gl = gengaSelectedLayer();
+          clearBtn.disabled = !(gl && gengaExposureAt(gl, gengaCurrentFrame())); // active when on a koma (even empty)
+        }
+        updatePrimaryUndoRedoButtonsOnly();
+        return;
+      }
       const selectedLayer = findConteLayerById(state.project, state.selectedConteLayerId);
       const selectedDrawing = selectedLayer && selectedLayer.layer ? getLayerDrawingData(state.project, selectedLayer.layer.drawingRef) : null;
       const page = selectedDrawing ? null : getMemoPageData(state.project.currentPage);
@@ -37879,6 +38003,11 @@
     }
 
     function selectMemoEditTool(tool) {
+      if (state.project && state.project.kind === 'genga') {
+        if (gengaSel && tool !== 'lasso-select' && tool !== 'transform' && tool !== 'perspective') gengaCommitSelection();
+        if (gengaStamp && tool !== 'lasso-stamp') gengaExitStamp();
+        if (tool === 'perspective' && gengaSel) gengaEnsureQuad(gengaSel);
+      }
       const previousTool = state.memoEditTool;
       const previousTransformRef = state.memoTransformPreview && state.memoTransformPreview.drawingRef || state.memoTransformBox && state.memoTransformBox.drawingRef || '';
       state.memoEditTool = String(tool || '');
@@ -37902,6 +38031,7 @@
         refreshMemoEditOverlays(previousTransformRef);
       }
       renderCameraFrameOverlay(document.getElementById('videoPreviewStage'));
+      if (state.project && state.project.kind === 'genga') drawGengaPreview();
     }
 
     function beginMemoNudgeWindowDrag(event) {
@@ -38492,7 +38622,7 @@
         updateMemoUndoRedoButtonsOnly();
       }
       if (action === 'onionSkinToggle') toggleOnionSkinEnabled();
-      if (action === 'paraparaPreview') showParaparaPreviousPanelPreview();
+      if (action === 'paraparaPreview') { if (state.project && state.project.kind === 'genga') gengaFlashParaparaPrev(); else showParaparaPreviousPanelPreview(); }
       if (action === 'lassoSelectClear') clearMemoSelection();
       if (action === 'lassoStamp') selectMemoEditTool(state.memoEditTool === 'lasso-stamp' ? '' : 'lasso-stamp');
       if (action === 'lassoSelect') selectMemoEditTool(state.memoEditTool === 'lasso-select' ? '' : 'lasso-select');
@@ -38812,7 +38942,8 @@
         paraparaBtn.addEventListener('click', function(event) {
           event.preventDefault();
           event.stopPropagation();
-          showParaparaPreviousPanelPreview();
+          if (state.project && state.project.kind === 'genga') gengaFlashParaparaPrev();
+          else showParaparaPreviousPanelPreview();
         });
       }
       const clearDrawingBtn = document.getElementById('memoClearDrawingBtn');
@@ -40291,16 +40422,135 @@
     // ================================================================================================
 
     // Data model: paper (作画用紙, base canvas) + camera (output crop = project resolution) + layers/exposures.
-    function applyGengaCreateResolution(project, camW, camH) {
-      const w = Math.max(1, Math.round(Number(camW) || 1920));
-      const h = Math.max(1, Math.round(Number(camH) || 1080));
+    // camera (出力解像度) and paper (作画用紙/canvas) are INDEPENDENT: paper is deliberately larger so the
+    // camera frame (= output crop, "100%") sits centered with margin for camera moves (pan/TU). paperW/H null
+    // → auto = camera ×1.3 (a sane default margin); paper is always clamped to ≥ camera.
+    // camera{x,y,w,h} = the crop rectangle ON the paper (px); output{w,h} = render resolution (separate).
+    function applyGengaCreateResolution(project, camW, camH, paperW, paperH, camX, camY, outW, outH) {
+      const cw = Math.max(1, Math.round(Number(camW) || 1920));
+      const ch = Math.max(1, Math.round(Number(camH) || 1080));
+      let pw = Math.round(Number(paperW)); if (!(pw > 0)) pw = Math.round(cw * 1.3);
+      let ph = Math.round(Number(paperH)); if (!(ph > 0)) ph = Math.round(ch * 1.3);
+      pw = Math.max(cw, pw); ph = Math.max(ch, ph);
+      let cx = Math.round(Number(camX)); if (!isFinite(cx)) cx = Math.round((pw - cw) / 2);
+      let cy = Math.round(Number(camY)); if (!isFinite(cy)) cy = Math.round((ph - ch) / 2);
+      cx = Math.max(0, Math.min(cx, pw - cw)); cy = Math.max(0, Math.min(cy, ph - ch));
+      let ow = Math.round(Number(outW)); if (!(ow > 0)) ow = cw;
+      let oh = Math.round(Number(outH)); if (!(oh > 0)) oh = ch;
       project.gengaTimeline = {
         fps: Math.max(1, Math.round(Number(project.fps) || 24)),
-        paper: { w: w, h: h },
-        camera: { x: 0, y: 0, w: w, h: h },
+        paper: { w: pw, h: ph },
+        camera: { x: cx, y: cy, w: cw, h: ch },
+        output: { w: ow, h: oh },
         totalFrames: 1,
-        layers: []
+        layers: [{
+          id: 'genga-layer-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          name: 'Layer 1', color: gengaLayerColor(0), opacity: 1, visible: true, locked: false, onion: false,
+          sharedDrawings: {},
+          exposures: [{ id: 'genga-exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), startFrame: 1, holdFrames: 1, instanceValue: null, drawing: null }]
+        }]
       };
+    }
+    // --- instance-value drawing LINK (shared pool) ---------------------------------------------------
+    // instanceValue null = independent instance (uses its own exposure.drawing). A SET value links every
+    // exposure with that value IN THE SAME LAYER: they SHARE one bitmap kept in layer.sharedDrawings[value]
+    // (single source of truth → edit one, all update; lighter clones than copying the dataUrl per exposure).
+    // Linked exposures keep drawing=null and read/write the pool.
+    function gengaValueKey(v) { return (v === null || v === undefined || v === '') ? null : String(v); }
+    function gengaSanitizeSharedDrawings(raw) {
+      const out = {};
+      if (raw && typeof raw === 'object') {
+        Object.keys(raw).forEach(function(k) {
+          const d = raw[k];
+          if (d && typeof d === 'object' && typeof d.dataUrl === 'string' && d.dataUrl) {
+            out[String(k)] = { dataUrl: d.dataUrl, w: Math.max(1, Math.round(Number(d.w) || 1)), h: Math.max(1, Math.round(Number(d.h) || 1)) };
+          }
+        });
+      }
+      return out;
+    }
+    function gengaGcSharedDrawings(layer) {
+      if (!layer || !layer.sharedDrawings) return;
+      const used = {};
+      (layer.exposures || []).forEach(function(e) { const k = gengaValueKey(e.instanceValue); if (k !== null) used[k] = true; });
+      Object.keys(layer.sharedDrawings).forEach(function(k) { if (!used[k]) delete layer.sharedDrawings[k]; });
+    }
+    function gengaExposureDrawing(layer, exp) {
+      if (!exp) return null;
+      const key = gengaValueKey(exp.instanceValue);
+      if (key !== null) { const sd = layer && layer.sharedDrawings; return (sd && sd[key]) ? sd[key] : null; }
+      return exp.drawing || null;
+    }
+    function gengaSetExposureDrawing(layer, exp, drawing) {
+      if (!exp) return;
+      const key = gengaValueKey(exp.instanceValue);
+      if (key !== null) {
+        if (!layer.sharedDrawings) layer.sharedDrawings = {};
+        layer.sharedDrawings[key] = drawing;
+        exp.drawing = null;
+      } else {
+        exp.drawing = drawing;
+      }
+    }
+    // assign / relink / unlink an instance value. choice ('mine'|'theirs') resolves a same-value drawing
+    // conflict (both the exposure and the target value already hold art); null choice = no conflict path.
+    function gengaApplyInstanceValue(proj, layerId, expId, newValueRaw, choice) {
+      const gt = proj && proj.gengaTimeline; if (!gt) return;
+      const layer = (gt.layers || []).find(function(l) { return String(l.id) === String(layerId); }); if (!layer) return;
+      const exp = (layer.exposures || []).find(function(e) { return String(e.id) === String(expId); }); if (!exp) return;
+      if (!layer.sharedDrawings) layer.sharedDrawings = {};
+      const oldKey = gengaValueKey(exp.instanceValue);
+      const newKey = gengaValueKey(newValueRaw);
+      if (oldKey === newKey) return;
+      const mine = (oldKey !== null) ? (layer.sharedDrawings[oldKey] || null) : (exp.drawing || null);
+      if (newKey === null) {
+        // unlink → keep a private copy so the exposure still shows its art independently
+        exp.instanceValue = null;
+        exp.drawing = mine ? { dataUrl: mine.dataUrl, w: mine.w, h: mine.h } : null;
+      } else {
+        const theirs = layer.sharedDrawings[newKey] || null;
+        let winner;
+        if (mine && theirs) winner = (choice === 'mine') ? mine : theirs;
+        else winner = mine || theirs || null;
+        exp.instanceValue = newKey;
+        exp.drawing = null;
+        if (winner) layer.sharedDrawings[newKey] = { dataUrl: winner.dataUrl, w: winner.w, h: winner.h };
+      }
+      gengaGcSharedDrawings(layer);
+    }
+    // inline 2-choice popover shown UNDER the instance-value input on a same-value drawing conflict.
+    function showGengaMergeChoice(anchorEl, onChoose) {
+      const prev = document.getElementById('gengaMergePop'); if (prev) prev.remove();
+      const pop = document.createElement('div');
+      pop.id = 'gengaMergePop';
+      pop.className = 'genga-merge-pop';
+      pop.innerHTML =
+        '<div class="genga-merge-title">同じ番号に絵があります</div>' +
+        '<button type="button" data-choice="mine">これで上書き</button>' +
+        '<button type="button" data-choice="theirs">既存に合わせる</button>';
+      document.body.appendChild(pop);
+      const rect = anchorEl.getBoundingClientRect();
+      let top = rect.bottom + 4, left = rect.left;
+      if (top + pop.offsetHeight > window.innerHeight - 6) top = Math.max(6, rect.top - pop.offsetHeight - 4);
+      if (left + pop.offsetWidth > window.innerWidth - 6) left = Math.max(6, window.innerWidth - pop.offsetWidth - 6);
+      pop.style.top = top + 'px'; pop.style.left = left + 'px';
+      let done = false;
+      const cleanup = function() {
+        if (done) return; done = true;
+        document.removeEventListener('pointerdown', onOutside, true);
+        document.removeEventListener('keydown', onKey, true);
+        pop.remove();
+      };
+      const choose = function(c) { cleanup(); onChoose(c); };
+      pop.querySelectorAll('button[data-choice]').forEach(function(b) {
+        b.addEventListener('click', function() { choose(b.getAttribute('data-choice')); });
+      });
+      const onOutside = function(ev) { if (!pop.contains(ev.target)) choose(null); };
+      const onKey = function(ev) { if (ev.key === 'Escape') { ev.preventDefault(); choose(null); } };
+      setTimeout(function() {
+        document.addEventListener('pointerdown', onOutside, true);
+        document.addEventListener('keydown', onKey, true);
+      }, 0);
     }
     // exposure = a placed "instance": one drawing held holdFrames koma from startFrame. instanceValue null =
     // independent (un-numbered); a set value links same-value instances IN THE SAME LAYER (future opt-in).
@@ -40319,7 +40569,7 @@
       let opacity = Number(layer.opacity);
       if (!isFinite(opacity)) opacity = 1;
       opacity = Math.max(0, Math.min(1, opacity));
-      return {
+      const out = {
         id: typeof layer.id === 'string' && layer.id ? layer.id : ('genga-layer-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)),
         name: typeof layer.name === 'string' ? layer.name : 'Layer',
         color: typeof layer.color === 'string' ? layer.color : '#888888',
@@ -40327,8 +40577,19 @@
         visible: layer.visible !== false,
         locked: Boolean(layer.locked),
         onion: Boolean(layer.onion),
-        exposures: Array.isArray(layer.exposures) ? layer.exposures.map(normalizeGengaExposure) : []
+        exposures: Array.isArray(layer.exposures) ? layer.exposures.map(normalizeGengaExposure) : [],
+        sharedDrawings: gengaSanitizeSharedDrawings(layer.sharedDrawings)
       };
+      // migrate legacy linked exposures (value set + own drawing, pre-pool) into the shared pool, then GC
+      out.exposures.forEach(function(e) {
+        const k = gengaValueKey(e.instanceValue);
+        if (k !== null && e.drawing && e.drawing.dataUrl) {
+          if (!out.sharedDrawings[k]) out.sharedDrawings[k] = { dataUrl: e.drawing.dataUrl, w: Math.max(1, Math.round(Number(e.drawing.w) || 1)), h: Math.max(1, Math.round(Number(e.drawing.h) || 1)) };
+          e.drawing = null;
+        }
+      });
+      gengaGcSharedDrawings(out);
+      return out;
     }
     function normalizeGengaTimeline(project) {
       const gt = project.gengaTimeline && typeof project.gengaTimeline === 'object' ? project.gengaTimeline : {};
@@ -40347,10 +40608,20 @@
       const layers = Array.isArray(gt.layers) ? gt.layers.map(normalizeGengaLayer) : [];
       let maxFrame = 1;
       layers.forEach(function(l) { l.exposures.forEach(function(e) { maxFrame = Math.max(maxFrame, e.startFrame + e.holdFrames - 1); }); });
+      const outp = gt.output && typeof gt.output === 'object' ? gt.output : {};
+      // camera (black) = fixed output/composition frame; cameraWork (red) = the editable camera-work frame
+      const cwk = gt.cameraWork && typeof gt.cameraWork === 'object' ? gt.cameraWork : {};
+      const cwW = Math.max(20, Math.round(Number(cwk.w) || camW));
+      const cwH = Math.max(20, Math.round(Number(cwk.h) || camH));
+      const cwX = Number.isFinite(Number(cwk.x)) ? Math.round(Number(cwk.x)) : camX;
+      const cwY = Number.isFinite(Number(cwk.y)) ? Math.round(Number(cwk.y)) : camY;
+      const cwRot = Number.isFinite(Number(cwk.rotation)) ? Number(cwk.rotation) : 0;
       project.gengaTimeline = {
         fps: Math.max(1, Math.round(Number(gt.fps) || project.fps || 24)),
         paper: { w: paperW, h: paperH },
         camera: { x: camX, y: camY, w: camW, h: camH },
+        cameraWork: { x: cwX, y: cwY, w: cwW, h: cwH, rotation: cwRot },
+        output: { w: Math.max(1, Math.round(Number(outp.w) || camW)), h: Math.max(1, Math.round(Number(outp.h) || camH)) },
         totalFrames: Math.max(1, Math.round(Number(gt.totalFrames) || 1), maxFrame),
         layers: layers
       };
@@ -40361,7 +40632,7 @@
         if (!(await confirmDiscardUnsavedForNew())) return;
         const res = await askGengaProjectName();
         if (res === null) return;
-        await finalizeNewProject(res.name, 'genga', { camW: res.camW, camH: res.camH });
+        await finalizeNewProject(res.name, 'genga', { camW: res.camW, camH: res.camH, paperW: res.paperW, paperH: res.paperH, camX: res.camX, camY: res.camY, outW: res.outW, outH: res.outH });
       } catch (error) {
         console.error('[new-genga] failed', error);
         alert('新規原画プロジェクト作成に失敗: ' + (error && error.message ? error.message : error));
@@ -40375,60 +40646,273 @@
         const ep = document.getElementById('gengaEpInput');
         const cut = document.getElementById('gengaCutInput');
         const suf = document.getElementById('gengaSuffixSelect');
-        const camPreset = document.getElementById('gengaCamPreset');
-        const camCustomRow = document.getElementById('gengaCamCustomRow');
-        const camW = document.getElementById('gengaCamW');
-        const camH = document.getElementById('gengaCamH');
+        const arTabs = document.getElementById('gengaArTabs');
+        const arCustomRow = document.getElementById('gengaArCustomRow');
+        const arWEl = document.getElementById('gengaArW');
+        const arHEl = document.getElementById('gengaArH');
+        const sizeTabs = document.getElementById('gengaSizeTabs');
+        const sizeCustomRow = document.getElementById('gengaSizeCustomRow');
+        const sizeHEl = document.getElementById('gengaSizeH');
+        const paperRatioTabs = document.getElementById('gengaPaperRatioTabs');
+        const dpiSel = document.getElementById('gengaPaperDpi');
+        const paperWEl = document.getElementById('gengaPaperW');
+        const paperHEl = document.getElementById('gengaPaperH');
+        const cropInfo = document.getElementById('gengaCropInfo');
+        const scanBtn = document.getElementById('gengaScanLoadBtn');
+        const scanFile = document.getElementById('gengaScanFile');
+        const scanClearBtn = document.getElementById('gengaScanClearBtn');
+        const scanLockNote = document.getElementById('gengaScanLockNote');
+        const stage = document.getElementById('gengaCpStage');
+        const taps = document.getElementById('gengaCpTaps');
+        const camEl = document.getElementById('gengaCpCam');
+        const readout = document.getElementById('gengaCpReadout');
         const hint = document.getElementById('gengaCreateHint');
-        if (!dialog || !form || !work || !ep || !cut || !suf || !camPreset) { resolve(null); return; }
-        work.value = 'untitled'; ep.value = '00'; cut.value = '000'; suf.value = '';
-        camPreset.value = '1920x1080';
-        if (camW) camW.value = ''; if (camH) camH.value = '';
-        if (camCustomRow) camCustomRow.style.display = 'none';
-        if (hint) { hint.textContent = '例: BW_01_002_LO'; hint.classList.remove('error'); }
+        if (!dialog || !form || !work || !ep || !cut || !suf || !arTabs || !sizeTabs || !stage || !camEl) { resolve(null); return; }
+        // OUTPUT resolution (px) = aspect × outH (left tabs, editable). CAMERA crop on paper = FRACTION of paper
+        // (cropWfrac/cropYfrac, preview-only — scales with paper); H-centered, vertical center→down. paper manual/scan.
+        const st = { paperW: 2339, paperH: 1654, paperLockAR: 1.41421356, dpi: 200, arW: 16, arH: 9, outH: 1080, outW: 1920, cropWfrac: 0.8552, cropYfrac: 0.2111, matchPaper: false, camW: 2000, camH: 1125, camY: 349, scanUrl: '' };
+        let scale = 1;
+        const camX = function() { return Math.max(0, Math.round((st.paperW - st.camW) / 2)); };
+        const a4px = function(dpi) { return { w: Math.round(297 * dpi / 25.4), h: Math.round(210 * dpi / 25.4) }; };
+        const parseAr = function(s) { const p = String(s).split(':'); const a = Number(p[0]), b = Number(p[1]); return (a > 0 && b > 0) ? { w: a, h: b } : null; };
+        const setActive = function(container, attr, val) { if (!container) return; container.querySelectorAll('button').forEach(function(b) { b.classList.toggle('active', b.getAttribute(attr) === val); }); };
+        const recompute = function() {
+          st.paperW = Math.max(1, Math.round(st.paperW)); st.paperH = Math.max(1, Math.round(st.paperH));
+          let cw, ch, cy;
+          if (st.matchPaper) { // camera = entire paper (follows paper exactly)
+            cw = st.paperW; ch = st.paperH; cy = 0; st.cropWfrac = 1; st.cropYfrac = 0;
+          } else { // crop SIZE anchored to paper WIDTH (cropWfrac) so it FOLLOWS paper-size changes; aspect arW:arH, H-centered
+            cw = Math.max(8, Math.round(st.cropWfrac * st.paperW));
+            ch = Math.max(8, Math.round(cw * st.arH / st.arW));
+            if (ch > st.paperH) { ch = st.paperH; cw = Math.max(8, Math.round(ch * st.arW / st.arH)); }
+            if (cw > st.paperW) { cw = st.paperW; ch = Math.max(8, Math.round(cw * st.arH / st.arW)); }
+            st.cropWfrac = cw / st.paperW;
+            const cy0 = Math.max(0, Math.round((st.paperH - ch) / 2));
+            cy = Math.max(cy0, Math.min(Math.round(st.cropYfrac * st.paperH), st.paperH - ch));
+            st.cropYfrac = cy / st.paperH;
+          }
+          st.camW = cw; st.camH = ch; st.camY = cy;
+          const aw = st.matchPaper ? st.paperW : st.arW, ah = st.matchPaper ? st.paperH : st.arH;
+          st.outH = Math.max(1, Math.round(st.outH)); st.outW = Math.max(1, Math.round(st.outH * aw / ah));
+        };
+        const renderPreview = function() {
+          recompute();
+          const MAXW = 560, MAXH = 360;
+          scale = Math.min(MAXW / st.paperW, MAXH / st.paperH);
+          stage.style.width = Math.max(1, Math.round(st.paperW * scale)) + 'px';
+          stage.style.height = Math.max(1, Math.round(st.paperH * scale)) + 'px';
+          stage.style.backgroundImage = st.scanUrl ? ('url(' + st.scanUrl + ')') : 'none';
+          camEl.style.left = Math.round(camX() * scale) + 'px';
+          camEl.style.top = Math.round(st.camY * scale) + 'px';
+          camEl.style.width = Math.round(st.camW * scale) + 'px';
+          camEl.style.height = Math.round(st.camH * scale) + 'px';
+          // A4(√2) detection → DPI readout + fixed real-size tap-hole guide (off when a scan is loaded — it already has them).
+          const ratio = Math.max(st.paperW, st.paperH) / Math.max(1, Math.min(st.paperW, st.paperH));
+          const isA4 = Math.abs(ratio - 1.41421356) < 0.03;
+          const dpiTxt = isA4 ? ('・A4 ' + Math.round(Math.max(st.paperW, st.paperH) / (297 / 25.4)) + 'dpi') : '';
+          if (taps) {
+            const showTaps = isA4 && !st.scanUrl && st.paperW >= st.paperH;
+            taps.hidden = !showTaps;
+            if (showTaps) {
+              const dpm = (st.paperW * scale) / 297; // landscape A4 → paper width = 297mm
+              const setHole = function(el, cxmm, cymm, wmm, hmm) {
+                if (!el) return; const wp = wmm * dpm, hp = hmm * dpm;
+                el.style.left = (cxmm * dpm - wp / 2) + 'px'; el.style.top = (cymm * dpm - hp / 2) + 'px';
+                el.style.width = wp + 'px'; el.style.height = hp + 'px';
+              };
+              const c = taps.children;
+              setHole(c[0], 46.9, 11, 15.7, 3.4);   // left slot
+              setHole(c[1], 148.5, 11, 6.35, 6.35); // center round (Ø 1/4\")
+              setHole(c[2], 250.1, 11, 15.7, 3.4);  // right slot
+            }
+          }
+          const arTxt = st.matchPaper ? '用紙と同じ' : (st.arW + ':' + st.arH);
+          if (readout) readout.textContent = '用紙 ' + st.paperW + '×' + st.paperH + dpiTxt + ' / 出力 ' + st.outW + '×' + st.outH + '（' + arTxt + '）';
+          if (cropInfo) cropInfo.textContent = st.matchPaper ? ('用紙と同じ ・ ' + st.camW + '×' + st.camH + 'px') : ('用紙比 ' + Math.round(st.cropWfrac * 100) + '% ・ ' + st.camW + '×' + st.camH + 'px ・ Y ' + Math.round(st.cropYfrac * 100) + '%（横中央）');
+        };
+        const syncInputs = function() {
+          if (paperWEl) paperWEl.value = st.paperW;
+          if (paperHEl) paperHEl.value = st.paperH;
+        };
+        // a loaded 作画用紙 scan FULLY fixes the paper size → disable paper inputs + ratio tabs (camera only).
+        const applyScanLockUI = function() {
+          const scan = !!st.scanUrl;
+          const isStd = !scan && st.paperLockAR != null;   // 標準√2 → A4, DPI-driven (no typing)
+          const manual = !scan && st.paperLockAR == null;  // 自由 → manual W/H
+          if (dpiSel) dpiSel.disabled = !isStd;
+          if (paperWEl) paperWEl.disabled = !manual;
+          if (paperHEl) paperHEl.disabled = !manual;
+          if (paperRatioTabs) paperRatioTabs.querySelectorAll('button').forEach(function(b) { b.disabled = scan; });
+          if (scanLockNote) scanLockNote.style.display = scan ? 'block' : 'none';
+          if (scanClearBtn) scanClearBtn.hidden = !scan;
+        };
+        // AJA-standard main frame on A4 (= industry average): 16:9, height ≈68% of paper, top ≈21.1%
+        // (center ~10.8mm below the paper's vertical center, since the tap strip sits at top). Initial value only.
+        const applyA4CameraDefault = function() {
+          st.arW = 16; st.arH = 9; st.matchPaper = false;
+          st.cropWfrac = 0.8552; st.cropYfrac = 0.2111; // AJA main frame (254/297 of paper width), proportional
+          setActive(arTabs, 'data-ar', '16:9'); // output resolution (size tabs) left as the user set it
+        };
         const buildName = function() {
           const w = work.value.trim(), e = ep.value.trim(), c = cut.value.trim(), s = suf.value;
           if (!w || !e || !c) return '';
           return w + '_' + e + '_' + c + (s ? ('_' + s) : '');
         };
-        const buildSize = function() {
-          if (camPreset.value === 'custom') {
-            const w = Math.round(Number(camW && camW.value));
-            const h = Math.round(Number(camH && camH.value));
-            if (!(w > 0) || !(h > 0)) return null;
-            return { w: w, h: h };
-          }
-          const parts = String(camPreset.value).split('x');
-          return { w: parseInt(parts[0], 10), h: parseInt(parts[1], 10) };
-        };
+        // defaults: 標準√2 (A4) @ 200dpi + AJA camera frame + output 1920×1080.
+        work.value = 'untitled'; ep.value = '00'; cut.value = '000'; suf.value = '';
+        st.arW = 16; st.arH = 9; st.outH = 720; st.scanUrl = ''; st.dpi = 150; st.paperLockAR = 1.41421356;
+        const dp0 = a4px(st.dpi); st.paperW = dp0.w; st.paperH = dp0.h;
+        st.cropWfrac = 0.8552; st.cropYfrac = 0.2111;
+        recompute();
+        setActive(arTabs, 'data-ar', '16:9'); setActive(sizeTabs, 'data-h', '720'); setActive(paperRatioTabs, 'data-par', '1.41421356:1');
+        if (dpiSel) dpiSel.value = '150';
+        if (arCustomRow) arCustomRow.style.display = 'none'; if (sizeCustomRow) sizeCustomRow.style.display = 'none';
+        if (arWEl) arWEl.value = ''; if (arHEl) arHEl.value = ''; if (sizeHEl) sizeHEl.value = '';
+        if (hint) { hint.textContent = '例: BW_01_002_LO'; hint.classList.remove('error'); }
+        syncInputs(); renderPreview(); applyScanLockUI();
         let done = false;
+        const onArTab = function(e) {
+          const btn = e.target && e.target.closest ? e.target.closest('button[data-ar]') : null; if (!btn) return;
+          const val = btn.getAttribute('data-ar'); setActive(arTabs, 'data-ar', val);
+          if (val === 'paper') { st.matchPaper = true; if (arCustomRow) arCustomRow.style.display = 'none'; renderPreview(); syncInputs(); return; }
+          st.matchPaper = false;
+          if (val === 'free') {
+            if (arCustomRow) arCustomRow.style.display = 'flex';
+            if (arWEl && !arWEl.value) arWEl.value = st.arW; if (arHEl && !arHEl.value) arHEl.value = st.arH;
+            if (arWEl) { try { arWEl.focus(); } catch (error) {} }
+          } else {
+            if (arCustomRow) arCustomRow.style.display = 'none';
+            const ar = parseAr(val); if (ar) { st.arW = ar.w; st.arH = ar.h; }
+            renderPreview(); syncInputs();
+          }
+        };
+        const onArCustom = function() { const a = Number(arWEl && arWEl.value), b = Number(arHEl && arHEl.value); if (a > 0 && b > 0) { st.arW = a; st.arH = b; renderPreview(); syncInputs(); } };
+        const onSizeTab = function(e) {
+          const btn = e.target && e.target.closest ? e.target.closest('button[data-h]') : null; if (!btn) return;
+          const val = btn.getAttribute('data-h'); setActive(sizeTabs, 'data-h', val);
+          if (val === 'free') {
+            if (sizeCustomRow) sizeCustomRow.style.display = 'flex';
+            if (sizeHEl && !sizeHEl.value) sizeHEl.value = st.outH;
+            if (sizeHEl) { try { sizeHEl.focus(); } catch (error) {} }
+          } else { if (sizeCustomRow) sizeCustomRow.style.display = 'none'; st.outH = Number(val); renderPreview(); syncInputs(); }
+        };
+        const onSizeCustom = function() { const h = Math.round(Number(sizeHEl && sizeHEl.value)); if (h > 0) { st.outH = h; renderPreview(); syncInputs(); } };
+        const onPaperWH = function(e) {
+          if (st.scanUrl) return; // paper fixed to the loaded scan
+          let w = Math.round(Number(paperWEl && paperWEl.value)), h = Math.round(Number(paperHEl && paperHEl.value));
+          if (st.paperLockAR) {
+            if (e && e.target === paperHEl && h > 0) { st.paperH = h; st.paperW = Math.max(1, Math.round(h * st.paperLockAR)); }
+            else if (w > 0) { st.paperW = w; st.paperH = Math.max(1, Math.round(w / st.paperLockAR)); }
+          } else { if (w > 0) st.paperW = w; if (h > 0) st.paperH = h; }
+          renderPreview(); syncInputs();
+        };
+        // 作画用紙 ratio presets (A4 297:210 = AJA standard / 劇場 345:230 / 自由). Locks paper aspect; H from W.
+        const onPaperRatio = function(e) {
+          const btn = e.target && e.target.closest ? e.target.closest('button[data-par]') : null; if (!btn) return;
+          if (st.scanUrl) return; // paper fixed to the loaded scan
+          const val = btn.getAttribute('data-par'); setActive(paperRatioTabs, 'data-par', val);
+          if (val === 'free') { st.paperLockAR = null; }
+          else { const ar = parseAr(val); st.paperLockAR = ar ? (ar.w / ar.h) : 1.41421356; const p = a4px(st.dpi); st.paperW = p.w; st.paperH = p.h; applyA4CameraDefault(); }
+          applyScanLockUI(); renderPreview(); syncInputs();
+        };
+        const onDpi = function() {
+          st.dpi = Math.max(1, Math.round(Number(dpiSel && dpiSel.value) || 200));
+          if (st.paperLockAR != null && !st.scanUrl) { const p = a4px(st.dpi); st.paperW = p.w; st.paperH = p.h; }
+          renderPreview(); syncInputs();
+        };
+        const loadScanFile = function(f) {
+          if (!f || (f.type && f.type.indexOf('image/') !== 0)) return;
+          const fr = new FileReader();
+          fr.onload = function() {
+            const im = new Image();
+            im.onload = function() {
+              st.scanUrl = String(fr.result); st.paperW = im.naturalWidth; st.paperH = im.naturalHeight;
+              st.paperLockAR = st.paperH > 0 ? (st.paperW / st.paperH) : null; // 불러온 用紙 = 比率 고정
+              setActive(paperRatioTabs, 'data-par', ''); // scan ratio is custom → no preset active
+              if (Math.abs((st.paperW / Math.max(1, st.paperH)) - 1.41421356) < 0.03 && st.paperW >= st.paperH) applyA4CameraDefault();
+              else { recompute(); }
+              syncInputs(); renderPreview(); applyScanLockUI();
+            };
+            im.src = String(fr.result);
+          };
+          fr.readAsDataURL(f);
+        };
+        const onScanBtn = function() { if (scanFile) { scanFile.value = ''; scanFile.click(); } };
+        const onScanClear = function() {
+          st.scanUrl = ''; st.paperLockAR = null;
+          setActive(paperRatioTabs, 'data-par', 'free');
+          applyScanLockUI(); renderPreview(); syncInputs();
+        };
+        const onScanFile = function(ev) { const f = ev.target.files && ev.target.files[0]; if (f) loadScanFile(f); };
+        // drop a 作画用紙 image straight onto the preview
+        const dropZone = stage.parentElement; // .genga-cp-stagewrap
+        const onDragOver = function(e) { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; if (dropZone) dropZone.classList.add('dragover'); };
+        const onDragLeave = function(e) { if (dropZone && (!e.relatedTarget || !dropZone.contains(e.relatedTarget))) dropZone.classList.remove('dragover'); };
+        const onDrop = function(e) { e.preventDefault(); if (dropZone) dropZone.classList.remove('dragover'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadScanFile(f); };
+        let drag = null;
+        const stagePt = function(e) { const b = stage.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+        const onStageDown = function(e) {
+          if (e.target && e.target.classList && e.target.classList.contains('genga-cp-handle')) drag = { mode: 'resize' };
+          else if (e.target === camEl) { const p = stagePt(e); drag = { mode: 'move', grabY: p.y - st.camY * scale }; }
+          else return;
+          if (st.matchPaper) { st.arW = st.paperW; st.arH = st.paperH; st.matchPaper = false; setActive(arTabs, 'data-ar', 'free'); if (arCustomRow) arCustomRow.style.display = 'flex'; if (arWEl) arWEl.value = st.arW; if (arHEl) arHEl.value = st.arH; }
+          document.addEventListener('pointermove', onStageMove); document.addEventListener('pointerup', onStageUp);
+          e.preventDefault(); e.stopPropagation();
+        };
+        const onStageMove = function(e) {
+          if (!drag) return; const p = stagePt(e);
+          if (drag.mode === 'move') { st.cropYfrac = ((p.y - drag.grabY) / scale) / Math.max(1, st.paperH); renderPreview(); }
+          else { const th = Math.max(8, (p.y / scale) - st.camY); st.cropWfrac = (th * st.arW / st.arH) / Math.max(1, st.paperW); renderPreview(); } // resize → crop WIDTH fraction (aspect kept)
+        };
+        const onStageUp = function() { document.removeEventListener('pointermove', onStageMove); document.removeEventListener('pointerup', onStageUp); drag = null; };
         const cleanup = function() {
           form.removeEventListener('submit', onSubmit);
           dialog.removeEventListener('cancel', onCancel);
           dialog.removeEventListener('close', onClose);
-          camPreset.removeEventListener('change', onPreset);
+          if (arTabs) arTabs.removeEventListener('click', onArTab);
+          if (sizeTabs) sizeTabs.removeEventListener('click', onSizeTab);
+          if (paperRatioTabs) paperRatioTabs.removeEventListener('click', onPaperRatio);
+          if (dpiSel) dpiSel.removeEventListener('change', onDpi);
+          if (arWEl) arWEl.removeEventListener('input', onArCustom);
+          if (arHEl) arHEl.removeEventListener('input', onArCustom);
+          if (sizeHEl) sizeHEl.removeEventListener('input', onSizeCustom);
+          if (paperWEl) paperWEl.removeEventListener('change', onPaperWH);
+          if (paperHEl) paperHEl.removeEventListener('change', onPaperWH);
+          if (scanBtn) scanBtn.removeEventListener('click', onScanBtn);
+          if (scanClearBtn) scanClearBtn.removeEventListener('click', onScanClear);
+          if (scanFile) scanFile.removeEventListener('change', onScanFile);
+          if (dropZone) { dropZone.removeEventListener('dragover', onDragOver); dropZone.removeEventListener('dragleave', onDragLeave); dropZone.removeEventListener('drop', onDrop); }
+          stage.removeEventListener('pointerdown', onStageDown);
         };
         const finish = function(value) { if (done) return; done = true; cleanup(); if (dialog.open) dialog.close(); resolve(value); };
-        const onPreset = function() {
-          const custom = camPreset.value === 'custom';
-          if (camCustomRow) camCustomRow.style.display = custom ? 'flex' : 'none';
-          if (custom && camW) { try { camW.focus(); } catch (error) {} }
-        };
         const onSubmit = function(event) {
           event.preventDefault();
           if ((event.submitter && event.submitter.value) !== 'create') { finish(null); return; }
           const name = buildName();
           if (!name) { if (hint) { hint.textContent = '作品名・話数・カット番号は必須です。'; hint.classList.add('error'); } return; }
-          const size = buildSize();
-          if (!size) { if (hint) { hint.textContent = 'カメラサイズ（幅・高さ）を入力してください。'; hint.classList.add('error'); } return; }
-          finish({ name: name, camW: size.w, camH: size.h });
+          recompute();
+          if (!(st.camW > 0 && st.camH > 0 && st.paperW > 0 && st.paperH > 0)) { if (hint) { hint.textContent = 'カメラ・用紙サイズを確認してください。'; hint.classList.add('error'); } return; }
+          finish({ name: name, camW: st.camW, camH: st.camH, paperW: st.paperW, paperH: st.paperH, camX: camX(), camY: st.camY, outW: st.outW, outH: st.outH });
         };
         const onCancel = function(event) { event.preventDefault(); finish(null); };
         const onClose = function() { if (!done) finish(null); };
         form.addEventListener('submit', onSubmit);
         dialog.addEventListener('cancel', onCancel);
         dialog.addEventListener('close', onClose);
-        camPreset.addEventListener('change', onPreset);
+        if (arTabs) arTabs.addEventListener('click', onArTab);
+        if (sizeTabs) sizeTabs.addEventListener('click', onSizeTab);
+        if (paperRatioTabs) paperRatioTabs.addEventListener('click', onPaperRatio);
+        if (dpiSel) dpiSel.addEventListener('change', onDpi);
+        if (arWEl) arWEl.addEventListener('input', onArCustom);
+        if (arHEl) arHEl.addEventListener('input', onArCustom);
+        if (sizeHEl) sizeHEl.addEventListener('input', onSizeCustom);
+        if (paperWEl) paperWEl.addEventListener('change', onPaperWH);
+        if (paperHEl) paperHEl.addEventListener('change', onPaperWH);
+        if (scanBtn) scanBtn.addEventListener('click', onScanBtn);
+        if (scanClearBtn) scanClearBtn.addEventListener('click', onScanClear);
+        if (scanFile) scanFile.addEventListener('change', onScanFile);
+        if (dropZone) { dropZone.addEventListener('dragover', onDragOver); dropZone.addEventListener('dragleave', onDragLeave); dropZone.addEventListener('drop', onDrop); }
+        stage.addEventListener('pointerdown', onStageDown);
         dialog.returnValue = '';
         dialog.showModal();
         setTimeout(function() { try { work.focus(); work.select(); } catch (error) {} }, 30);
@@ -40492,6 +40976,7 @@
     }
     function setGengaFrame(n) {
       const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      if (gengaSel) gengaCommitSelection(); // bake a floating selection before leaving its frame
       const shown = Math.max(24, gt.totalFrames || 1);
       n = Math.max(1, Math.min(Math.round(Number(n) || 1), shown));
       state.gengaFrame = n;
@@ -40517,6 +41002,7 @@
       document.addEventListener('pointerup', up);
     }
     function selectGengaLayer(id) {
+      if (gengaSel && String(gengaSel.layerId) !== (String(id || '') || null)) gengaCommitSelection();
       state.gengaSelectedLayerId = String(id || '') || null;
       document.querySelectorAll('#gengaStage .genga-layer-head[data-genga-layer]').forEach(function(h) {
         h.classList.toggle('selected', h.getAttribute('data-genga-layer') === state.gengaSelectedLayerId);
@@ -40596,6 +41082,42 @@
       }
       return null;
     }
+    // ---- instance (koma) navigation: onion/parapara step by drawing instance, not literal frame ----
+    function gengaSortedExposures(layer) {
+      return (layer && Array.isArray(layer.exposures)) ? layer.exposures.slice().sort(function(a, b) { return a.startFrame - b.startFrame; }) : [];
+    }
+    function gengaCurrentInstanceIndex(layer, frame) {
+      const s = gengaSortedExposures(layer);
+      let idx = -1;
+      for (let i = 0; i < s.length; i++) { if (frame >= s[i].startFrame && frame <= s[i].startFrame + s[i].holdFrames - 1) { idx = i; break; } }
+      if (idx < 0) { for (let i = 0; i < s.length; i++) { if (s[i].startFrame <= frame) idx = i; } } // nearest koma at/before
+      return { sorted: s, idx: idx };
+    }
+    // startFrame of the previous/next instance (koma) relative to `frame`, or null if none
+    function gengaAdjacentInstanceFrame(layer, frame, dir) {
+      const ci = gengaCurrentInstanceIndex(layer, frame);
+      if (!ci.sorted.length) return null;
+      if (ci.idx < 0) { // before any koma
+        if (dir > 0) return ci.sorted[0].startFrame;
+        return null;
+      }
+      // not sitting on a koma (between komas) → nearest in the requested direction
+      const onKoma = (frame >= ci.sorted[ci.idx].startFrame && frame <= ci.sorted[ci.idx].startFrame + ci.sorted[ci.idx].holdFrames - 1);
+      if (!onKoma) {
+        if (dir < 0) return ci.sorted[ci.idx].startFrame;
+        return (ci.idx + 1 < ci.sorted.length) ? ci.sorted[ci.idx + 1].startFrame : null;
+      }
+      const t = ci.idx + (dir < 0 ? -1 : 1);
+      return (t >= 0 && t < ci.sorted.length) ? ci.sorted[t].startFrame : null;
+    }
+    // startFrame reached by stepping `offset` instances from the current one (clamped)
+    function gengaInstanceFrameByOffset(layer, frame, offset) {
+      const ci = gengaCurrentInstanceIndex(layer, frame);
+      if (!ci.sorted.length) return null;
+      let i = ci.idx < 0 ? 0 : ci.idx;
+      i = Math.max(0, Math.min(ci.sorted.length - 1, i + offset));
+      return ci.sorted[i].startFrame;
+    }
     function gengaSelectedLayer() {
       const gt = state.project && state.project.gengaTimeline; if (!gt) return null;
       const layers = gt.layers || [];
@@ -40616,9 +41138,12 @@
         let src = null;
         if (gengaDrawSession && String(l.id) === String(gengaDrawSession.layerId) && frame === gengaDrawSession.frame) {
           src = gengaDrawSession.canvas;
+        } else if (gengaSel && String(l.id) === String(gengaSel.layerId) && frame === gengaSel.frame) {
+          src = gengaSelCompositeFrom(gengaSel);
         } else {
           const e = gengaExposureAt(l, frame);
-          if (e && e.drawing && e.drawing.dataUrl) src = gengaImageFor(e.drawing.dataUrl, drawGengaPreview);
+          const dr = gengaExposureDrawing(l, e);
+          if (dr && dr.dataUrl) src = gengaImageFor(dr.dataUrl, drawGengaPreview);
         }
         if (src) { cx2.globalAlpha = (l.opacity != null ? l.opacity : 1); cx2.drawImage(src, 0, 0, pw, ph); cx2.globalAlpha = 1; }
       }
@@ -40633,26 +41158,19 @@
       tx.globalAlpha = 0.6; tx.fillStyle = tint; tx.fillRect(0, 0, t.width, t.height);
       ctx.globalAlpha = opacity; ctx.drawImage(t, ox, oy, dw, dh); ctx.globalAlpha = 1;
     }
-    function toggleGengaOnion() {
-      const o = onionSkinSettings(state.project);
-      o.enabled = !o.enabled;
-      if (o.enabled && !o.previous && !o.next) { o.previous = true; o.next = true; }
-      try { localStorage.setItem(ONION_SKIN_STORAGE_KEY, JSON.stringify(state.onionSkin)); } catch (e) {}
-      const b = document.getElementById('gengaOnionBtn'); if (b) b.classList.toggle('active', o.enabled);
-      drawGengaPreview();
-    }
     function gengaNearestDrawing(layer, frame) {
       if (!layer || !Array.isArray(layer.exposures)) return null;
-      const exact = gengaExposureAt(layer, frame);
-      if (exact && exact.drawing && exact.drawing.dataUrl) return exact.drawing.dataUrl;
-      let best = null, bestDist = Infinity;
+      const exact = gengaExposureDrawing(layer, gengaExposureAt(layer, frame));
+      if (exact && exact.dataUrl) return exact.dataUrl;
+      let bestUrl = null, bestDist = Infinity;
       layer.exposures.forEach(function(e) {
-        if (e.drawing && e.drawing.dataUrl) {
+        const dr = gengaExposureDrawing(layer, e);
+        if (dr && dr.dataUrl) {
           const d = Math.min(Math.abs(e.startFrame - frame), Math.abs(e.startFrame + e.holdFrames - 1 - frame));
-          if (d < bestDist) { bestDist = d; best = e; }
+          if (d < bestDist) { bestDist = d; bestUrl = dr.dataUrl; }
         }
       });
-      return best ? best.drawing.dataUrl : null;
+      return bestUrl;
     }
     // TVPaint-style layer-header thumbnail: each layer's drawing at the current (or nearest) frame.
     function drawGengaLayerThumbs() {
@@ -40679,27 +41197,104 @@
       const gt = state.project && state.project.gengaTimeline; if (!gt) return;
       const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
       const margin = 14;
-      const scale = Math.min((W - margin * 2) / pw, (H - margin * 2) / ph);
+      const fit = Math.min((W - margin * 2) / pw, (H - margin * 2) / ph);
+      const zoom = clampNumber(state.gengaZoom, 0.1, 8, 1);
+      const scale = fit * zoom;
       const dw = pw * scale, dh = ph * scale;
-      const ox = Math.round((W - dw) / 2), oy = Math.round((H - dh) / 2);
+      // pan only when content overflows the wrap; otherwise re-center. clamp so edges stay reachable.
+      const PAD = 24;
+      let panX = state.gengaPanX || 0, panY = state.gengaPanY || 0;
+      const cenX = (W - dw) / 2, cenY = (H - dh) / 2;
+      if (dw <= W) { panX = 0; } else { const lo = (W - dw - PAD) - cenX, hi = PAD - cenX; panX = Math.max(lo, Math.min(hi, panX)); }
+      if (dh <= H) { panY = 0; } else { const lo = (H - dh - PAD) - cenY, hi = PAD - cenY; panY = Math.max(lo, Math.min(hi, panY)); }
+      state.gengaPanX = panX; state.gengaPanY = panY;
+      const ox = Math.round(cenX + panX), oy = Math.round(cenY + panY);
       gengaPreviewXform = { ox: ox, oy: oy, scale: scale, pw: pw, ph: ph };
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(ox, oy, dw, dh);
-      const frame = gengaCurrentFrame();
+      // parapara/yubipara flip: temporarily show another frame's composite (no onion during the flip)
+      const frame = (gengaParaparaFrame != null) ? gengaParaparaFrame : gengaCurrentFrame();
+      const onionShow = (gengaParaparaFrame == null);
       // onion skin (reuse conte state.onionSkin — 1 prev + 1 next, opacity). prev = red, next = blue tint.
       const onion = state.onionSkin;
-      if (onion && onion.enabled) {
+      if (onionShow && onion && onion.enabled) {
         const oop = clampNumber(onion.opacity, 0, 100, 45) / 100;
-        if (onion.previous && frame > 1) gengaDrawOnionFrame(ctx, frame - 1, ox, oy, dw, dh, oop, '#e23b3b');
-        if (onion.next) gengaDrawOnionFrame(ctx, frame + 1, ox, oy, dw, dh, oop, '#2f8fd1');
+        const oLayer = gengaSelectedLayer();
+        const pf = oLayer ? gengaAdjacentInstanceFrame(oLayer, frame, -1) : null; // previous instance (koma)
+        const nf = oLayer ? gengaAdjacentInstanceFrame(oLayer, frame, 1) : null;  // next instance (koma)
+        if (onion.previous && pf != null) gengaDrawOnionFrame(ctx, pf, ox, oy, dw, dh, oop, '#31ab56'); // 前 = green
+        if (onion.next && nf != null) gengaDrawOnionFrame(ctx, nf, ox, oy, dw, dh, oop, '#e08523');     // 後 = orange
       }
       const composite = gengaCompositeFrame(frame);
       if (composite) ctx.drawImage(composite, ox, oy, dw, dh);
-      const cx = ox + gt.camera.x * scale, cy = oy + gt.camera.y * scale, cw = gt.camera.w * scale, ch = gt.camera.h * scale;
-      ctx.strokeStyle = '#2f6fd1'; ctx.lineWidth = 1.5;
-      ctx.strokeRect(cx, cy, cw, ch);
+      {
+        const SC = function(px2, py2) { return { x: ox + px2 * scale, y: oy + py2 * scale }; };
+        const bcam = gt.camera;                                  // BLACK = fixed output/composition frame
+        const wcam = gt.cameraWork || gt.camera;                 // RED  = editable camera-work frame
+        const camEdit = (state.memoEditTool === 'camera');
+        const corners = gengaCamCorners(wcam).map(function(pt) { return SC(pt.x, pt.y); });
+        const redFrame = function() { ctx.beginPath(); ctx.moveTo(corners[0].x, corners[0].y); ctx.lineTo(corners[1].x, corners[1].y); ctx.lineTo(corners[2].x, corners[2].y); ctx.lineTo(corners[3].x, corners[3].y); ctx.closePath(); };
+        ctx.save();
+        // (button) dim everything outside the red camera-work frame — previews what the camera captures
+        if (state.gengaCamDim) {
+          ctx.beginPath(); ctx.rect(0, 0, W, H);
+          ctx.moveTo(corners[0].x, corners[0].y); ctx.lineTo(corners[1].x, corners[1].y); ctx.lineTo(corners[2].x, corners[2].y); ctx.lineTo(corners[3].x, corners[3].y); ctx.closePath();
+          ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill('evenodd');
+        }
+        // black fixed output frame (axis-aligned, no handles)
+        ctx.strokeStyle = '#111111'; ctx.lineWidth = 1.5; ctx.strokeRect(ox + bcam.x * scale, oy + bcam.y * scale, bcam.w * scale, bcam.h * scale);
+        // red camera-work frame
+        ctx.strokeStyle = '#e00000'; ctx.lineWidth = 2; redFrame(); ctx.stroke();
+        if (camEdit) {
+          const center = SC(gengaCamCenter(wcam).x, gengaCamCenter(wcam).y);
+          const topMidP = gengaCamLocalToPaper(wcam, 0, -wcam.h / 2), topMid = SC(topMidP.x, topMidP.y);
+          const rhP = gengaCamRotateHandlePaper(wcam, scale), rh = SC(rhP.x, rhP.y);
+          ctx.strokeStyle = '#e00000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(topMid.x, topMid.y); ctx.lineTo(rh.x, rh.y); ctx.stroke();
+          corners.forEach(function(pt) { const s = 8; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#e00000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.rect(pt.x - s / 2, pt.y - s / 2, s, s); ctx.fill(); ctx.stroke(); });
+          ctx.beginPath(); ctx.arc(rh.x, rh.y, 6, 0, Math.PI * 2); ctx.fillStyle = '#e00000'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.arc(center.x, center.y, 5, 0, Math.PI * 2); ctx.fillStyle = '#e00000'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
+        }
+        ctx.restore();
+      }
       ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
       ctx.strokeRect(ox + 0.5, oy + 0.5, Math.max(1, dw - 1), Math.max(1, dh - 1));
+      // ---- tool overlays (match conte memo: marching-ants white+blue, 8px square handles) ----
+      const S = function(px2, py2) { return { x: ox + px2 * scale, y: oy + py2 * scale }; };
+      // lasso path while drawing (open marching-ants polyline)
+      if (gengaLasso && gengaLasso.pts.length > 1) {
+        gengaOverlayStroke(ctx, function() {
+          ctx.beginPath();
+          for (let i = 0; i < gengaLasso.pts.length; i++) { const s = S(gengaLasso.pts[i][0], gengaLasso.pts[i][1]); if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y); }
+        }, '#1f66d1', [6, 4]);
+      }
+      if (gengaSel && gengaSel.frame === frame) {
+        const tool = state.memoEditTool;
+        if (gengaSel.quad && tool === 'perspective') {
+          const q = gengaSel.quad.map(function(pt) { return S(pt[0], pt[1]); });
+          gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[1].x, q[1].y); ctx.lineTo(q[2].x, q[2].y); ctx.lineTo(q[3].x, q[3].y); ctx.closePath(); }, '#d06a1f', [5, 3]);
+          q.forEach(function(pt) { gengaOverlayHandle(ctx, pt.x, pt.y); });
+        } else if (tool === 'transform') {
+          const H = gengaSelHandlesPaper(gengaSel, scale);
+          const c = H.corners.map(function(pt) { return S(pt.x, pt.y); }), rot = S(H.rotate.x, H.rotate.y), tm = S(H.topMid.x, H.topMid.y);
+          gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(c[0].x, c[0].y); ctx.lineTo(c[1].x, c[1].y); ctx.lineTo(c[2].x, c[2].y); ctx.lineTo(c[3].x, c[3].y); ctx.closePath(); }, '#1f66d1', [5, 3]);
+          ctx.save(); ctx.strokeStyle = '#1f66d1'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(tm.x, tm.y); ctx.lineTo(rot.x, rot.y); ctx.stroke(); ctx.restore();
+          c.forEach(function(pt) { gengaOverlayHandle(ctx, pt.x, pt.y); });
+          gengaOverlayHandle(ctx, rot.x, rot.y, '#e7f2ff');
+        } else if (gengaSel.poly && gengaSel.poly.length > 2) {
+          // lasso-select (and idle): show the actual lasso outline (transformed), no handles
+          const sp = gengaSel.poly.map(function(pt) { const t = gengaSelT(gengaSel, pt[0], pt[1]); return S(t.x, t.y); });
+          gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(sp[0].x, sp[0].y); for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y); ctx.closePath(); }, '#1f66d1', [6, 4]);
+        }
+      }
+      // lasso-stamp preview: the captured stamp follows the cursor (semi-transparent + dashed bbox)
+      if (gengaStamp && gengaStampPt && state.memoEditTool === 'lasso-stamp') {
+        const dx = ox + (gengaStampPt.x - gengaStamp.w / 2) * scale, dy = oy + (gengaStampPt.y - gengaStamp.h / 2) * scale;
+        const dw2 = gengaStamp.w * scale, dh2 = gengaStamp.h * scale;
+        ctx.save();
+        ctx.globalAlpha = 0.45; ctx.drawImage(gengaStamp.patch, dx, dy, dw2, dh2); ctx.globalAlpha = 1;
+        ctx.setLineDash([5, 4]); ctx.strokeStyle = '#1f66d1'; ctx.lineWidth = 1.5; ctx.strokeRect(dx, dy, dw2, dh2);
+        ctx.restore();
+      }
     }
     function gengaPreviewPointerXY(ev) {
       const canvas = document.getElementById('gengaPreviewCanvas');
@@ -40712,18 +41307,42 @@
     }
     function gengaDrawStart(ev) {
       if (!state.project || state.project.kind !== 'genga') return;
+      if (gengaFlipTouchStart(ev)) return; // ユビパラ: margin touch-drag flips frames
+      if (ev.button === 1) { // middle-drag = pan the zoomed preview
+        gengaPanDrag = { startX: ev.clientX, startY: ev.clientY, baseX: state.gengaPanX || 0, baseY: state.gengaPanY || 0 };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+        ev.preventDefault(); return;
+      }
+      if (state.memoEditTool === 'camera') { gengaCameraPointerDown(ev); return; } // camera-frame edit (no layer needed)
       const layer = gengaSelectedLayer();
       if (!layer || layer.locked) return;
+      const editTool = gengaActiveEditTool();
+      if (editTool === 'lasso-stamp') { gengaStampPointerDown(ev, layer); return; }
+      const sameSel = gengaSel && String(gengaSel.layerId) === String(layer.id) && gengaSel.frame === gengaCurrentFrame();
+      if ((editTool === 'transform' || editTool === 'perspective') && !sameSel) gengaSelectAll(layer, gengaCurrentFrame());
+      if (editTool === 'perspective' && gengaSel) gengaEnsureQuad(gengaSel);
+      if (editTool === 'lasso-select' || editTool === 'transform' || editTool === 'perspective') { gengaSelectPointerDown(ev, layer); return; }
+      if (state.memoEditTool) return; // lasso-stamp/perspective/camera: not yet wired; don't pen-draw under them.
       const p = gengaPreviewPointerXY(ev); if (!p) return;
       const gt = state.project.gengaTimeline;
       const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
       const frame = gengaCurrentFrame();
       const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
       const c = cv.getContext('2d');
-      const existing = gengaExposureAt(layer, frame);
-      if (existing && existing.drawing && existing.drawing.dataUrl) {
-        const img = gengaImageCache.get(existing.drawing.dataUrl);
-        if (img && img.complete) c.drawImage(img, 0, 0, pw, ph);
+      // bake any floating selection (lasso/transform) first — synchronous seed avoids the dataUrl-reload race.
+      let seedCanvas = null;
+      if (gengaSel && String(gengaSel.layerId) === String(layer.id) && gengaSel.frame === frame) {
+        seedCanvas = gengaSelCompositeFrom(gengaSel);
+        gengaCommitSelection();
+      }
+      if (seedCanvas) {
+        c.drawImage(seedCanvas, 0, 0);
+      } else {
+        const existingDr = gengaExposureDrawing(layer, gengaExposureAt(layer, frame));
+        if (existingDr && existingDr.dataUrl) {
+          const img = gengaImageCache.get(existingDr.dataUrl);
+          if (img && img.complete) c.drawImage(img, 0, 0, pw, ph);
+        }
       }
       c.lineCap = 'round'; c.lineJoin = 'round';
       // Reuse the conte memo tool state (pen/eraser + color + size). memo size is 480-space px → scale to paper.
@@ -40745,6 +41364,11 @@
       ev.preventDefault();
     }
     function gengaDrawMove(ev) {
+      if (gengaFlipTouch) { gengaFlipTouchMove(ev); return; }
+      if (gengaPanDrag) { state.gengaPanX = gengaPanDrag.baseX + (ev.clientX - gengaPanDrag.startX); state.gengaPanY = gengaPanDrag.baseY + (ev.clientY - gengaPanDrag.startY); drawGengaPreview(); ev.preventDefault(); return; }
+      if (gengaCamDrag) { gengaCameraPointerMove(ev); return; }
+      if (gengaSelDrag || gengaLasso) { gengaSelectPointerMove(ev); return; }
+      if (gengaStamp && gengaActiveEditTool() === 'lasso-stamp') { const p = gengaPreviewPointerXY(ev); if (p) { gengaStampPt = { x: p.x, y: p.y }; drawGengaPreview(); } return; }
       if (!gengaDrawSession) return;
       const p = gengaPreviewPointerXY(ev); if (!p) return;
       const c = gengaDrawSession.ctx;
@@ -40754,13 +41378,23 @@
       ev.preventDefault();
     }
     function gengaDrawEnd(ev) {
+      if (gengaFlipTouch) { gengaFlipTouchEnd(ev); return; }
+      if (gengaPanDrag) { gengaPanDrag = null; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} return; }
+      if (gengaCamDrag) { gengaCameraPointerEnd(ev); return; }
+      if (gengaSelDrag || gengaLasso) { gengaSelectPointerEnd(ev); return; }
       if (!gengaDrawSession) return;
       const sess = gengaDrawSession;
       gengaDrawSession = null;
       const dataUrl = sess.canvas.toDataURL('image/png');
       const layerId = sess.layerId, frame = sess.frame, pw = sess.canvas.width, ph = sess.canvas.height;
       gengaImageFor(dataUrl, drawGengaPreview);
-      runCommand('原画描画', function(proj) {
+      gengaCommitDrawing(layerId, frame, { dataUrl: dataUrl, w: pw, h: ph }, '原画描画');
+      try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
+    }
+    // ---- shared drawing commit + tool helpers (P1: clear/nudge; P2+: lasso/transform) ----
+    // commit a drawing object (or null to clear) onto the exposure covering `frame` of layer `layerId`.
+    function gengaCommitDrawing(layerId, frame, drawing, label) {
+      runCommand(label || '原画描画', function(proj) {
         const gt = proj.gengaTimeline; if (!gt) return;
         const layer = (gt.layers || []).find(function(x) { return String(x.id) === String(layerId); });
         if (!layer) return;
@@ -40771,12 +41405,513 @@
           if (frame >= x.startFrame && frame <= x.startFrame + x.holdFrames - 1) { e = x; break; }
         }
         if (!e) {
+          if (!drawing) return;
+          if (proj.settings && proj.settings.gengaAutoCreateKomaOnDraw === false) return; // 空セル描画時のレイヤーコマ自動作成 OFF
           e = { id: 'genga-exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), startFrame: frame, holdFrames: 1, instanceValue: null, drawing: null };
           layer.exposures.push(e);
         }
-        e.drawing = { dataUrl: dataUrl, w: pw, h: ph };
+        gengaSetExposureDrawing(layer, e, drawing);
       });
+    }
+    // paper-sized working canvas seeded with the current exposure art (sync, from cache).
+    function gengaWorkingCanvasFor(layer, frame) {
+      const gt = state.project.gengaTimeline;
+      const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
+      const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
+      const c = cv.getContext('2d');
+      let hasContent = false;
+      // a floating selection over this layer/frame is the live art — bake it in synchronously.
+      if (gengaSel && String(gengaSel.layerId) === String(layer.id) && gengaSel.frame === frame) {
+        c.drawImage(gengaSelCompositeFrom(gengaSel), 0, 0);
+        return { cv: cv, ctx: c, pw: pw, ph: ph, hasContent: true };
+      }
+      const dr = gengaExposureDrawing(layer, gengaExposureAt(layer, frame));
+      if (dr && dr.dataUrl) {
+        const img = gengaImageFor(dr.dataUrl, drawGengaPreview);
+        if (img && img.complete) { c.drawImage(img, 0, 0, pw, ph); hasContent = true; }
+      }
+      return { cv: cv, ctx: c, pw: pw, ph: ph, hasContent: hasContent };
+    }
+    // which memo edit tool is active (lasso/transform/perspective) — '' = plain pen/eraser.
+    function gengaActiveEditTool() {
+      const t = state.memoEditTool;
+      return (t === 'lasso-select' || t === 'lasso-stamp' || t === 'transform' || t === 'perspective') ? t : '';
+    }
+    // 1px nudge: shift the whole current-exposure drawing by (dx,dy) paper px.
+    function gengaNudgeDrawing(dx, dy) {
+      if (!state.project || state.project.kind !== 'genga') return false;
+      const layer = gengaSelectedLayer(); if (!layer || layer.locked) return true;
+      dx = Math.round(Number(dx) || 0); dy = Math.round(Number(dy) || 0);
+      if (!dx && !dy) return true;
+      const frame = gengaCurrentFrame();
+      const wk = gengaWorkingCanvasFor(layer, frame);
+      gengaSel = null; // wk already baked any floating selection
+      if (!wk.hasContent) return true;
+      const out = document.createElement('canvas'); out.width = wk.pw; out.height = wk.ph;
+      out.getContext('2d').drawImage(wk.cv, dx, dy);
+      const dataUrl = out.toDataURL('image/png');
+      gengaImageFor(dataUrl, drawGengaPreview);
+      gengaCommitDrawing(layer.id, frame, { dataUrl: dataUrl, w: wk.pw, h: wk.ph }, '原画移動');
+      drawGengaPreview(); drawGengaLayerThumbs();
+      return true;
+    }
+    // the current layer-koma (exposure at the current frame). a koma with a drawing → clear it (keep the
+    // slot); an already-empty koma → delete the koma (so the cell goes back to empty). Active whenever the
+    // current frame has a koma in the selected layer — no stroke required.
+    function gengaClearDrawing() {
+      if (!state.project || state.project.kind !== 'genga') return false;
+      const layer = gengaSelectedLayer(); if (!layer || layer.locked) return true;
+      const frame = gengaCurrentFrame();
+      const hadSel = !!(gengaSel && String(gengaSel.layerId) === String(layer.id) && gengaSel.frame === frame);
+      gengaSel = null;
+      const exp = gengaExposureAt(layer, frame);
+      if (!exp) { drawGengaPreview(); return true; } // no current koma → nothing to do
+      const dr = gengaExposureDrawing(layer, exp);
+      if (hadSel || (dr && dr.dataUrl)) {
+        gengaCommitDrawing(layer.id, frame, null, '原画クリア'); // has content → empty the drawing (keep the koma)
+      } else {
+        const expId = exp.id; // already empty → remove the koma
+        runCommand('原画コマ削除', function(proj) {
+          const gt = proj.gengaTimeline; if (!gt) return;
+          const l = (gt.layers || []).find(function(x) { return String(x.id) === String(layer.id); });
+          if (l) l.exposures = (l.exposures || []).filter(function(e) { return String(e.id) !== String(expId); });
+        });
+      }
+      drawGengaPreview(); drawGengaLayerThumbs();
+      return true;
+    }
+    // ---- P2a: lasso selection + move (genga single-bitmap) ----
+    let gengaSel = null;     // floating selection { layerId, frame, base<canvas>, patch<canvas>, bounds, tx, ty, scale, rot, quad? }
+    let gengaLasso = null;   // { pts:[[x,y],...], stamp } while drawing the lasso polygon
+    let gengaSelDrag = null; // { mode, ... } while dragging the selection / a handle
+    let gengaPanDrag = null; // { startX, startY, baseX, baseY } while middle-drag panning the zoomed preview
+    let gengaStamp = null;   // captured stamp { patch<canvas cropped>, w, h, work<paper canvas>, workLayer, workFrame } — click to rubber-stamp copies
+    let gengaStampPt = null; // { x, y } paper-coord preview point following the cursor in stamp mode
+    let gengaCamDrag = null; // { mode:'move'|'resize', corner, startX, startY, orig:{x,y,w,h}, aspect } while editing the camera frame
+    let gengaParaparaFrame = null; // when set, drawGengaPreview shows this frame instead of the current one (parapara/yubipara flip)
+    let gengaParaparaTimer = 0;
+    let gengaFlipTouch = null; // { pointerId, startY, offset } while finger-flipping (ユビパラ) on a touch device
+    function gengaSelCenter0(sel) { return { x: sel.bounds.x + sel.bounds.w / 2, y: sel.bounds.y + sel.bounds.h / 2 }; }
+    // base (the hole) + patch transformed (translate tx/ty, rotate, scale about its original center) → a paper-res canvas
+    function gengaSelCompositeFrom(sel) {
+      const pw = sel.base.width, ph = sel.base.height;
+      const c = document.createElement('canvas'); c.width = pw; c.height = ph;
+      const cc = c.getContext('2d');
+      cc.drawImage(sel.base, 0, 0);
+      if (sel.quad) {
+        const crop = gengaSelPatchCrop(sel);
+        gengaWarpQuad(cc, crop.canvas, crop.w, crop.h, sel.quad, 12);
+      } else {
+        const c0 = gengaSelCenter0(sel);
+        cc.save();
+        cc.translate(c0.x + (sel.tx || 0), c0.y + (sel.ty || 0));
+        cc.rotate(sel.rot || 0);
+        cc.scale(sel.scale || 1, sel.scale || 1);
+        cc.translate(-c0.x, -c0.y);
+        cc.drawImage(sel.patch, 0, 0);
+        cc.restore();
+      }
+      return c;
+    }
+    // forward transform: a local paper point → its transformed paper point
+    function gengaSelT(sel, px, py) {
+      const c0 = gengaSelCenter0(sel), s = sel.scale || 1, r = sel.rot || 0;
+      const vx = (px - c0.x) * s, vy = (py - c0.y) * s, cs = Math.cos(r), sn = Math.sin(r);
+      return { x: c0.x + (sel.tx || 0) + (vx * cs - vy * sn), y: c0.y + (sel.ty || 0) + (vx * sn + vy * cs) };
+    }
+    // inverse transform: a transformed paper point → its local paper point
+    function gengaSelInv(sel, qx, qy) {
+      const c0 = gengaSelCenter0(sel), s = sel.scale || 1, r = sel.rot || 0;
+      const vx = qx - c0.x - (sel.tx || 0), vy = qy - c0.y - (sel.ty || 0), cs = Math.cos(-r), sn = Math.sin(-r);
+      return { x: c0.x + (vx * cs - vy * sn) / s, y: c0.y + (vx * sn + vy * cs) / s };
+    }
+    // transformed corner + rotate-handle positions (paper coords); rotate handle sits a screen-fixed gap above top-mid.
+    function gengaSelHandlesPaper(sel, viewScale) {
+      const b = sel.bounds;
+      const corners = [gengaSelT(sel, b.x, b.y), gengaSelT(sel, b.x + b.w, b.y), gengaSelT(sel, b.x + b.w, b.y + b.h), gengaSelT(sel, b.x, b.y + b.h)];
+      const topMid = gengaSelT(sel, b.x + b.w / 2, b.y);
+      const r = sel.rot || 0, ux = Math.sin(r), uy = -Math.cos(r), d = 26 / Math.max(1e-4, viewScale);
+      return { corners: corners, topMid: topMid, rotate: { x: topMid.x + ux * d, y: topMid.y + uy * d } };
+    }
+    // ---- P3b: perspective (4-corner) warp via triangle-mesh (bilinear). quad = [TL,TR,BR,BL] paper coords ----
+    function gengaSelPatchCrop(sel) {
+      if (sel.patchCrop) return sel.patchCrop;
+      const b = sel.bounds, w = Math.max(1, Math.round(b.w)), h = Math.max(1, Math.round(b.h));
+      const cn = document.createElement('canvas'); cn.width = w; cn.height = h;
+      cn.getContext('2d').drawImage(sel.patch, Math.round(b.x), Math.round(b.y), w, h, 0, 0, w, h);
+      sel.patchCrop = { canvas: cn, w: w, h: h };
+      return sel.patchCrop;
+    }
+    function gengaEnsureQuad(sel) {
+      if (sel.quad) return;
+      const b = sel.bounds, TL = gengaSelT(sel, b.x, b.y), TR = gengaSelT(sel, b.x + b.w, b.y), BR = gengaSelT(sel, b.x + b.w, b.y + b.h), BL = gengaSelT(sel, b.x, b.y + b.h);
+      sel.quad = [[TL.x, TL.y], [TR.x, TR.y], [BR.x, BR.y], [BL.x, BL.y]];
+    }
+    function gengaQuadBilinear(quad, u, v) {
+      const tx = quad[0][0] * (1 - u) + quad[1][0] * u, ty = quad[0][1] * (1 - u) + quad[1][1] * u;
+      const bx = quad[3][0] * (1 - u) + quad[2][0] * u, by = quad[3][1] * (1 - u) + quad[2][1] * u;
+      return { x: tx * (1 - v) + bx * v, y: ty * (1 - v) + by * v };
+    }
+    function gengaWarpTri(ctx, img, s0, s1, s2, d0, d1, d2) {
+      const det = (s1[0] - s0[0]) * (s2[1] - s0[1]) - (s2[0] - s0[0]) * (s1[1] - s0[1]);
+      if (!det) return;
+      const a = ((d1[0] - d0[0]) * (s2[1] - s0[1]) - (d2[0] - d0[0]) * (s1[1] - s0[1])) / det;
+      const b = ((d1[1] - d0[1]) * (s2[1] - s0[1]) - (d2[1] - d0[1]) * (s1[1] - s0[1])) / det;
+      const c = ((d2[0] - d0[0]) * (s1[0] - s0[0]) - (d1[0] - d0[0]) * (s2[0] - s0[0])) / det;
+      const d = ((d2[1] - d0[1]) * (s1[0] - s0[0]) - (d1[1] - d0[1]) * (s2[0] - s0[0])) / det;
+      const e = d0[0] - a * s0[0] - c * s0[1], f = d0[1] - b * s0[0] - d * s0[1];
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(d0[0], d0[1]); ctx.lineTo(d1[0], d1[1]); ctx.lineTo(d2[0], d2[1]); ctx.closePath(); ctx.clip();
+      ctx.setTransform(a, b, c, d, e, f);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+    }
+    function gengaWarpQuad(ctx, img, iw, ih, quad, n) {
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          const u0 = i / n, u1 = (i + 1) / n, v0 = j / n, v1 = (j + 1) / n;
+          const sx0 = u0 * iw, sx1 = u1 * iw, sy0 = v0 * ih, sy1 = v1 * ih;
+          const dTL = gengaQuadBilinear(quad, u0, v0), dTR = gengaQuadBilinear(quad, u1, v0), dBR = gengaQuadBilinear(quad, u1, v1), dBL = gengaQuadBilinear(quad, u0, v1);
+          gengaWarpTri(ctx, img, [sx0, sy0], [sx1, sy0], [sx1, sy1], [dTL.x, dTL.y], [dTR.x, dTR.y], [dBR.x, dBR.y]);
+          gengaWarpTri(ctx, img, [sx0, sy0], [sx1, sy1], [sx0, sy1], [dTL.x, dTL.y], [dBR.x, dBR.y], [dBL.x, dBL.y]);
+        }
+      }
+    }
+    function gengaPointInPoly(px, py, poly) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+        if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+      }
+      return inside;
+    }
+    // overlay style matching the conte memo: marching-ants (white underlay + colored dash) + 8px square handles
+    function gengaOverlayStroke(ctx, drawPath, color, dash) {
+      ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.setLineDash(dash || [6, 4]);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; drawPath(); ctx.stroke();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = color || '#1f66d1'; drawPath(); ctx.stroke();
+      ctx.restore();
+    }
+    function gengaOverlayHandle(ctx, x, y, fill) {
+      const s = 8; ctx.save(); ctx.fillStyle = fill || '#fff'; ctx.strokeStyle = '#1f66d1'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.rect(x - s / 2, y - s / 2, s, s); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+    // bake the floating selection back into the layer drawing.
+    function gengaCommitSelection() {
+      if (!gengaSel) return;
+      const sel = gengaSel; gengaSel = null; gengaSelDrag = null;
+      const out = gengaSelCompositeFrom(sel);
+      const dataUrl = out.toDataURL('image/png');
+      gengaImageFor(dataUrl, drawGengaPreview);
+      gengaCommitDrawing(sel.layerId, sel.frame, { dataUrl: dataUrl, w: out.width, h: out.height }, '原画変形');
+      drawGengaPreview(); drawGengaLayerThumbs();
+    }
+    // ---- lasso-stamp (conte-style): lasso COPIES a region into a stamp → it follows the cursor → click to rubber-stamp copies, right-click to exit ----
+    function gengaExitStamp() { if (gengaStamp || gengaStampPt) { gengaStamp = null; gengaStampPt = null; drawGengaPreview(); } }
+    function gengaCaptureStamp(layer, frame, pts) {
+      if (!pts || pts.length < 3) return false;
+      const wk = gengaWorkingCanvasFor(layer, frame);
+      if (!wk.hasContent) return false;
+      const pw = wk.pw, ph = wk.ph;
+      const mask = document.createElement('canvas'); mask.width = pw; mask.height = ph;
+      const mx = mask.getContext('2d');
+      mx.beginPath(); mx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) mx.lineTo(pts[i][0], pts[i][1]);
+      mx.closePath(); mx.fillStyle = '#fff'; mx.fill();
+      const full = document.createElement('canvas'); full.width = pw; full.height = ph;
+      const fx = full.getContext('2d');
+      fx.drawImage(wk.cv, 0, 0); fx.globalCompositeOperation = 'destination-in'; fx.drawImage(mask, 0, 0); fx.globalCompositeOperation = 'source-over';
+      let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+      pts.forEach(function(p) { if (p[0] < minx) minx = p[0]; if (p[1] < miny) miny = p[1]; if (p[0] > maxx) maxx = p[0]; if (p[1] > maxy) maxy = p[1]; });
+      minx = Math.max(0, Math.floor(minx)); miny = Math.max(0, Math.floor(miny)); maxx = Math.min(pw, Math.ceil(maxx)); maxy = Math.min(ph, Math.ceil(maxy));
+      const w = maxx - minx, h = maxy - miny;
+      if (w < 2 || h < 2) return false;
+      const id = fx.getImageData(minx, miny, w, h).data;
+      let ink = false; for (let i = 3; i < id.length; i += 4) { if (id[i] > 8) { ink = true; break; } }
+      if (!ink) return false;
+      const patch = document.createElement('canvas'); patch.width = w; patch.height = h;
+      patch.getContext('2d').drawImage(full, minx, miny, w, h, 0, 0, w, h);
+      const work = document.createElement('canvas'); work.width = pw; work.height = ph; work.getContext('2d').drawImage(wk.cv, 0, 0);
+      gengaStamp = { patch: patch, w: w, h: h, work: work, workLayer: String(layer.id), workFrame: frame };
+      gengaStampPt = null;
+      state.timelineStatus = 'スタンプ取得：クリックで配置 / 右クリックで終了';
+      drawGengaPreview();
+      return true;
+    }
+    function gengaPlaceStamp(layer, frame, x, y) {
+      if (!gengaStamp) return;
+      if (gengaStamp.workLayer !== String(layer.id) || gengaStamp.workFrame !== frame) {
+        const wk = gengaWorkingCanvasFor(layer, frame);
+        const work = document.createElement('canvas'); work.width = wk.pw; work.height = wk.ph;
+        if (wk.hasContent) work.getContext('2d').drawImage(wk.cv, 0, 0);
+        gengaStamp.work = work; gengaStamp.workLayer = String(layer.id); gengaStamp.workFrame = frame;
+      }
+      gengaStamp.work.getContext('2d').drawImage(gengaStamp.patch, Math.round(x - gengaStamp.w / 2), Math.round(y - gengaStamp.h / 2));
+      const dataUrl = gengaStamp.work.toDataURL('image/png');
+      gengaImageFor(dataUrl, drawGengaPreview);
+      gengaCommitDrawing(layer.id, frame, { dataUrl: dataUrl, w: gengaStamp.work.width, h: gengaStamp.work.height }, '原画スタンプ');
+      drawGengaPreview(); drawGengaLayerThumbs();
+    }
+    function gengaStampPointerDown(ev, layer) {
+      if (ev.button === 2) { gengaExitStamp(); ev.preventDefault(); return; }
+      const p = gengaPreviewPointerXY(ev); if (!p) return;
+      if (gengaStamp) {
+        gengaPlaceStamp(layer, gengaCurrentFrame(), p.x, p.y);
+      } else {
+        gengaLasso = { pts: [[p.x, p.y]], stamp: true };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+      }
+      ev.preventDefault();
+    }
+    // ---- preview zoom / pan / camera-frame toggle (100% = fit, like the conte preview) ----
+    function updateGengaZoomLabel() { const el = document.getElementById('gengaZoomResetBtn'); if (el) el.textContent = Math.round(clampNumber(state.gengaZoom, 0.1, 8, 1) * 100) + '%'; }
+    function gengaSetZoom(z) {
+      state.gengaZoom = clampNumber(z, 0.1, 8, 1);
+      if (state.gengaZoom <= 1.0001) { state.gengaPanX = 0; state.gengaPanY = 0; }
+      drawGengaPreview(); updateGengaZoomLabel();
+    }
+    function gengaZoomStep(dir) { gengaSetZoom(Math.round((clampNumber(state.gengaZoom, 0.1, 8, 1) * (dir > 0 ? 1.25 : 1 / 1.25)) * 100) / 100); }
+    function gengaZoomReset() { gengaSetZoom(1); }
+    // the zoom-bar camera button toggles the "dim outside the camera frame" preview (フレーム外を暗く).
+    function toggleGengaCameraFrame() {
+      state.gengaCamDim = !state.gengaCamDim;
+      const b = document.getElementById('gengaCameraFrameBtn'); if (b) b.classList.toggle('active', !!state.gengaCamDim);
+      drawGengaPreview();
+    }
+    // ---- parapara (flash previous frame) + ユビパラ (mobile finger-flip through frames) ----
+    function gengaSetParaparaFrame(f) {
+      const gt = state.project && state.project.gengaTimeline;
+      if (f == null || !gt) gengaParaparaFrame = null;
+      else gengaParaparaFrame = Math.max(1, Math.min(Math.round(f), Math.max(1, gt.totalFrames || 1)));
+      drawGengaPreview();
+    }
+    function gengaFlashParaparaPrev() {
+      if (!state.project || state.project.kind !== 'genga') return;
+      const layer = gengaSelectedLayer(); if (!layer) return;
+      const pf = gengaAdjacentInstanceFrame(layer, gengaCurrentFrame(), -1); if (pf == null) return; // previous instance
+      if (gengaParaparaTimer) clearTimeout(gengaParaparaTimer);
+      gengaSetParaparaFrame(pf);
+      gengaParaparaTimer = setTimeout(function() { gengaParaparaTimer = 0; gengaSetParaparaFrame(null); }, 160);
+    }
+    // ユビパラ: a touch starting in the left/right margin (outside the paper) then dragged up/down flips frames.
+    function gengaFlipTouchStart(ev) {
+      if (ev.pointerType !== 'touch') return false;
+      if (typeof mobileOrTabletRuntime === 'function' && !mobileOrTabletRuntime()) return false;
+      const canvas = document.getElementById('gengaPreviewCanvas'); if (!canvas || !gengaPreviewXform) return false;
+      const rect = canvas.getBoundingClientRect();
+      const lx = ev.clientX - rect.left;
+      const paperLeft = gengaPreviewXform.ox, paperRight = gengaPreviewXform.ox + gengaPreviewXform.pw * gengaPreviewXform.scale;
+      if (lx >= paperLeft && lx <= paperRight) return false; // inside the paper → normal drawing
+      gengaFlipTouch = { pointerId: ev.pointerId, startY: ev.clientY, offset: 0 };
+      try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+      ev.preventDefault();
+      return true;
+    }
+    function gengaFlipTouchMove(ev) {
+      if (!gengaFlipTouch || gengaFlipTouch.pointerId !== ev.pointerId) return;
+      const dy = ev.clientY - gengaFlipTouch.startY;
+      const steps = dy > 0 ? Math.floor(dy / 40) : Math.ceil(dy / 40);
+      const offset = -steps; // drag down → previous instances, up → next
+      if (offset !== gengaFlipTouch.offset) {
+        gengaFlipTouch.offset = offset;
+        if (offset) { const layer = gengaSelectedLayer(); gengaSetParaparaFrame(layer ? gengaInstanceFrameByOffset(layer, gengaCurrentFrame(), offset) : null); }
+        else gengaSetParaparaFrame(null);
+      }
+      ev.preventDefault();
+    }
+    function gengaFlipTouchEnd(ev) {
+      if (!gengaFlipTouch) return;
+      gengaFlipTouch = null;
+      gengaSetParaparaFrame(null);
       try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
+    }
+    // ---- camera-frame edit tool (memoEditTool === 'camera'): conte-style move / resize / rotate of gt.camera ----
+    function gengaCamCenter(cam) { return { x: cam.x + cam.w / 2, y: cam.y + cam.h / 2 }; }
+    function gengaCamLocalToPaper(cam, lx, ly) { const c = gengaCamCenter(cam), r = Number(cam.rotation) || 0, cs = Math.cos(r), sn = Math.sin(r); return { x: c.x + lx * cs - ly * sn, y: c.y + lx * sn + ly * cs }; }
+    function gengaCamPaperToLocal(cam, px, py) { const c = gengaCamCenter(cam), r = Number(cam.rotation) || 0, cs = Math.cos(-r), sn = Math.sin(-r), dx = px - c.x, dy = py - c.y; return { x: dx * cs - dy * sn, y: dx * sn + dy * cs }; }
+    function gengaCamCorners(cam) { const hw = cam.w / 2, hh = cam.h / 2; return [gengaCamLocalToPaper(cam, -hw, -hh), gengaCamLocalToPaper(cam, hw, -hh), gengaCamLocalToPaper(cam, hw, hh), gengaCamLocalToPaper(cam, -hw, hh)]; }
+    function gengaCamRotateHandlePaper(cam, viewScale) { const top = gengaCamLocalToPaper(cam, 0, -cam.h / 2), r = Number(cam.rotation) || 0, ux = Math.sin(r), uy = -Math.cos(r), d = 30 / Math.max(1e-4, viewScale); return { x: top.x + ux * d, y: top.y + uy * d }; }
+    function gengaCameraPointerDown(ev) {
+      if (ev.button != null && ev.button !== 0) { ev.preventDefault(); return; }
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const p = gengaPreviewPointerXY(ev); if (!p) return;
+      const cam = gt.cameraWork, view = gengaPreviewXform ? gengaPreviewXform.scale : 1, tol = 13 / Math.max(1e-4, view);
+      const orig = { x: cam.x, y: cam.y, w: cam.w, h: cam.h, rotation: Number(cam.rotation) || 0 };
+      const center = gengaCamCenter(cam);
+      const near = function(h2) { return Math.hypot(p.x - h2.x, p.y - h2.y) <= tol; };
+      if (near(gengaCamRotateHandlePaper(cam, view))) {
+        gengaCamDrag = { mode: 'rotate', startAngle: Math.atan2(p.y - center.y, p.x - center.x), orig: orig };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); return;
+      }
+      const corners = gengaCamCorners(cam);
+      for (let i = 0; i < 4; i++) {
+        if (near(corners[i])) { gengaCamDrag = { mode: 'resize', corner: i, orig: orig, aspect: cam.w / Math.max(1, cam.h) }; try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); return; }
+      }
+      const loc = gengaCamPaperToLocal(cam, p.x, p.y);
+      if (Math.abs(loc.x) <= cam.w / 2 && Math.abs(loc.y) <= cam.h / 2) {
+        gengaCamDrag = { mode: 'move', startX: p.x, startY: p.y, orig: orig };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+      }
+      ev.preventDefault();
+    }
+    function gengaCameraPointerMove(ev) {
+      if (!gengaCamDrag) return;
+      const gt = state.project.gengaTimeline, cam = gt.cameraWork, pw = gt.paper.w, ph = gt.paper.h;
+      const p = gengaPreviewPointerXY(ev); if (!p) return;
+      const d = gengaCamDrag, o = d.orig;
+      if (d.mode === 'move') {
+        let nx = o.x + (p.x - d.startX), ny = o.y + (p.y - d.startY);
+        const cxC = nx + o.w / 2, cyC = ny + o.h / 2; // keep the frame center reachable within the paper
+        if (cxC < 0) nx = -o.w / 2; else if (cxC > pw) nx = pw - o.w / 2;
+        if (cyC < 0) ny = -o.h / 2; else if (cyC > ph) ny = ph - o.h / 2;
+        cam.x = Math.round(nx); cam.y = Math.round(ny);
+      } else if (d.mode === 'rotate') {
+        const c = gengaCamCenter(o);
+        cam.rotation = o.rotation + (Math.atan2(p.y - c.y, p.x - c.x) - d.startAngle);
+      } else { // resize: opposite corner fixed, aspect-locked, in the rotated frame
+        const opp = gengaCamCorners(o)[(d.corner + 2) % 4];
+        const r = o.rotation, ux = { x: Math.cos(r), y: Math.sin(r) }, vy = { x: -Math.sin(r), y: Math.cos(r) };
+        const dx = p.x - opp.x, dy = p.y - opp.y;
+        const wSigned = dx * ux.x + dy * ux.y, hSigned = dx * vy.x + dy * vy.y;
+        const w = Math.max(20, Math.abs(wSigned), Math.abs(hSigned) * d.aspect), h = w / d.aspect;
+        const wDir = wSigned < 0 ? -1 : 1, hDir = hSigned < 0 ? -1 : 1;
+        const cxN = opp.x + ux.x * (wDir * w / 2) + vy.x * (hDir * h / 2);
+        const cyN = opp.y + ux.y * (wDir * w / 2) + vy.y * (hDir * h / 2);
+        cam.w = Math.round(w); cam.h = Math.round(h); cam.x = Math.round(cxN - w / 2); cam.y = Math.round(cyN - h / 2);
+      }
+      drawGengaPreview();
+      ev.preventDefault();
+    }
+    function gengaCameraPointerEnd(ev) {
+      if (!gengaCamDrag) return;
+      const gt = state.project.gengaTimeline, cam = gt.cameraWork, o = gengaCamDrag.orig; gengaCamDrag = null;
+      const final = { x: Math.round(cam.x), y: Math.round(cam.y), w: Math.round(cam.w), h: Math.round(cam.h), rotation: Number(cam.rotation) || 0 };
+      cam.x = o.x; cam.y = o.y; cam.w = o.w; cam.h = o.h; cam.rotation = o.rotation; // restore for a clean undo before→after
+      if (final.x !== o.x || final.y !== o.y || final.w !== o.w || final.h !== o.h || final.rotation !== o.rotation) {
+        runCommand('カメラワーク調整', function(proj) { const c = proj.gengaTimeline.cameraWork; c.x = final.x; c.y = final.y; c.w = final.w; c.h = final.h; c.rotation = final.rotation; });
+      }
+      drawGengaPreview();
+      try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
+    }
+    // lift a lasso polygon (paper coords) of `layer`@`frame` into a floating selection.
+    function gengaLiftSelection(layer, frame, pts) {
+      if (!pts || pts.length < 3) return false;
+      const wk = gengaWorkingCanvasFor(layer, frame);
+      if (!wk.hasContent) return false;
+      const pw = wk.pw, ph = wk.ph;
+      const mask = document.createElement('canvas'); mask.width = pw; mask.height = ph;
+      const mx = mask.getContext('2d');
+      mx.beginPath(); mx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) mx.lineTo(pts[i][0], pts[i][1]);
+      mx.closePath(); mx.fillStyle = '#fff'; mx.fill();
+      const patch = document.createElement('canvas'); patch.width = pw; patch.height = ph;
+      const px = patch.getContext('2d');
+      px.drawImage(wk.cv, 0, 0);
+      px.globalCompositeOperation = 'destination-in'; px.drawImage(mask, 0, 0); px.globalCompositeOperation = 'source-over';
+      const base = document.createElement('canvas'); base.width = pw; base.height = ph;
+      const bx = base.getContext('2d');
+      bx.drawImage(wk.cv, 0, 0);
+      bx.globalCompositeOperation = 'destination-out'; bx.drawImage(mask, 0, 0); bx.globalCompositeOperation = 'source-over';
+      let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+      pts.forEach(function(p) { if (p[0] < minx) minx = p[0]; if (p[1] < miny) miny = p[1]; if (p[0] > maxx) maxx = p[0]; if (p[1] > maxy) maxy = p[1]; });
+      minx = Math.max(0, Math.floor(minx)); miny = Math.max(0, Math.floor(miny));
+      maxx = Math.min(pw, Math.ceil(maxx)); maxy = Math.min(ph, Math.ceil(maxy));
+      if (maxx - minx < 2 || maxy - miny < 2) return false;
+      const id = px.getImageData(minx, miny, maxx - minx, maxy - miny).data;
+      let ink = false; for (let i = 3; i < id.length; i += 4) { if (id[i] > 8) { ink = true; break; } }
+      if (!ink) return false;
+      gengaSel = { layerId: layer.id, frame: frame, base: base, patch: patch, bounds: { x: minx, y: miny, w: maxx - minx, h: maxy - miny }, tx: 0, ty: 0, scale: 1, rot: 0, poly: pts.map(function(p) { return [p[0], p[1]]; }) };
+      return true;
+    }
+    // transform tool with no selection grabs the whole drawing (ink bbox) as the patch (base = empty).
+    function gengaSelectAll(layer, frame) {
+      const wk = gengaWorkingCanvasFor(layer, frame);
+      if (!wk.hasContent) return false;
+      const pw = wk.pw, ph = wk.ph;
+      const id = wk.ctx.getImageData(0, 0, pw, ph).data;
+      let minx = pw, miny = ph, maxx = 0, maxy = 0, found = false;
+      for (let y = 0; y < ph; y++) {
+        const row = y * pw;
+        for (let x = 0; x < pw; x++) { if (id[(row + x) * 4 + 3] > 8) { found = true; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; } }
+      }
+      if (!found) return false;
+      const patch = document.createElement('canvas'); patch.width = pw; patch.height = ph; patch.getContext('2d').drawImage(wk.cv, 0, 0);
+      const base = document.createElement('canvas'); base.width = pw; base.height = ph;
+      gengaSel = { layerId: layer.id, frame: frame, base: base, patch: patch, bounds: { x: minx, y: miny, w: (maxx - minx) || 1, h: (maxy - miny) || 1 }, tx: 0, ty: 0, scale: 1, rot: 0, poly: [[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]] };
+      return true;
+    }
+    function gengaSelPointInside(px, py) {
+      if (!gengaSel) return false;
+      const loc = gengaSelInv(gengaSel, px, py), b = gengaSel.bounds;
+      return loc.x >= b.x && loc.x <= b.x + b.w && loc.y >= b.y && loc.y <= b.y + b.h;
+    }
+    // pointer dispatch when the lasso-select / transform tool is active (called from gengaDrawStart).
+    function gengaSelectPointerDown(ev, layer) {
+      const p = gengaPreviewPointerXY(ev); if (!p) return;
+      const sel = (gengaSel && String(gengaSel.layerId) === String(layer.id)) ? gengaSel : null;
+      const tool = gengaActiveEditTool();
+      const view = gengaPreviewXform ? gengaPreviewXform.scale : 1;
+      const cap = function() { try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {} };
+      if (sel && sel.quad && tool === 'perspective') {
+        const tol = 14 / Math.max(1e-4, view);
+        for (let i = 0; i < 4; i++) {
+          if (Math.hypot(p.x - sel.quad[i][0], p.y - sel.quad[i][1]) <= tol) { gengaSelDrag = { mode: 'quad', idx: i }; cap(); ev.preventDefault(); return; }
+        }
+        if (gengaPointInPoly(p.x, p.y, sel.quad)) { gengaSelDrag = { mode: 'quadmove', startX: p.x, startY: p.y, base: sel.quad.map(function(q) { return [q[0], q[1]]; }) }; cap(); ev.preventDefault(); return; }
+      } else if (sel && tool === 'transform') {
+        const tol = 12 / Math.max(1e-4, view);
+        const H = gengaSelHandlesPaper(sel, view);
+        const c0 = gengaSelCenter0(sel), C = { x: c0.x + (sel.tx || 0), y: c0.y + (sel.ty || 0) };
+        const near = function(h) { return Math.hypot(p.x - h.x, p.y - h.y) <= tol; };
+        if (near(H.rotate)) { gengaSelDrag = { mode: 'rotate', startAngle: Math.atan2(p.y - C.y, p.x - C.x), startRot: sel.rot || 0 }; cap(); ev.preventDefault(); return; }
+        for (let i = 0; i < 4; i++) {
+          if (near(H.corners[i])) { gengaSelDrag = { mode: 'scale', startScale: sel.scale || 1, grabDist: Math.max(1, Math.hypot(p.x - C.x, p.y - C.y)) }; cap(); ev.preventDefault(); return; }
+        }
+        if (gengaSelPointInside(p.x, p.y)) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
+      } else if (sel && tool === 'lasso-select') {
+        // lasso-select = move only; hit-test the actual (transformed) lasso shape, fallback to bbox
+        const hit = (sel.poly && sel.poly.length > 2)
+          ? gengaPointInPoly(p.x, p.y, sel.poly.map(function(q) { const t = gengaSelT(sel, q[0], q[1]); return [t.x, t.y]; }))
+          : gengaSelPointInside(p.x, p.y);
+        if (hit) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
+      }
+      if (gengaSel) gengaCommitSelection();
+      if (tool === 'lasso-select') { gengaLasso = { pts: [[p.x, p.y]] }; cap(); }
+      ev.preventDefault();
+    }
+    function gengaSelectPointerMove(ev) {
+      if (gengaSelDrag && gengaSel) {
+        const p = gengaPreviewPointerXY(ev); if (!p) return;
+        const d = gengaSelDrag;
+        if (d.mode === 'move') {
+          gengaSel.tx = d.baseTx + (p.x - d.startX); gengaSel.ty = d.baseTy + (p.y - d.startY);
+        } else if (d.mode === 'quad') {
+          gengaSel.quad[d.idx] = [p.x, p.y];
+        } else if (d.mode === 'quadmove') {
+          const dx = p.x - d.startX, dy = p.y - d.startY;
+          gengaSel.quad = d.base.map(function(q) { return [q[0] + dx, q[1] + dy]; });
+        } else {
+          const c0 = gengaSelCenter0(gengaSel), C = { x: c0.x + (gengaSel.tx || 0), y: c0.y + (gengaSel.ty || 0) };
+          if (d.mode === 'scale') gengaSel.scale = Math.max(0.05, d.startScale * (Math.hypot(p.x - C.x, p.y - C.y) / d.grabDist));
+          else if (d.mode === 'rotate') gengaSel.rot = d.startRot + (Math.atan2(p.y - C.y, p.x - C.x) - d.startAngle);
+        }
+        drawGengaPreview(); ev.preventDefault(); return;
+      }
+      if (gengaLasso) {
+        const p = gengaPreviewPointerXY(ev); if (!p) return;
+        gengaLasso.pts.push([p.x, p.y]);
+        drawGengaPreview(); ev.preventDefault();
+      }
+    }
+    function gengaSelectPointerEnd(ev) {
+      if (gengaSelDrag) { gengaSelDrag = null; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} drawGengaPreview(); return; }
+      if (gengaLasso) {
+        const pts = gengaLasso.pts, stamp = gengaLasso.stamp; gengaLasso = null;
+        const layer = gengaSelectedLayer();
+        if (layer) { if (stamp) gengaCaptureStamp(layer, gengaCurrentFrame(), pts); else gengaLiftSelection(layer, gengaCurrentFrame(), pts); }
+        try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
+        drawGengaPreview(); drawGengaLayerThumbs();
+      }
     }
     // P3: exposure (instance) editing in the dope sheet — drag the right edge to change koma (holdFrames),
     // drag the body to move (startFrame); right-click → 複製 (independent copy) / 削除. 1-frame snap.
@@ -40854,7 +41989,25 @@
         numEl.classList.remove('editing');
         const v = cancel ? orig : numEl.textContent.trim();
         if (v === orig) { renderGengaView(); return; }
-        runCommand('原画インスタンス値', function(proj) { const x = gengaFindExposure(proj, layerId, expId); if (x) x.instanceValue = (v === '' ? null : v); });
+        const commit = function(choice) {
+          runCommand('原画インスタンス値', function(proj) { gengaApplyInstanceValue(proj, layerId, expId, v, choice); });
+        };
+        // same-value drawing conflict? (this exposure AND the target value both already hold art) → ask 2-choice
+        const layer = ((state.project.gengaTimeline && state.project.gengaTimeline.layers) || []).find(function(l) { return String(l.id) === String(layerId); });
+        const expNow = layer ? (layer.exposures || []).find(function(x) { return String(x.id) === String(expId); }) : null;
+        const newKey = gengaValueKey(v);
+        if (layer && expNow && newKey !== null && newKey !== gengaValueKey(expNow.instanceValue)) {
+          const mine = gengaExposureDrawing(layer, expNow);
+          const theirs = layer.sharedDrawings ? layer.sharedDrawings[newKey] : null;
+          if (mine && mine.dataUrl && theirs && theirs.dataUrl) {
+            showGengaMergeChoice(numEl, function(choice) {
+              if (choice === null) { renderGengaView(); return; }
+              commit(choice);
+            });
+            return;
+          }
+        }
+        commit(undefined);
       };
       const onBlur = function() { finish(false); };
       const onKey = function(ev) {
@@ -40882,12 +42035,13 @@
         if (!layer) return;
         const src = (layer.exposures || []).find(function(e) { return String(e.id) === String(expId); });
         if (!src) return;
+        const srcDr = gengaExposureDrawing(layer, src);
         layer.exposures.push({
           id: 'genga-exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
           startFrame: src.startFrame + src.holdFrames,
           holdFrames: src.holdFrames,
           instanceValue: null,
-          drawing: src.drawing ? { dataUrl: src.drawing.dataUrl, w: src.drawing.w, h: src.drawing.h } : null
+          drawing: srcDr ? { dataUrl: srcDr.dataUrl, w: srcDr.w, h: srcDr.h } : null
         });
       });
     }
@@ -40902,6 +42056,7 @@
     // genga transport bar — mirrors the conte video-edit playback bar (reuses timelineIconHtml so the icons
     // match), but WITHOUT the 音声生成/音声初期化 voice buttons. rAF loop advances gengaFrame at fps.
     let gengaPlayRaf = 0, gengaPlayStartTime = 0, gengaPlayStartFrame = 1;
+    let gengaPreviewRO = null;
     function gengaTransportControlsHtml() {
       return '<span class="timeline-control-row">' +
         '<button id="gengaGoStartBtn" type="button" title="先頭へ" aria-label="先頭へ">' + timelineIconHtml('go-start') + '</button>' +
@@ -40987,10 +42142,14 @@
             '</div>' +
             '</div>';
           let blocks = '';
+          // value-less koma show their left-to-right position on the timeline (1,2,3…), not insertion order.
+          const expoRank = {};
+          (l.exposures || []).slice().sort(function(a, b) { return a.startFrame - b.startFrame; }).forEach(function(e, i) { expoRank[e.id] = i + 1; });
           (l.exposures || []).forEach(function(e, ei) {
             const valued = (e.instanceValue !== null && e.instanceValue !== undefined && e.instanceValue !== '');
-            const numText = valued ? String(e.instanceValue) : String(ei + 1);
-            const thumbBg = (e.drawing && e.drawing.dataUrl) ? ' style="background-image:url(' + e.drawing.dataUrl + ')"' : '';
+            const numText = valued ? String(e.instanceValue) : String(expoRank[e.id] || (ei + 1));
+            const eDr = gengaExposureDrawing(l, e);
+            const thumbBg = (eDr && eDr.dataUrl) ? ' style="background-image:url(' + eDr.dataUrl + ')"' : '';
             blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px">' +
               '<span class="genga-exp-thumb"' + thumbBg + '></span>' +
               '<span class="genga-exp-num' + (valued ? ' valued' : '') + '" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" title="クリックでインスタンス値を入力">' + escapeHtml(numText) + '</span>' +
@@ -41004,10 +42163,15 @@
         '<div class="genga-preview"><canvas id="gengaPreviewCanvas" class="genga-preview-canvas"></canvas></div>' +
         '<div class="genga-topbar">' +
           gengaTransportControlsHtml() +
-          '<button id="gengaOnionBtn" class="genga-onion-btn' + (state.onionSkin && state.onionSkin.enabled ? ' active' : '') + '" type="button" title="オニオンスキン（前後フレームの透かし）">オニオン</button>' +
           '<span class="genga-tl-label">原画タイムライン</span>' +
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
           '<span class="genga-info-mini">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
+          '<span class="video-preview-zoom-controls genga-zoom" style="margin-left:auto" aria-label="プレビュー拡大縮小">' +
+            '<button id="gengaCameraFrameBtn" type="button"' + (state.gengaCamDim ? ' class="active"' : '') + ' aria-label="フレーム外を暗く" title="カメラ枠の外を暗くする"><span class="video-camera-frame-icon" aria-hidden="true"></span></button>' +
+            '<button id="gengaZoomResetBtn" class="video-preview-zoom-value" type="button" title="フィット (100%)">' + Math.round(clampNumber(state.gengaZoom, 0.1, 8, 1) * 100) + '%</button>' +
+            '<button id="gengaZoomOutBtn" type="button" aria-label="縮小">−</button>' +
+            '<button id="gengaZoomInBtn" type="button" aria-label="拡大">＋</button>' +
+          '</span>' +
         '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
@@ -41043,7 +42207,10 @@
       const playBtn = stageEl.querySelector('#gengaPlayPauseBtn'); if (playBtn) playBtn.addEventListener('click', toggleGengaPlayback);
       const sFwd = stageEl.querySelector('#gengaStepForwardBtn'); if (sFwd) sFwd.addEventListener('click', function() { stopGengaPlayback(); stepGengaFrame(1); });
       const rptBtn = stageEl.querySelector('#gengaRepeatBtn'); if (rptBtn) rptBtn.addEventListener('click', function() { state.gengaRepeat = !state.gengaRepeat; rptBtn.classList.toggle('active', state.gengaRepeat); });
-      const onionBtn = stageEl.querySelector('#gengaOnionBtn'); if (onionBtn) onionBtn.addEventListener('click', toggleGengaOnion);
+      const camFrameBtn = stageEl.querySelector('#gengaCameraFrameBtn'); if (camFrameBtn) camFrameBtn.addEventListener('click', toggleGengaCameraFrame);
+      const zResetBtn = stageEl.querySelector('#gengaZoomResetBtn'); if (zResetBtn) zResetBtn.addEventListener('click', gengaZoomReset);
+      const zOutBtn = stageEl.querySelector('#gengaZoomOutBtn'); if (zOutBtn) zOutBtn.addEventListener('click', function() { gengaZoomStep(-1); });
+      const zInBtn = stageEl.querySelector('#gengaZoomInBtn'); if (zInBtn) zInBtn.addEventListener('click', function() { gengaZoomStep(1); });
       ['.genga-ruler', '.genga-lanes'].forEach(function(sel) {
         const el = stageEl.querySelector(sel);
         if (el) el.addEventListener('pointerdown', gengaScrubStart);
@@ -41058,7 +42225,29 @@
         pv.addEventListener('pointermove', gengaDrawMove);
         pv.addEventListener('pointerup', gengaDrawEnd);
         pv.addEventListener('pointercancel', gengaDrawEnd);
+        pv.addEventListener('contextmenu', function(ev) { if (gengaStamp) { ev.preventDefault(); gengaExitStamp(); } });
+        pv.addEventListener('wheel', function(ev) {
+          ev.preventDefault();
+          const before = gengaPreviewPointerXY(ev);
+          state.gengaZoom = clampNumber((clampNumber(state.gengaZoom, 0.1, 8, 1)) * (ev.deltaY < 0 ? 1.15 : 1 / 1.15), 0.1, 8, 1);
+          if (state.gengaZoom <= 1.0001) { state.gengaPanX = 0; state.gengaPanY = 0; drawGengaPreview(); updateGengaZoomLabel(); return; }
+          drawGengaPreview();
+          const after = gengaPreviewPointerXY(ev);
+          if (before && after) { state.gengaPanX = (state.gengaPanX || 0) + (after.x - before.x) * gengaPreviewXform.scale; state.gengaPanY = (state.gengaPanY || 0) + (after.y - before.y) * gengaPreviewXform.scale; drawGengaPreview(); }
+          updateGengaZoomLabel();
+        }, { passive: false });
       }
+      // keep the preview canvas in sync with its container size (layout settle / window resize) so it never
+      // stretches/distorts — the canvas internal resolution is re-set to the live wrap size on every change.
+      if (gengaPreviewRO) { try { gengaPreviewRO.disconnect(); } catch (e) {} gengaPreviewRO = null; }
+      const pvWrap = stageEl.querySelector('.genga-preview');
+      if (pvWrap && typeof ResizeObserver !== 'undefined') {
+        gengaPreviewRO = new ResizeObserver(function() { drawGengaPreview(); });
+        gengaPreviewRO.observe(pvWrap);
+      }
+      // redraw after layout settles (e.g. the create modal closing reflows the stage) — setTimeout fires
+      // regardless of tab visibility, so the canvas resolution re-syncs to the final wrap size.
+      setTimeout(function() { if (state.project && state.project.kind === 'genga') drawGengaPreview(); }, 60);
       stageEl.querySelectorAll('.genga-exp[data-genga-exp]').forEach(function(block) {
         block.addEventListener('pointerdown', gengaExpPointerDown);
         block.addEventListener('contextmenu', gengaExpContextMenu);
@@ -41164,6 +42353,13 @@
     // 옵션 미지정 시 기존 동작 100% 보존.
     function refresh(options) {
       options = options || {};
+      // genga has its OWN render path — the conte stage/timing/source/memo renderers are not used at all here.
+      if (state.project && state.project.kind === 'genga') {
+        if (!options.skipStage) guardedRender('stage', renderStageView);       // → renderGengaView
+        if (!options.skipInspector) guardedRender('inspector', renderInspector); // → genga inspector branch
+        if (!options.skipChrome) guardedRender('chrome', refreshChromeControls);
+        return;
+      }
       clampCurrentPage();
       syncPaperSelectionToCurrentPage(state.project);
       if (!options.skipStage) guardedRender('stage', renderStageView);
@@ -41352,7 +42548,7 @@
       if (previousToggle) previousToggle.classList.toggle('active', Boolean(settings.previous));
       if (nextToggle) nextToggle.classList.toggle('active', Boolean(settings.next));
       if (opacityRange && document.activeElement !== opacityRange) opacityRange.value = String(settings.opacity);
-      if (layerMode) layerMode.classList.toggle('active', settings.mode !== 'panel');
+      if (layerMode) { layerMode.classList.toggle('active', settings.mode !== 'panel'); layerMode.textContent = (state.project && state.project.kind === 'genga') ? 'レイヤー' : 'Layer row'; }
       if (panelMode) panelMode.classList.toggle('active', settings.mode === 'panel');
     }
 
@@ -41363,6 +42559,7 @@
       saveOnionSkinSettings();
       updateOnionSkinUI();
       refreshOnionSkinPreview();
+      if (state.project && state.project.kind === 'genga') drawGengaPreview();
     }
 
     function toggleOnionSkinEnabled() {
@@ -41388,7 +42585,10 @@
         button.setAttribute('aria-expanded', state.stageSettingsOpen ? 'true' : 'false');
       }
       if (popover) popover.hidden = !state.stageSettingsOpen;
-      if (toggle && document.activeElement !== toggle) toggle.checked = videoEditAutoCreateLayerKomaOnDrawEnabled(state.project);
+      const isGenga = !!(state.project && state.project.kind === 'genga');
+      const acLabel = document.getElementById('autoCreateKomaLabel');
+      if (acLabel) acLabel.textContent = isGenga ? '空セル描画時にレイヤーコマを自動作成' : '空パネル描画時にレイヤーコマを自動作成';
+      if (toggle && document.activeElement !== toggle) toggle.checked = isGenga ? (!state.project.settings || state.project.settings.gengaAutoCreateKomaOnDraw !== false) : videoEditAutoCreateLayerKomaOnDrawEnabled(state.project);
       if (autosaveToggle && document.activeElement !== autosaveToggle) {
         autosaveToggle.checked = indexedDbAutosaveEnabled(state.project);
         autosaveToggle.disabled = !indexedDbAutosaveAvailable();
@@ -41606,7 +42806,8 @@
       });
       document.getElementById('videoAutoCreateLayerKomaToggle').addEventListener('change', function(event) {
         state.project.settings = state.project.settings || {};
-        state.project.settings.videoEditAutoCreateLayerKomaOnDraw = Boolean(event.currentTarget.checked);
+        if (state.project.kind === 'genga') state.project.settings.gengaAutoCreateKomaOnDraw = Boolean(event.currentTarget.checked);
+        else state.project.settings.videoEditAutoCreateLayerKomaOnDraw = Boolean(event.currentTarget.checked);
         updateStageSettingsUI();
         scheduleIndexedDbAutosave(INDEXED_DB_AUTOSAVE_DELAY_MS);
       });
