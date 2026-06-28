@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver276</title>
+  <title>Conte Editor Prototype ver277</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver276</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver277</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7674,7 +7674,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '276';
+    const APP_DISPLAY_VERSION = '277';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -8671,8 +8671,15 @@
       state.timelineScrollLeft = Math.max(0, Math.round(Number(ui.timelineScrollLeft) || 0));
       if (Object.prototype.hasOwnProperty.call(ui, 'timelineLowerPanelHeight')) state.timelineLowerPanelHeight = clampTimelineLowerPanelHeight(ui.timelineLowerPanelHeight);
       state.videoPreviewZoom = clampVideoPreviewZoom(ui.videoPreviewZoom, state.videoPreviewZoom);
-      state.memoViewportPanX = Math.round(Number(ui.memoViewportPanX) || 0);
-      state.memoViewportPanY = Math.round(Number(ui.memoViewportPanY) || 0);
+      // recover from a persisted off-screen pan (see applyMemoViewportPan): a huge saved value kept the conte
+      // stage blank across reloads/new projects/IndexedDB clears. On load, a value beyond the visible bound is
+      // garbage → RESET to 0 (re-center, full recovery); a legit in-bound pan is kept as-is.
+      const panBoundX = Math.max(300, Math.round((window.innerWidth || 1024) * 0.5 * Math.max(1, Number(state.videoPreviewZoom) || 1)));
+      const panBoundY = Math.max(300, Math.round((window.innerHeight || 768) * 0.5 * Math.max(1, Number(state.videoPreviewZoom) || 1)));
+      const savedPanX = Math.round(Number(ui.memoViewportPanX) || 0);
+      const savedPanY = Math.round(Number(ui.memoViewportPanY) || 0);
+      state.memoViewportPanX = Math.abs(savedPanX) <= panBoundX ? savedPanX : 0;
+      state.memoViewportPanY = Math.abs(savedPanY) <= panBoundY ? savedPanY : 0;
       state.timelineVideoTracksCollapsed = Boolean(ui.timelineVideoTracksCollapsed);
       state.timelineAudioTracksCollapsed = Boolean(ui.timelineAudioTracksCollapsed);
       if (Object.prototype.hasOwnProperty.call(ui, 'timelineRepeat')) state.timelineRepeat = Boolean(ui.timelineRepeat);
@@ -36994,8 +37001,21 @@
     }
 
     function applyMemoViewportPan() {
-      const x = Math.round(Number(state.memoViewportPanX) || 0);
-      const y = Math.round(Number(state.memoViewportPanY) || 0);
+      // SAFETY CLAMP — this transform translates BOTH #contePage (用紙) and #videoPreviewStage (映像編集).
+      // An unclamped pinch/drag (conte preview gesture) could set memoViewportPan huge, pushing the conte
+      // stage FULLY off-screen (it looked blank in both modes while the timeline/thumbnails stayed visible),
+      // and the value persisted in localStorage so it survived reloads / new projects / IndexedDB clears.
+      // Bound it to a generous range of the viewport (scaled by preview zoom) and WRITE THE CLAMPED VALUE
+      // BACK so the sane value re-persists — this also auto-recovers anyone already stuck.
+      // bound = half a viewport (scaled by zoom) → the centered content's center can't leave the viewport,
+      // so it's always at least half-visible; generous enough to still pan to the edges of a zoomed preview.
+      const zoom = (typeof videoPreviewZoomValue === 'function') ? (Number(videoPreviewZoomValue()) || 1) : 1;
+      const maxX = Math.max(300, Math.round((window.innerWidth || 1024) * 0.5 * Math.max(1, zoom)));
+      const maxY = Math.max(300, Math.round((window.innerHeight || 768) * 0.5 * Math.max(1, zoom)));
+      const x = Math.max(-maxX, Math.min(maxX, Math.round(Number(state.memoViewportPanX) || 0)));
+      const y = Math.max(-maxY, Math.min(maxY, Math.round(Number(state.memoViewportPanY) || 0)));
+      state.memoViewportPanX = x;
+      state.memoViewportPanY = y;
       const page = document.getElementById('contePage');
       const stage = document.getElementById('videoPreviewStage');
       [page, stage].forEach(function(el) {
