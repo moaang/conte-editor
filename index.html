@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver274</title>
+  <title>Conte Editor Prototype ver275</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6651,13 +6651,48 @@
     }
 
     @media (max-width: 1160px) {
-      .workspace {
-        grid-template-columns: minmax(520px, 1fr);
+      /* portrait / narrow: the inspector must NOT dock full-width below (it covered the preview + timeline and
+         wasted space) NOR force a 2-col layout that overflows the viewport (760+300 > screen → canvas clipped /
+         pushed off). Only two states here: a thin RIGHT strip (open/compact) and a floating WINDOW.
+         Applies to conte + genga + video-edit uniformly so they all behave the same. */
+      .workspace,
+      .workspace.video-edit-active,
+      .workspace.inspector-compact,
+      .workspace.video-edit-active.inspector-compact {
+        grid-template-columns: minmax(0, 1fr) 46px;
       }
 
-      .right-pane {
-        grid-column: 1 / -1;
-        min-height: 300px;
+      .workspace.inspector-window,
+      .workspace.video-edit-active.inspector-window {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      /* open + compact → collapse the right-pane into the vertical strip (window mode keeps its own fixed layout) */
+      .workspace:not(.inspector-window) .right-pane {
+        grid-column: auto;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .workspace:not(.inspector-window) .right-pane .pane-header {
+        min-height: 0;
+        padding: 5px 4px;
+        flex-direction: column;
+        justify-content: flex-start;
+        gap: 6px;
+      }
+
+      .workspace:not(.inspector-window) .right-pane .pane-title {
+        writing-mode: vertical-rl;
+        text-orientation: upright;
+        font-size: 11px;
+        line-height: 1;
+      }
+
+      .workspace:not(.inspector-window) .right-pane .pane-body,
+      .workspace:not(.inspector-window) .inspector-footer {
+        display: none;
       }
     }
 
@@ -7248,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver274</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver275</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7335,6 +7370,8 @@
     body.genga-active #onionSkinModePanelBtn { display: none !important; }
     body.genga-active .paper-stage { place-items: stretch; overflow: hidden; }
     body.genga-active .inspector-footer { display: none; }
+    /* "Memo Mode" toggle is a conte memo on/off switch — meaningless in genga (drawing is always on), so hide it */
+    body.genga-active #memoToggleBtn { display: none !important; }
     /* top-bar Undo/Redo removed everywhere (Edit-window undo/redo + Ctrl+Z remain); page-nav hidden in genga only */
     #paperNavUndoHost { display: none !important; }
     body.genga-active #paperPageNavHost { display: none !important; }
@@ -7637,7 +7674,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '274';
+    const APP_DISPLAY_VERSION = '275';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -42551,6 +42588,9 @@
 
     function cycleInspectorMode() {
       const mode = normalizedInspectorMode(state.inspectorMode);
+      // portrait/narrow has no inline 'open' dock (it would cover the preview/timeline) — only strip <-> window
+      const portrait = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1160px)').matches;
+      if (portrait) { setInspectorMode(mode === 'window' ? 'compact' : 'window'); return; }
       if (mode === 'open') setInspectorMode('compact');
       else if (mode === 'compact') setInspectorMode('window');
       else setInspectorMode('open');
