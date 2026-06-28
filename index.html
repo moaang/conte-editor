@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver269</title>
+  <title>Conte Editor Prototype ver271</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7242,7 +7242,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver269</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver271</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7367,6 +7367,8 @@
     .genga-exp-num.editing { background: #fff; color: #111; outline: 1px solid #2f6fd1; border-radius: 2px; cursor: text; }
     .genga-exp-resize { position: absolute; right: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
     .genga-exp-resize-left { position: absolute; left: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+    .genga-postbehavior { position: absolute; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; min-width: 16px; padding: 0; border: 1px solid #b9b9ae; border-radius: 3px; background: #f3f3ee; color: #999; font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; z-index: 3; display: inline-flex; align-items: center; justify-content: center; }
+    .genga-postbehavior.pb-hold, .genga-postbehavior.pb-repeat { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .genga-tl-content { position: relative; }
     .genga-tl-content .genga-ruler, .genga-tl-content .genga-lanes { width: 100%; }
     .genga-playhead { position: absolute; top: 0; bottom: 0; width: 22px; box-sizing: border-box; background: rgba(224,59,59,0.05); border-left: 1px solid rgba(224,59,59,0.35); border-right: 1px solid rgba(224,59,59,0.35); pointer-events: none; z-index: 5; }
@@ -7626,7 +7628,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '269';
+    const APP_DISPLAY_VERSION = '271';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40577,6 +40579,7 @@
         visible: layer.visible !== false,
         locked: Boolean(layer.locked),
         onion: Boolean(layer.onion),
+        postBehavior: (layer.postBehavior === 'hold' || layer.postBehavior === 'repeat') ? layer.postBehavior : 'none', // after the last instance (TVPaint-style)
         exposures: Array.isArray(layer.exposures) ? layer.exposures.map(normalizeGengaExposure) : [],
         sharedDrawings: gengaSanitizeSharedDrawings(layer.sharedDrawings)
       };
@@ -41020,6 +41023,15 @@
       id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
       runCommand('原画レイヤーロック', function(p) { const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === id; }); if (l) l.locked = !l.locked; });
     }
+    // cycle a layer's post-behavior (after the last instance): none → hold → repeat
+    function cycleGengaPostBehavior(id) {
+      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
+      const order = ['none', 'hold', 'repeat'];
+      runCommand('ポストビヘイビア変更', function(p) {
+        const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === id; });
+        if (l) l.postBehavior = order[(order.indexOf(l.postBehavior || 'none') + 1) % order.length];
+      });
+    }
     function moveGengaLayer(id, insertIndex) {
       id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
       runCommand('原画レイヤー並べ替え', function(p) {
@@ -41118,6 +41130,26 @@
       i = Math.max(0, Math.min(ci.sorted.length - 1, i + offset));
       return ci.sorted[i].startFrame;
     }
+    // resolve which exposure a layer shows at `frame`, applying the post-behavior beyond the last instance
+    // (TVPaint-style): none = nothing, hold = keep the last drawing, repeat = loop the instances.
+    function gengaResolveExposure(layer, frame) {
+      const exp = gengaExposureAt(layer, frame);
+      if (exp) return exp;
+      const s = gengaSortedExposures(layer);
+      if (!s.length) return null;
+      const firstStart = s[0].startFrame;
+      const last = s[s.length - 1];
+      const lastEnd = last.startFrame + last.holdFrames - 1;
+      if (frame <= lastEnd) return null; // gap inside the range / before the first koma → empty
+      const pb = layer.postBehavior || 'none';
+      if (pb === 'hold') return last;
+      if (pb === 'repeat') {
+        const span = lastEnd - firstStart + 1;
+        if (span <= 0) return null;
+        return gengaExposureAt(layer, firstStart + ((frame - firstStart) % span));
+      }
+      return null; // none
+    }
     function gengaSelectedLayer() {
       const gt = state.project && state.project.gengaTimeline; if (!gt) return null;
       const layers = gt.layers || [];
@@ -41141,7 +41173,7 @@
         } else if (gengaSel && String(l.id) === String(gengaSel.layerId) && frame === gengaSel.frame) {
           src = gengaSelCompositeFrom(gengaSel);
         } else {
-          const e = gengaExposureAt(l, frame);
+          const e = gengaResolveExposure(l, frame);
           const dr = gengaExposureDrawing(l, e);
           if (dr && dr.dataUrl) src = gengaImageFor(dr.dataUrl, drawGengaPreview);
         }
@@ -41307,7 +41339,15 @@
     }
     function gengaDrawStart(ev) {
       if (!state.project || state.project.kind !== 'genga') return;
-      if (gengaFlipTouchStart(ev)) return; // ユビパラ: margin touch-drag flips frames
+      // iPad: a FINGER never draws — it pans (on the paper) or flips (ユビパラ, in the margin); only Apple
+      // Pencil ('pen') / mouse draw. Two-finger pinch-zoom is handled by TouchEvents (bindGengaPinch).
+      if (ev.pointerType === 'touch' && (typeof mobileOrTabletRuntime !== 'function' || mobileOrTabletRuntime())) {
+        if (gengaPinch) { ev.preventDefault(); return; }
+        if (gengaFlipTouchStart(ev)) return; // margin → flip
+        gengaFingerPan = { pointerId: ev.pointerId, startX: ev.clientX, startY: ev.clientY, baseX: state.gengaPanX || 0, baseY: state.gengaPanY || 0 };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+        ev.preventDefault(); return;
+      }
       if (ev.button === 1) { // middle-drag = pan the zoomed preview
         gengaPanDrag = { startX: ev.clientX, startY: ev.clientY, baseX: state.gengaPanX || 0, baseY: state.gengaPanY || 0 };
         try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -41364,7 +41404,9 @@
       ev.preventDefault();
     }
     function gengaDrawMove(ev) {
-      if (gengaFlipTouch) { gengaFlipTouchMove(ev); return; }
+      if (gengaPinch) return; // two-finger pinch owns the gesture
+      if (gengaFingerPan && gengaFingerPan.pointerId === ev.pointerId) { state.gengaPanX = gengaFingerPan.baseX + (ev.clientX - gengaFingerPan.startX); state.gengaPanY = gengaFingerPan.baseY + (ev.clientY - gengaFingerPan.startY); drawGengaPreview(); ev.preventDefault(); return; }
+      if (gengaFlipTouch && gengaFlipTouch.pointerId === ev.pointerId) { gengaFlipTouchMove(ev); return; }
       if (gengaPanDrag) { state.gengaPanX = gengaPanDrag.baseX + (ev.clientX - gengaPanDrag.startX); state.gengaPanY = gengaPanDrag.baseY + (ev.clientY - gengaPanDrag.startY); drawGengaPreview(); ev.preventDefault(); return; }
       if (gengaCamDrag) { gengaCameraPointerMove(ev); return; }
       if (gengaSelDrag || gengaLasso) { gengaSelectPointerMove(ev); return; }
@@ -41378,7 +41420,8 @@
       ev.preventDefault();
     }
     function gengaDrawEnd(ev) {
-      if (gengaFlipTouch) { gengaFlipTouchEnd(ev); return; }
+      if (gengaFingerPan && gengaFingerPan.pointerId === ev.pointerId) { gengaFingerPan = null; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} return; }
+      if (gengaFlipTouch && gengaFlipTouch.pointerId === ev.pointerId) { gengaFlipTouchEnd(ev); return; }
       if (gengaPanDrag) { gengaPanDrag = null; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} return; }
       if (gengaCamDrag) { gengaCameraPointerEnd(ev); return; }
       if (gengaSelDrag || gengaLasso) { gengaSelectPointerEnd(ev); return; }
@@ -41491,6 +41534,8 @@
     let gengaParaparaFrame = null; // when set, drawGengaPreview shows this frame instead of the current one (parapara/yubipara flip)
     let gengaParaparaTimer = 0;
     let gengaFlipTouch = null; // { pointerId, startY, offset } while finger-flipping (ユビパラ) on a touch device
+    let gengaFingerPan = null; // { pointerId, startX, startY, baseX, baseY } single-finger pan (iPad)
+    let gengaPinch = null;     // two-finger pinch zoom+pan (iPad, via TouchEvents)
     function gengaSelCenter0(sel) { return { x: sel.bounds.x + sel.bounds.w / 2, y: sel.bounds.y + sel.bounds.h / 2 }; }
     // base (the hole) + patch transformed (translate tx/ty, rotate, scale about its original center) → a paper-res canvas
     function gengaSelCompositeFrom(sel) {
@@ -41724,6 +41769,35 @@
       gengaFlipTouch = null;
       gengaSetParaparaFrame(null);
       try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
+    }
+    // two-finger pinch = zoom + pan (iPad), via TouchEvents on the preview wrap (mirrors the conte preview gesture)
+    function bindGengaPinch(wrap) {
+      if (!wrap || wrap.dataset.gengaPinchBound === 'true') return;
+      wrap.dataset.gengaPinchBound = 'true';
+      wrap.addEventListener('touchstart', function(e) {
+        if (typeof mobileOrTabletRuntime === 'function' && !mobileOrTabletRuntime()) return;
+        if (!e.touches || e.touches.length !== 2) return;
+        const d = touchPairDistance(e.touches), m = touchPairMidpoint(e.touches); if (!d || !m) return;
+        gengaFingerPan = null; gengaFlipTouch = null; gengaDrawSession = null; // a 2nd finger cancels single-finger ops
+        gengaPinch = { distance: d, zoom: clampNumber(state.gengaZoom, 0.1, 8, 1), midX: m.x, midY: m.y, basePanX: state.gengaPanX || 0, basePanY: state.gengaPanY || 0 };
+        e.preventDefault(); e.stopPropagation();
+      }, { passive: false });
+      wrap.addEventListener('touchmove', function(e) {
+        if (!gengaPinch || !e.touches || e.touches.length < 2) return;
+        const d = touchPairDistance(e.touches), m = touchPairMidpoint(e.touches);
+        if (d) state.gengaZoom = clampNumber(gengaPinch.zoom * d / Math.max(1, gengaPinch.distance), 0.1, 8, 1);
+        if (m) { state.gengaPanX = gengaPinch.basePanX + (m.x - gengaPinch.midX); state.gengaPanY = gengaPinch.basePanY + (m.y - gengaPinch.midY); }
+        drawGengaPreview(); updateGengaZoomLabel();
+        e.preventDefault(); e.stopPropagation();
+      }, { passive: false });
+      const endPinch = function(e) { if (gengaPinch && (!e.touches || e.touches.length < 2)) gengaPinch = null; };
+      wrap.addEventListener('touchend', endPinch, { passive: true });
+      wrap.addEventListener('touchcancel', function() { gengaPinch = null; }, { passive: true });
+    }
+    // iPad Apple Pencil fires pen PointerEvents AND TouchEvents; touch-action:none doesn't suppress the
+    // pencil's touchmove, so WebKit's scroll/gesture decision eats the stroke + scrolls. Cancel it ourselves.
+    function gengaCanvasTouchGuard(ev) {
+      if ((gengaDrawSession || gengaSelDrag || gengaLasso || gengaCamDrag) && ev.cancelable) ev.preventDefault();
     }
     // ---- camera-frame edit tool (memoEditTool === 'camera'): conte-style move / resize / rotate of gt.camera ----
     function gengaCamCenter(cam) { return { x: cam.x + cam.w / 2, y: cam.y + cam.h / 2 }; }
@@ -42155,6 +42229,16 @@
               '<span class="genga-exp-num' + (valued ? ' valued' : '') + '" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" title="クリックでインスタンス値を入力">' + escapeHtml(numText) + '</span>' +
               '<span class="genga-exp-resize-left"></span><span class="genga-exp-resize"></span></div>';
           });
+          // post-behavior toggle (TVPaint-style) just right of the last instance: none / hold / repeat
+          const pbSorted = (l.exposures || []).slice().sort(function(a, b) { return a.startFrame - b.startFrame; });
+          if (pbSorted.length) {
+            const pbLast = pbSorted[pbSorted.length - 1];
+            const pbRight = (pbLast.startFrame - 1 + pbLast.holdFrames) * cellW + 2;
+            const pb = l.postBehavior || 'none';
+            const pbGlyph = pb === 'hold' ? 'H' : (pb === 'repeat' ? '↻' : '–');
+            const pbTitle = (pb === 'hold' ? 'ホールド（最後の絵を保持）' : (pb === 'repeat' ? 'リピート（ループ）' : 'なし')) + ' — クリックで切替 (none/hold/repeat)';
+            blocks += '<button class="genga-postbehavior pb-' + pb + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" style="left:' + pbRight + 'px" title="ポストビヘイビア: ' + pbTitle + '">' + pbGlyph + '</button>';
+          }
           rowsLane += '<div class="genga-lane">' + blocks + '</div>';
         });
       }
@@ -42199,6 +42283,9 @@
       stageEl.querySelectorAll('.genga-lock').forEach(function(b) {
         b.addEventListener('click', function(ev) { ev.stopPropagation(); toggleGengaLayerLock(b.getAttribute('data-genga-layer')); });
       });
+      stageEl.querySelectorAll('.genga-postbehavior[data-genga-layer]').forEach(function(b) {
+        b.addEventListener('click', function(ev) { ev.stopPropagation(); cycleGengaPostBehavior(b.getAttribute('data-genga-layer')); });
+      });
       stageEl.querySelectorAll('.genga-layer-head[data-genga-layer]').forEach(function(h) {
         h.addEventListener('pointerdown', gengaLayerHeadPointerDown);
       });
@@ -42225,6 +42312,7 @@
         pv.addEventListener('pointermove', gengaDrawMove);
         pv.addEventListener('pointerup', gengaDrawEnd);
         pv.addEventListener('pointercancel', gengaDrawEnd);
+        pv.addEventListener('touchmove', gengaCanvasTouchGuard, { passive: false }); // iPad Pencil stroke guard
         pv.addEventListener('contextmenu', function(ev) { if (gengaStamp) { ev.preventDefault(); gengaExitStamp(); } });
         pv.addEventListener('wheel', function(ev) {
           ev.preventDefault();
@@ -42245,6 +42333,7 @@
         gengaPreviewRO = new ResizeObserver(function() { drawGengaPreview(); });
         gengaPreviewRO.observe(pvWrap);
       }
+      if (pvWrap) bindGengaPinch(pvWrap); // iPad two-finger pinch-zoom + pan
       // redraw after layout settles (e.g. the create modal closing reflows the stage) — setTimeout fires
       // regardless of tab visibility, so the canvas resolution re-syncs to the final wrap size.
       setTimeout(function() { if (state.project && state.project.kind === 'genga') drawGengaPreview(); }, 60);
