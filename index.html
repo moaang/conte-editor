@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver273</title>
+  <title>Conte Editor Prototype ver274</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7116,6 +7116,12 @@
               <button type="button" data-video-preview-zoom="out" aria-label="Zoom out">−</button>
               <button type="button" data-video-preview-zoom="in" aria-label="Zoom in">＋</button>
             </div>
+            <div id="gengaZoomHeader" class="video-preview-zoom-controls header-zoom" aria-label="プレビュー拡大縮小">
+              <button id="gengaCameraFrameBtn" type="button" aria-label="フレーム外を暗く" title="カメラ枠の外を暗くする"><span class="video-camera-frame-icon" aria-hidden="true"></span></button>
+              <button id="gengaZoomResetBtn" class="video-preview-zoom-value" type="button" title="フィット (100%)">100%</button>
+              <button id="gengaZoomOutBtn" type="button" aria-label="縮小">−</button>
+              <button id="gengaZoomInBtn" type="button" aria-label="拡大">＋</button>
+            </div>
           </div>
         </div>
         <div class="timing-dashboard" id="timingDashboard" aria-label="Timing summary"></div>
@@ -7242,7 +7248,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver273</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver274</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7314,6 +7320,9 @@
     .project-start-btn.primary { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .project-start-btn.primary:hover { background: #2a62ba; }
     body.project-locked .workspace { pointer-events: none; }
+    /* genga zoom/frame controls live in the shared header (right side, like conte's preview zoom); shown only in genga */
+    #gengaZoomHeader { display: none !important; }
+    body.genga-active #gengaZoomHeader { display: inline-flex !important; }
     body.genga-active .paper-edit-controls,
     body.genga-active #timingDashboard,
     body.genga-active #scenarioBoardToggleBtn,
@@ -7628,7 +7637,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '273';
+    const APP_DISPLAY_VERSION = '274';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -42224,9 +42233,23 @@
     function toggleGengaPlayback() { if (state.gengaPlaying) stopGengaPlayback(); else startGengaPlayback(); }
     // P2a/ver215: genga workspace mirrors video-edit layout = preview (top) + transport bar (no voice buttons)
     // + dope sheet (the genga timeline). Reads project.gengaTimeline.
+    // clear any in-flight touch/draw gesture state. A stage re-render can orphan a pointerdown whose pointerup
+    // never reaches the new canvas → a stale gengaPointers entry made every later touch look like a 2nd finger
+    // (pinch) so the canvas "went dead". Reset on every (re)render so input always starts clean.
+    function gengaResetInputState() {
+      if (gengaPointers && gengaPointers.clear) gengaPointers.clear();
+      gengaPinch = null; gengaDrawSession = null; gengaPanDrag = null; gengaFlipTouch = null;
+      gengaSelDrag = null; gengaLasso = null; gengaCamDrag = null;
+    }
+    // keep the shared-header genga controls (label + camera-frame active state) in sync with state.
+    function gengaSyncZoomHeader() {
+      updateGengaZoomLabel();
+      const b = document.getElementById('gengaCameraFrameBtn'); if (b) b.classList.toggle('active', !!state.gengaCamDim);
+    }
     function renderGengaView(stageEl) {
       stageEl = stageEl || document.getElementById('gengaStage');
       if (!stageEl) return;
+      gengaResetInputState();
       const project = state.project;
       const gt = project && project.gengaTimeline;
       if (!gt) { stageEl.innerHTML = '<div class="genga-info"><span class="genga-ph">原画タイムラインがありません</span></div>'; return; }
@@ -42297,13 +42320,7 @@
           gengaTransportControlsHtml() +
           '<span class="genga-tl-label">原画タイムライン</span>' +
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
-          '<span class="genga-info-mini">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
-          '<span class="video-preview-zoom-controls genga-zoom" style="margin-left:auto" aria-label="プレビュー拡大縮小">' +
-            '<button id="gengaCameraFrameBtn" type="button"' + (state.gengaCamDim ? ' class="active"' : '') + ' aria-label="フレーム外を暗く" title="カメラ枠の外を暗くする"><span class="video-camera-frame-icon" aria-hidden="true"></span></button>' +
-            '<button id="gengaZoomResetBtn" class="video-preview-zoom-value" type="button" title="フィット (100%)">' + Math.round(gengaClampZoom(state.gengaZoom) * 100) + '%</button>' +
-            '<button id="gengaZoomOutBtn" type="button" aria-label="縮小">−</button>' +
-            '<button id="gengaZoomInBtn" type="button" aria-label="拡大">＋</button>' +
-          '</span>' +
+          '<span class="genga-info-mini" style="margin-left:auto">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
         '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
@@ -42342,10 +42359,7 @@
       const playBtn = stageEl.querySelector('#gengaPlayPauseBtn'); if (playBtn) playBtn.addEventListener('click', toggleGengaPlayback);
       const sFwd = stageEl.querySelector('#gengaStepForwardBtn'); if (sFwd) sFwd.addEventListener('click', function() { stopGengaPlayback(); stepGengaFrame(1); });
       const rptBtn = stageEl.querySelector('#gengaRepeatBtn'); if (rptBtn) rptBtn.addEventListener('click', function() { state.gengaRepeat = !state.gengaRepeat; rptBtn.classList.toggle('active', state.gengaRepeat); });
-      const camFrameBtn = stageEl.querySelector('#gengaCameraFrameBtn'); if (camFrameBtn) camFrameBtn.addEventListener('click', toggleGengaCameraFrame);
-      const zResetBtn = stageEl.querySelector('#gengaZoomResetBtn'); if (zResetBtn) zResetBtn.addEventListener('click', gengaZoomReset);
-      const zOutBtn = stageEl.querySelector('#gengaZoomOutBtn'); if (zOutBtn) zOutBtn.addEventListener('click', function() { gengaZoomStep(-1); });
-      const zInBtn = stageEl.querySelector('#gengaZoomInBtn'); if (zInBtn) zInBtn.addEventListener('click', function() { gengaZoomStep(1); });
+      // camera-frame + zoom buttons now live in the shared header (#gengaZoomHeader), wired once in setup — not here.
       ['.genga-ruler', '.genga-lanes'].forEach(function(sel) {
         const el = stageEl.querySelector(sel);
         if (el) el.addEventListener('pointerdown', gengaScrubStart);
@@ -42354,6 +42368,7 @@
       if (phHandle) phHandle.addEventListener('pointerdown', gengaScrubStart);
       drawGengaPreview();
       drawGengaLayerThumbs();
+      gengaSyncZoomHeader(); // shared-header label + camera-frame active state for this project
       const pv = stageEl.querySelector('#gengaPreviewCanvas');
       if (pv) {
         pv.addEventListener('pointerdown', gengaDrawStart);
@@ -42892,6 +42907,14 @@
       document.getElementById('addConteLayerKomaBtn').addEventListener('click', function() { addConteLayerToSelection('panel'); });
       document.getElementById('addPicturePanelBtn').addEventListener('click', addPicturePanelAfterSelection);
       document.getElementById('addConteCutBtn').addEventListener('click', addConteCutAfterSelection);
+      // genga zoom/frame controls live in the shared header (#gengaZoomHeader) — wired ONCE here (static, not
+      // re-created per stage render) so they can't tangle with the canvas pointer state or cause misclicks.
+      (function bindGengaZoomHeader() {
+        const cam = document.getElementById('gengaCameraFrameBtn'); if (cam) cam.addEventListener('click', toggleGengaCameraFrame);
+        const zr = document.getElementById('gengaZoomResetBtn'); if (zr) zr.addEventListener('click', gengaZoomReset);
+        const zo = document.getElementById('gengaZoomOutBtn'); if (zo) zo.addEventListener('click', function() { gengaZoomStep(-1); });
+        const zi = document.getElementById('gengaZoomInBtn'); if (zi) zi.addEventListener('click', function() { gengaZoomStep(1); });
+      })();
       document.getElementById('stageSettingsBtn').addEventListener('click', function(event) {
         event.preventDefault();
         event.stopPropagation();
