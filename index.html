@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver272</title>
+  <title>Conte Editor Prototype ver273</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7242,7 +7242,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver272</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver273</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7628,7 +7628,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '272';
+    const APP_DISPLAY_VERSION = '273';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41230,7 +41230,7 @@
       const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
       const margin = 14;
       const fit = Math.min((W - margin * 2) / pw, (H - margin * 2) / ph);
-      const zoom = clampNumber(state.gengaZoom, 0.1, 8, 1);
+      const zoom = gengaClampZoom(state.gengaZoom);
       const scale = fit * zoom;
       const dw = pw * scale, dh = ph * scale;
       // pan only when content overflows the wrap; otherwise re-center. clamp so edges stay reachable.
@@ -41340,9 +41340,19 @@
     }
     function gengaDrawStart(ev) {
       if (!state.project || state.project.kind !== 'genga') return;
-      // iPad model (match conte): single touch — finger OR pencil — DRAWS on the paper; a finger in the dark-gray
-      // MARGIN flips (ユビパラ); two fingers pinch-zoom + pan (bindGengaPinch). Drawing never blocked.
-      if (gengaPinch) { try { if (ev.cancelable) ev.preventDefault(); } catch (e) {} return; } // a 2-finger gesture owns it
+      // iPad model (match conte), ONE input model = Pointer Events: single touch — finger OR pencil — DRAWS on the
+      // paper; a finger in the dark-gray MARGIN flips (ユビパラ); a SECOND touch pointer starts a pinch (zoom+pan).
+      if (ev.pointerType === 'touch') {
+        gengaPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (gengaPointers.size >= 2) { // 2nd finger → pinch takes over; drop the draw/flip finger 1 may have started
+          gengaCancelSingleFingerOps();
+          gengaReleaseAllPointerCapture(ev.currentTarget || ev.target);
+          gengaPinchStart(); drawGengaPreview();
+          try { if (ev.cancelable) ev.preventDefault(); } catch (e) {}
+          return;
+        }
+      }
+      if (gengaPinch) { try { if (ev.cancelable) ev.preventDefault(); } catch (e) {} return; } // pinch active (extra pointer)
       if (gengaFlipTouchStart(ev)) return; // finger in the margin → flip (touch + margin checked inside)
       if (ev.button === 1) { // middle-drag = pan the zoomed preview
         gengaPanDrag = { startX: ev.clientX, startY: ev.clientY, baseX: state.gengaPanX || 0, baseY: state.gengaPanY || 0 };
@@ -41402,7 +41412,8 @@
       ev.preventDefault();
     }
     function gengaDrawMove(ev) {
-      if (gengaPinch) return; // two-finger pinch owns the gesture
+      if (ev.pointerType === 'touch' && gengaPointers.has(ev.pointerId)) gengaPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (gengaPinch) { if (gengaPointers.size >= 2) gengaPinchMove(); try { if (ev.cancelable) ev.preventDefault(); } catch (e) {} return; } // pinch owns it
       if (gengaFlipTouch && gengaFlipTouch.pointerId === ev.pointerId) { gengaFlipTouchMove(ev); return; }
       if (gengaPanDrag) { state.gengaPanX = gengaPanDrag.baseX + (ev.clientX - gengaPanDrag.startX); state.gengaPanY = gengaPanDrag.baseY + (ev.clientY - gengaPanDrag.startY); drawGengaPreview(); ev.preventDefault(); return; }
       if (gengaCamDrag) { gengaCameraPointerMove(ev); return; }
@@ -41417,6 +41428,8 @@
       ev.preventDefault();
     }
     function gengaDrawEnd(ev) {
+      if (ev.pointerType === 'touch') gengaPointers.delete(ev.pointerId);
+      if (gengaPinch) { if (gengaPointers.size < 2) gengaPinch = null; try { if (ev.pointerId != null) (ev.currentTarget || ev.target).releasePointerCapture(ev.pointerId); } catch (e) {} return; }
       if (gengaFlipTouch && gengaFlipTouch.pointerId === ev.pointerId) { gengaFlipTouchEnd(ev); return; }
       if (gengaPanDrag) { gengaPanDrag = null; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} return; }
       if (gengaCamDrag) { gengaCameraPointerEnd(ev); return; }
@@ -41531,7 +41544,8 @@
     let gengaParaparaFrame = null; // when set, drawGengaPreview shows this frame instead of the current one (parapara/yubipara flip)
     let gengaParaparaTimer = 0;
     let gengaFlipTouch = null; // { pointerId, startY, offset } while finger-flipping (ユビパラ) in the margin
-    let gengaPinch = null;     // two-finger pinch zoom+pan (iPad, via TouchEvents)
+    let gengaPointers = new Map(); // active TOUCH pointerId -> {x,y} (client px); 2+ → pinch (one input model: Pointer Events)
+    let gengaPinch = null;     // two-finger pinch zoom+pan (iPad) — driven by gengaPointers via Pointer Events (not TouchEvents)
     let gengaLastStrokeCanvas = null; // { dataUrl, canvas } — last committed stroke, seeds the next stroke before its dataUrl decodes
     function gengaSelCenter0(sel) { return { x: sel.bounds.x + sel.bounds.w / 2, y: sel.bounds.y + sel.bounds.h / 2 }; }
     // base (the hole) + patch transformed (translate tx/ty, rotate, scale about its original center) → a paper-res canvas
@@ -41706,13 +41720,16 @@
       ev.preventDefault();
     }
     // ---- preview zoom / pan / camera-frame toggle (100% = fit, like the conte preview) ----
-    function updateGengaZoomLabel() { const el = document.getElementById('gengaZoomResetBtn'); if (el) el.textContent = Math.round(clampNumber(state.gengaZoom, 0.1, 8, 1) * 100) + '%'; }
+    // NOTE: the general clampNumber() ROUNDS to an integer — using it for zoom forced 100% steps (1×,2×,3×).
+    // gengaClampZoom keeps the FRACTIONAL value so pinch/wheel zoom is continuous.
+    function gengaClampZoom(z) { const n = Number(z); if (!Number.isFinite(n)) return 1; return Math.min(8, Math.max(0.1, n)); }
+    function updateGengaZoomLabel() { const el = document.getElementById('gengaZoomResetBtn'); if (el) el.textContent = Math.round(gengaClampZoom(state.gengaZoom) * 100) + '%'; }
     function gengaSetZoom(z) {
-      state.gengaZoom = clampNumber(z, 0.1, 8, 1);
+      state.gengaZoom = gengaClampZoom(z);
       if (state.gengaZoom <= 1.0001) { state.gengaPanX = 0; state.gengaPanY = 0; }
       drawGengaPreview(); updateGengaZoomLabel();
     }
-    function gengaZoomStep(dir) { gengaSetZoom(Math.round((clampNumber(state.gengaZoom, 0.1, 8, 1) * (dir > 0 ? 1.25 : 1 / 1.25)) * 100) / 100); }
+    function gengaZoomStep(dir) { gengaSetZoom(Math.round((gengaClampZoom(state.gengaZoom) * (dir > 0 ? 1.25 : 1 / 1.25)) * 100) / 100); }
     function gengaZoomReset() { gengaSetZoom(1); }
     // the zoom-bar camera button toggles the "dim outside the camera frame" preview (フレーム外を暗く).
     function toggleGengaCameraFrame() {
@@ -41768,48 +41785,59 @@
       try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
     }
     // two-finger pinch = zoom + pan (iPad), via TouchEvents on the preview wrap (mirrors the conte preview gesture)
-    function bindGengaPinch(wrap) {
-      if (!wrap || wrap.dataset.gengaPinchBound === 'true') return;
-      wrap.dataset.gengaPinchBound = 'true';
-      const pinchCanvas = function() { return wrap.querySelector('#gengaPreviewCanvas') || document.getElementById('gengaPreviewCanvas'); };
-      wrap.addEventListener('touchstart', function(e) {
-        if (!e.touches || e.touches.length !== 2) return;
-        const d = touchPairDistance(e.touches), m = touchPairMidpoint(e.touches); if (!d || !m || !gengaPreviewXform) return;
-        gengaFlipTouch = null; gengaDrawSession = null; // a 2nd finger cancels any single-finger op (no stray stroke)
-        const canvas = pinchCanvas(); if (!canvas) return; const rect = canvas.getBoundingClientRect();
-        const mcx = m.x - rect.left, mcy = m.y - rect.top; // midpoint in canvas px
-        gengaPinch = {
-          startDist: d,
-          startZoom: clampNumber(state.gengaZoom, 0.1, 8, 1),
-          startScale: gengaPreviewXform.scale,
-          anchorX: (mcx - gengaPreviewXform.ox) / gengaPreviewXform.scale, // paper point under the fingers — kept fixed
-          anchorY: (mcy - gengaPreviewXform.oy) / gengaPreviewXform.scale,
-          rectLeft: rect.left, rectTop: rect.top
-        };
-        e.preventDefault(); e.stopPropagation();
-      }, { passive: false });
-      wrap.addEventListener('touchmove', function(e) {
-        if (!gengaPinch || !e.touches || e.touches.length < 2) return;
-        const d = touchPairDistance(e.touches), m = touchPairMidpoint(e.touches); if (!d || !m) return;
-        const gt = state.project && state.project.gengaTimeline; if (!gt) return;
-        const canvas = pinchCanvas(); if (!canvas) return;
-        const W = canvas.width, H = canvas.height, pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
-        const ratio = d / Math.max(1, gengaPinch.startDist);
-        const newZoom = clampNumber(gengaPinch.startZoom * ratio, 0.1, 8, 1);
-        state.gengaZoom = newZoom;
-        const fit = gengaPinch.startScale / Math.max(1e-6, gengaPinch.startZoom);
-        const newScale = fit * newZoom; // respects the zoom clamp
-        const newCenX = (W - pw * newScale) / 2, newCenY = (H - ph * newScale) / 2;
-        const mcx = m.x - gengaPinch.rectLeft, mcy = m.y - gengaPinch.rectTop;
-        // keep the anchored paper point under the (current) midpoint → zoom doesn't bounce, pan follows the fingers
-        state.gengaPanX = mcx - gengaPinch.anchorX * newScale - newCenX;
-        state.gengaPanY = mcy - gengaPinch.anchorY * newScale - newCenY;
-        drawGengaPreview(); updateGengaZoomLabel();
-        e.preventDefault(); e.stopPropagation();
-      }, { passive: false });
-      const endPinch = function(e) { if (gengaPinch && (!e.touches || e.touches.length < 2)) gengaPinch = null; };
-      wrap.addEventListener('touchend', endPinch, { passive: true });
-      wrap.addEventListener('touchcancel', function() { gengaPinch = null; }, { passive: true });
+    // ---- two-finger pinch (iPad) via POINTER EVENTS (one input model w/ draw+flip) ---------------------
+    // gengaPointers holds every active TOUCH pointer; 2+ → pinch. Driving pinch off pointer events (not a
+    // separate TouchEvent listener) is the fix for "pinch dead on real iPad": when finger 1 starts a draw it
+    // setPointerCaptures the canvas, and iOS then won't deliver the 2nd finger's TouchEvents to the wrap — so
+    // the old TouchEvent pinch never fired and only the button zoom worked. Pointer events always fire here.
+    function gengaPinchVals() {
+      const pts = []; gengaPointers.forEach(function(p) { pts.push(p); }); if (pts.length < 2) return null;
+      const a = pts[0], b = pts[1], dx = a.x - b.x, dy = a.y - b.y;
+      return { d: Math.hypot(dx, dy), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    }
+    // the canvas FIT scale, computed exactly like drawGengaPreview (so pinch math matches what gets rendered,
+    // even if the wrap resized mid-gesture — caching startScale drifted when geometry shifted).
+    function gengaPreviewFit() {
+      const canvas = document.getElementById('gengaPreviewCanvas'); const wrap = canvas && canvas.parentElement;
+      const gt = state.project && state.project.gengaTimeline; if (!wrap || !gt) return null;
+      const W = Math.max(40, wrap.clientWidth), H = Math.max(40, wrap.clientHeight);
+      const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h), margin = 14;
+      return { W: W, H: H, pw: pw, ph: ph, fit: Math.min((W - margin * 2) / pw, (H - margin * 2) / ph), rect: canvas.getBoundingClientRect() };
+    }
+    function gengaPinchStart() {
+      const v = gengaPinchVals(); if (!v || !gengaPreviewXform) return;
+      const f = gengaPreviewFit(); if (!f) return;
+      const mcx = v.mx - f.rect.left, mcy = v.my - f.rect.top; // midpoint in canvas px
+      gengaPinch = {
+        startDist: Math.max(1, v.d),
+        startZoom: gengaClampZoom(state.gengaZoom),
+        anchorX: (mcx - gengaPreviewXform.ox) / gengaPreviewXform.scale, // paper point under the fingers — kept fixed
+        anchorY: (mcy - gengaPreviewXform.oy) / gengaPreviewXform.scale
+      };
+    }
+    function gengaPinchMove() {
+      if (!gengaPinch) return;
+      const v = gengaPinchVals(); if (!v) return;
+      const f = gengaPreviewFit(); if (!f) return;
+      const ratio = v.d / gengaPinch.startDist;
+      const newZoom = gengaClampZoom(gengaPinch.startZoom * ratio); // CONTINUOUS — gengaClampZoom doesn't round
+      state.gengaZoom = newZoom;
+      const newScale = f.fit * newZoom; // SAME scale drawGengaPreview will use → anchor holds through resizes
+      const newCenX = (f.W - f.pw * newScale) / 2, newCenY = (f.H - f.ph * newScale) / 2;
+      const mcx = v.mx - f.rect.left, mcy = v.my - f.rect.top;
+      // keep the anchored paper point under the (current) midpoint → zoom doesn't bounce, pan follows the fingers
+      state.gengaPanX = mcx - gengaPinch.anchorX * newScale - newCenX;
+      state.gengaPanY = mcy - gengaPinch.anchorY * newScale - newCenY;
+      drawGengaPreview(); updateGengaZoomLabel();
+    }
+    // a 2nd finger arriving cancels whatever single-finger op finger 1 started (no stray stroke / stuck flip)
+    function gengaCancelSingleFingerOps() {
+      gengaDrawSession = null;
+      if (gengaFlipTouch) { gengaFlipTouch = null; if (typeof gengaSetParaparaFrame === 'function') gengaSetParaparaFrame(null); }
+    }
+    function gengaReleaseAllPointerCapture(target) {
+      if (!target || !target.releasePointerCapture) return;
+      gengaPointers.forEach(function(_, id) { try { target.releasePointerCapture(id); } catch (e) {} });
     }
     // iPad Apple Pencil fires pen PointerEvents AND TouchEvents; touch-action:none doesn't suppress the
     // pencil's touchmove, so WebKit's scroll/gesture decision eats the stroke + scrolls. Cancel it ourselves.
@@ -42272,7 +42300,7 @@
           '<span class="genga-info-mini">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
           '<span class="video-preview-zoom-controls genga-zoom" style="margin-left:auto" aria-label="プレビュー拡大縮小">' +
             '<button id="gengaCameraFrameBtn" type="button"' + (state.gengaCamDim ? ' class="active"' : '') + ' aria-label="フレーム外を暗く" title="カメラ枠の外を暗くする"><span class="video-camera-frame-icon" aria-hidden="true"></span></button>' +
-            '<button id="gengaZoomResetBtn" class="video-preview-zoom-value" type="button" title="フィット (100%)">' + Math.round(clampNumber(state.gengaZoom, 0.1, 8, 1) * 100) + '%</button>' +
+            '<button id="gengaZoomResetBtn" class="video-preview-zoom-value" type="button" title="フィット (100%)">' + Math.round(gengaClampZoom(state.gengaZoom) * 100) + '%</button>' +
             '<button id="gengaZoomOutBtn" type="button" aria-label="縮小">−</button>' +
             '<button id="gengaZoomInBtn" type="button" aria-label="拡大">＋</button>' +
           '</span>' +
@@ -42337,7 +42365,7 @@
         pv.addEventListener('wheel', function(ev) {
           ev.preventDefault();
           const before = gengaPreviewPointerXY(ev);
-          state.gengaZoom = clampNumber((clampNumber(state.gengaZoom, 0.1, 8, 1)) * (ev.deltaY < 0 ? 1.15 : 1 / 1.15), 0.1, 8, 1);
+          state.gengaZoom = gengaClampZoom(gengaClampZoom(state.gengaZoom) * (ev.deltaY < 0 ? 1.15 : 1 / 1.15));
           if (state.gengaZoom <= 1.0001) { state.gengaPanX = 0; state.gengaPanY = 0; drawGengaPreview(); updateGengaZoomLabel(); return; }
           drawGengaPreview();
           const after = gengaPreviewPointerXY(ev);
@@ -42353,7 +42381,7 @@
         gengaPreviewRO = new ResizeObserver(function() { drawGengaPreview(); });
         gengaPreviewRO.observe(pvWrap);
       }
-      if (pvWrap) bindGengaPinch(pvWrap); // iPad two-finger pinch-zoom + pan
+      // (pinch is handled in gengaDrawStart/Move/End via Pointer Events — no separate TouchEvent binding)
       // redraw after layout settles (e.g. the create modal closing reflows the stage) — setTimeout fires
       // regardless of tab visibility, so the canvas resolution re-syncs to the final wrap size.
       setTimeout(function() { if (state.project && state.project.kind === 'genga') drawGengaPreview(); }, 60);
