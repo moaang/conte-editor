@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver279</title>
+  <title>Conte Editor Prototype ver280</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver279</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver280</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7674,7 +7674,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '279';
+    const APP_DISPLAY_VERSION = '280';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -43282,6 +43282,53 @@
     renderVersionInfoDialog();
     refresh();
     bootProjectStartup();
+
+    // ---- GENGA dead-canvas DIAGNOSTIC (read-only; OFF unless the URL hash contains #gdiag; changes NO behavior) ----
+    // When the genga canvas "goes dead", open the page with #gdiag and touch the dead canvas: the overlay shows
+    //   • touch pd/up counts + onCanvas + topEl@last  → is the touch even reaching the canvas, or is something covering it?
+    //   • pointers / pinch / drawSess / tool / layer  → which state is stuck (the thing blocking the draw)
+    //   • "=> reason"                                  → the exact branch that would block gengaDrawStart
+    // Screenshot it in the dead state and we'll know the real cause (no more guessing). Remove this block after.
+    (function gengaDeadCanvasDiag() {
+      try {
+        if (String(location.hash || '').toLowerCase().indexOf('gdiag') < 0) return;
+        const dbg = { pd: 0, up: 0, cancel: 0, lastPD: '-', lastUp: '-', x: 0, y: 0, onCanvas: '-' };
+        const cvEl = function() { return document.getElementById('gengaPreviewCanvas'); };
+        window.addEventListener('pointerdown', function(e) {
+          dbg.pd++; dbg.x = e.clientX; dbg.y = e.clientY;
+          dbg.onCanvas = (e.target === cvEl()) ? 'YES' : ('NO(' + ((e.target && e.target.tagName) || '?') + ')');
+          dbg.lastPD = e.pointerType + '#' + e.pointerId + (e.isPrimary ? 'P' : '');
+        }, true);
+        window.addEventListener('pointerup', function(e) { dbg.up++; dbg.lastUp = 'up#' + e.pointerId; }, true);
+        window.addEventListener('pointercancel', function(e) { dbg.cancel++; dbg.lastUp = 'CANCEL#' + e.pointerId; }, true);
+        const box = document.createElement('div');
+        box.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:2147483647;background:rgba(0,0,0,.86);color:#19ff5b;font:11px/1.35 ui-monospace,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:82vw';
+        document.body.appendChild(box);
+        const ids = function(m) { try { return Array.from(m.keys()).join(','); } catch (e) { return '?'; } };
+        setInterval(function() {
+          const gl = (typeof gengaSelectedLayer === 'function') ? gengaSelectedLayer() : null;
+          const kind = (state.project && state.project.kind) || '-';
+          let reason;
+          if (kind !== 'genga') reason = '(not genga)';
+          else if (gengaPinch) reason = 'BLOCK: gengaPinch stuck';
+          else if (gengaPointers.size >= 2) reason = 'BLOCK: pointers>=2 (ghost)';
+          else if (!gl) reason = 'BLOCK: no layer';
+          else if (gl.locked) reason = 'BLOCK: layer locked';
+          else if (state.memoEditTool) reason = 'TOOL=' + state.memoEditTool + ' (not pen)';
+          else reason = 'PEN draw OK';
+          const top = (dbg.x || dbg.y) ? document.elementFromPoint(dbg.x, dbg.y) : null;
+          const topDesc = top ? (top.tagName + (top.id ? '#' + top.id : '') + (top.className && String(top.className).split ? '.' + String(top.className).split(' ')[0] : '')) : '-';
+          box.textContent =
+            'GENGA DIAG ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  kind:' + kind + '\n' +
+            'touch pd:' + dbg.pd + ' up:' + dbg.up + ' cancel:' + dbg.cancel + '  last:' + dbg.lastPD + '/' + dbg.lastUp + '\n' +
+            'onCanvas:' + dbg.onCanvas + '  topEl@touch:' + topDesc + '\n' +
+            'pointers:' + gengaPointers.size + '[' + ids(gengaPointers) + ']  pinch:' + (!!gengaPinch) + '  drawSess:' + (!!gengaDrawSession) + '\n' +
+            'flip:' + (!!gengaFlipTouch) + ' pan:' + (!!gengaPanDrag) + ' sel:' + (!!gengaSelDrag) + ' lasso:' + (!!gengaLasso) + ' cam:' + (!!gengaCamDrag) + '\n' +
+            'tool:' + (state.memoEditTool || '(pen)') + '  layer:' + (gl ? (gl.locked ? 'LOCKED' : 'ok') : 'none') + '\n' +
+            '=> ' + reason;
+        }, 200);
+      } catch (e) { /* diagnostics must never break the app */ }
+    })();
   </script>
 </body>
 </html>
