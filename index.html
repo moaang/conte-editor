@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver297</title>
+  <title>Conte Editor Prototype ver298</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver297</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver298</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7381,7 +7381,7 @@
     .genga-onion-btn.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .genga-dopesheet { display: flex; flex: none; height: 240px; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
     .genga-layers-col { width: 172px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
-    .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #555; }
+    .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #444; }
     .genga-layer-head { height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 13px; box-sizing: border-box; cursor: default; }
     .genga-lh-top { display: flex; align-items: center; }
     .genga-lh-bottom { display: flex; align-items: center; gap: 6px; }
@@ -7494,7 +7494,7 @@
     #gengaPaperRatioTabs button[data-par="free"] { margin-left: 8px; }
     .genga-wh-row input:disabled { background-color: #ececec; color: #999; cursor: default; }
     .genga-col-head { justify-content: space-between; }
-    .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+    .genga-add-layer { border: none; background: #2f6fd1; color: #fff; width: 24px; height: 20px; min-height: 20px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .genga-del-layer { border: none; background: transparent; color: #aaa; cursor: pointer; font-size: 16px; line-height: 0; padding: 0 2px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
     .genga-del-layer:hover { color: #e03b3b; }
     .genga-lname { cursor: default; }
@@ -7516,7 +7516,7 @@
     /* camera-work keyframe track */
     .genga-cam-head { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box; border-bottom: 1px solid rgba(0,0,0,0.12); font-size: 11px; color: #444; background: #ecece4; }
     .genga-cam-title { font-weight: 600; }
-    .genga-cam-kf-btn { margin-left: auto; border: 1px solid #b9b9ad; background: #fff; color: #999; border-radius: 4px; min-width: 24px; height: 18px; line-height: 1; cursor: pointer; font-size: 11px; padding: 0 4px; }
+    .genga-cam-kf-btn { margin-left: auto; border: 1px solid #b9b9ad; background: #fff; color: #999; border-radius: 4px; width: 24px; height: 20px; min-height: 20px; line-height: 1; cursor: pointer; font-size: 12px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .genga-cam-kf-btn.on { color: #e00000; border-color: #e00000; background: #fff0f0; }
     .genga-cam-lane { height: 26px; position: relative; box-sizing: border-box; border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(0,0,0,0.03); background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) var(--genga-cell-w, 22px)); }
     .genga-cam-kf { position: absolute; top: 50%; width: 11px; height: 11px; transform: translate(-50%,-50%) rotate(45deg); background: #e00000; border: 1px solid #fff; box-shadow: 0 0 0 1px #a00; cursor: grab; touch-action: none; z-index: 2; }
@@ -7716,7 +7716,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '297';
+    const APP_DISPLAY_VERSION = '298';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
