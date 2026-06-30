@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver282</title>
+  <title>Conte Editor Prototype ver283</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver282</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver283</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7398,7 +7398,15 @@
     .genga-lname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
     .genga-lop { font-size: 11px; opacity: 0.6; }
     .genga-ph { color: #999; font-style: italic; }
-    .genga-timeline-wrap { flex: 1; overflow-x: hidden; overflow-y: auto; position: relative; touch-action: pan-y; }
+    /* overflow-x:auto = a horizontal scrollbar at the bottom when zoomed-in content overflows; touch-action:pan-y
+       keeps finger-drag from scrolling horizontally (that's for koma drag / playhead) — scrollbar + wheel scroll. */
+    .genga-timeline-wrap { flex: 1; overflow-x: auto; overflow-y: auto; position: relative; touch-action: pan-y; }
+    .genga-timeline-wrap::-webkit-scrollbar { height: 12px; width: 10px; }
+    .genga-timeline-wrap::-webkit-scrollbar-track { background: rgba(0,0,0,0.06); }
+    .genga-timeline-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.32); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+    .genga-timeline-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.46); background-clip: padding-box; }
+    .genga-tl-zoom { display: inline-flex; align-items: center; gap: 4px; opacity: 0.7; font-size: 11px; }
+    .genga-tl-zoom input[type="range"] { width: 96px; }
     .genga-ruler { position: relative; height: 24px; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; }
     .genga-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(0,0,0,0.07); }
     .genga-tick.major { border-left-color: rgba(0,0,0,0.22); }
@@ -7674,7 +7682,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '282';
+    const APP_DISPLAY_VERSION = '283';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41043,7 +41051,8 @@
       });
     }
     // genga current-frame (1-based) + selected layer — transient UI state (not persisted in the project).
-    const GENGA_CELL_W = 22;
+    const GENGA_BASE_CELL = 22; // base px-per-frame; gengaCellW() applies the timeline zoom (state.gengaCellW)
+    function gengaCellW() { return clampNumber(state.gengaCellW || GENGA_BASE_CELL, 8, 64, GENGA_BASE_CELL); }
     function gengaCurrentFrame() {
       const f = Math.round(Number(state.gengaFrame) || 1);
       return f >= 1 ? f : 1;
@@ -41055,11 +41064,21 @@
       n = Math.max(1, Math.min(Math.round(Number(n) || 1), shown));
       state.gengaFrame = n;
       const ph = document.querySelector('#gengaStage .genga-playhead');
-      if (ph) ph.style.left = ((n - 1) * GENGA_CELL_W) + 'px';
+      if (ph) ph.style.left = ((n - 1) * gengaCellW()) + 'px';
       const lbl = document.getElementById('gengaFrameNo');
       if (lbl) lbl.textContent = n;
+      gengaScrollPlayheadIntoView();
       drawGengaPreview();
       drawGengaLayerThumbs();
+    }
+    // keep the playhead within the timeline viewport (conte-like: drag the playhead and the view follows when
+    // zoomed in past the visible width). Only scrolls when needed; the bottom scrollbar handles manual scroll.
+    function gengaScrollPlayheadIntoView() {
+      const wrap = document.querySelector('#gengaStage .genga-timeline-wrap'); if (!wrap) return;
+      const cw = gengaCellW(), n = gengaCurrentFrame();
+      const x = (n - 1) * cw, margin = cw * 2;
+      if (x < wrap.scrollLeft + margin) wrap.scrollLeft = Math.max(0, x - margin);
+      else if (x + cw > wrap.scrollLeft + wrap.clientWidth - margin) wrap.scrollLeft = x + cw - wrap.clientWidth + margin;
     }
     function stepGengaFrame(delta) { setGengaFrame(gengaCurrentFrame() + delta); }
     // drag-scrub: pointerdown on the ruler / lane background / playhead handle → jump + follow the pointer.
@@ -41069,7 +41088,7 @@
       stopGengaPlayback();
       const content = document.querySelector('#gengaStage .genga-tl-content');
       if (!content) return;
-      const scrub = function(e) { const rect = content.getBoundingClientRect(); setGengaFrame(Math.floor((e.clientX - rect.left) / GENGA_CELL_W) + 1); };
+      const scrub = function(e) { const rect = content.getBoundingClientRect(); setGengaFrame(Math.floor((e.clientX - rect.left) / gengaCellW()) + 1); };
       scrub(ev);
       const up = function() { document.removeEventListener('pointermove', scrub); document.removeEventListener('pointerup', up); };
       document.addEventListener('pointermove', scrub);
@@ -42161,19 +42180,19 @@
     }
     function gengaExpPointerMove(ev) {
       const d = gengaExpDrag; if (!d) return;
-      const delta = Math.round((ev.clientX - d.startX) / GENGA_CELL_W);
+      const delta = Math.round((ev.clientX - d.startX) / gengaCellW());
       if (d.mode === 'resize') {
         d.nextHold = Math.max(1, d.origHold + delta);
-        d.block.style.width = (d.nextHold * GENGA_CELL_W - 2) + 'px';
+        d.block.style.width = (d.nextHold * gengaCellW() - 2) + 'px';
       } else if (d.mode === 'resize-left') {
         const ns = Math.max(1, Math.min(d.origStart + delta, d.origStart + d.origHold - 1));
         d.nextStart = ns;
         d.nextHold = d.origStart + d.origHold - ns;
-        d.block.style.left = ((ns - 1) * GENGA_CELL_W) + 'px';
-        d.block.style.width = (d.nextHold * GENGA_CELL_W - 2) + 'px';
+        d.block.style.left = ((ns - 1) * gengaCellW()) + 'px';
+        d.block.style.width = (d.nextHold * gengaCellW() - 2) + 'px';
       } else {
         d.nextStart = Math.max(1, d.origStart + delta);
-        d.block.style.left = ((d.nextStart - 1) * GENGA_CELL_W) + 'px';
+        d.block.style.left = ((d.nextStart - 1) * gengaCellW()) + 'px';
       }
       // live: make the none/hold/repeat button follow the last koma's right edge during the drag (no commit lag)
       const lane = d.block.parentElement;
@@ -42186,7 +42205,7 @@
             const end = (String(x.id) === String(d.expId)) ? (d.nextStart - 1 + d.nextHold) : (x.startFrame - 1 + x.holdFrames);
             if (end > maxEnd) maxEnd = end;
           });
-          pbBtn.style.left = (maxEnd * GENGA_CELL_W + 2) + 'px';
+          pbBtn.style.left = (maxEnd * gengaCellW() + 2) + 'px';
         }
       }
     }
@@ -42355,7 +42374,7 @@
       const layers = Array.isArray(gt.layers) ? gt.layers : [];
       const fps = gt.fps || 24;
       const total = Math.max(24, gt.totalFrames || 1);
-      const cellW = GENGA_CELL_W;
+      const cellW = gengaCellW();
       const frame = gengaCurrentFrame();
       const selId = state.gengaSelectedLayerId || '';
       const thumbW = 40;
@@ -42419,6 +42438,7 @@
           gengaTransportControlsHtml() +
           '<span class="genga-tl-label">原画タイムライン</span>' +
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
+          '<label class="genga-tl-zoom" title="タイムライン拡大縮小">⟷<input id="gengaTimelineZoomRange" type="range" min="8" max="64" step="2" value="' + gengaCellW() + '"></label>' +
           '<span class="genga-info-mini" style="margin-left:auto">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
         '</div>' +
         '<div class="genga-dopesheet">' +
@@ -42470,7 +42490,13 @@
         const content = stageEl.querySelector('.genga-tl-content'); if (!content) return;
         stopGengaPlayback();
         const rect = content.getBoundingClientRect();
-        setGengaFrame(Math.floor((e.clientX - rect.left) / GENGA_CELL_W) + 1);
+        setGengaFrame(Math.floor((e.clientX - rect.left) / gengaCellW()) + 1);
+      });
+      const tlZoom = stageEl.querySelector('#gengaTimelineZoomRange');
+      if (tlZoom) tlZoom.addEventListener('input', function(e) {
+        state.gengaCellW = clampNumber(e.target.value, 8, 64, GENGA_BASE_CELL);
+        renderGengaView(); // re-layout the ruler/lanes/komas/playhead at the new px-per-frame
+        gengaScrollPlayheadIntoView();
       });
       drawGengaPreview();
       drawGengaLayerThumbs();
