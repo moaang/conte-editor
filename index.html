@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver293</title>
+  <title>Conte Editor Prototype ver294</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver293</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver294</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7506,8 +7506,16 @@
     .genga-frame-step { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
     .genga-frame-step button { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 1px 7px; font-size: 11px; line-height: 1.4; }
     .genga-frame-step button:hover { background: #f0f0ea; }
-    .genga-layer-head.selected { background: rgba(47,111,209,0.14); }
+    .genga-layer-head.selected { background: rgba(47,111,209,0.22); box-shadow: inset 3px 0 0 #2f6fd1; }
     .genga-ruler, .genga-lanes { cursor: pointer; }
+    /* camera-work keyframe track */
+    .genga-cam-head { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box; border-bottom: 1px solid rgba(0,0,0,0.12); font-size: 11px; color: #444; background: #ecece4; }
+    .genga-cam-title { font-weight: 600; }
+    .genga-cam-kf-btn { margin-left: auto; border: 1px solid #b9b9ad; background: #fff; color: #999; border-radius: 4px; min-width: 24px; height: 18px; line-height: 1; cursor: pointer; font-size: 11px; padding: 0 4px; }
+    .genga-cam-kf-btn.on { color: #e00000; border-color: #e00000; background: #fff0f0; }
+    .genga-cam-lane { height: 26px; position: relative; box-sizing: border-box; border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(0,0,0,0.03); background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) var(--genga-cell-w, 22px)); }
+    .genga-cam-kf { position: absolute; top: 50%; width: 11px; height: 11px; transform: translate(-50%,-50%) rotate(45deg); background: #e00000; border: 1px solid #fff; box-shadow: 0 0 0 1px #a00; cursor: grab; touch-action: none; z-index: 2; }
+    .genga-cam-kf[data-active="1"] { background: #ff5a5a; box-shadow: 0 0 0 1px #a00, 0 0 5px #e00000; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
     #projectCreateTitleInput, #gengaCreateDialog input[type="text"], #gengaCreateDialog select {
       display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
@@ -7702,7 +7710,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '293';
+    const APP_DISPLAY_VERSION = '294';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -38788,17 +38796,15 @@
       if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); gengaSel = null; gengaSelDrag = null; gengaLasso = null; drawGengaPreview(); drawGengaLayerThumbs(); return true; }
       return false;
     }
-    // Delete key in genga (user choice: playhead-based) → delete the koma at (selected layer, current frame);
-    // if there's no koma there, do NOTHING (do not delete the layer). Layer delete = its right-click menu / ×.
+    // Delete key in genga → delete the SELECTED layer (layer-selection = click its name/thumbnail). Undoable.
+    // (Koma/instance deletion is via the koma's right-click menu.)
     function handleGengaDeleteKey(event) {
       if (!(state.project && state.project.kind === 'genga')) return false;
       if (isTypingTarget(event.target) || gengaSel) return false;
       if (!isDeleteKeyEvent(event)) return false;
-      const id = state.gengaSelectedLayerId; const layer = gengaLayerById(id); if (!layer) return false;
-      const koma = gengaExposureAt(layer, gengaCurrentFrame());
-      if (!koma) return false; // no koma at the playhead → do nothing (do NOT delete the layer)
+      const id = state.gengaSelectedLayerId; if (!gengaLayerById(id)) return false;
       event.preventDefault(); event.stopImmediatePropagation();
-      deleteGengaExposure(id, koma.id);
+      deleteGengaLayer(id);
       return true;
     }
     function handleMemoKeydown(event) {
@@ -40793,6 +40799,15 @@
       const cwX = Number.isFinite(Number(cwk.x)) ? Math.round(Number(cwk.x)) : camX;
       const cwY = Number.isFinite(Number(cwk.y)) ? Math.round(Number(cwk.y)) : camY;
       const cwRot = Number.isFinite(Number(cwk.rotation)) ? Number(cwk.rotation) : 0;
+      // camera-work keyframes (animate the red frame over the timeline): one per frame, deduped + sorted
+      const cwKfMap = {};
+      (Array.isArray(cwk.keyframes) ? cwk.keyframes : []).forEach(function(k) {
+        const f = Math.max(1, Math.round(Number(k.frame) || 1));
+        cwKfMap[f] = { frame: f, x: Math.round(Number(k.x)), y: Math.round(Number(k.y)), w: Math.max(20, Math.round(Number(k.w) || cwW)), h: Math.max(20, Math.round(Number(k.h) || cwH)), rotation: Number(k.rotation) || 0 };
+        if (!isFinite(cwKfMap[f].x)) cwKfMap[f].x = cwX;
+        if (!isFinite(cwKfMap[f].y)) cwKfMap[f].y = cwY;
+      });
+      const cwKeyframes = Object.keys(cwKfMap).map(function(f) { return cwKfMap[f]; }).sort(function(a, b) { return a.frame - b.frame; });
       const totalFrames = Math.max(1, Math.round(Number(gt.totalFrames) || 1), maxFrame);
       const markMax = Math.max(24, totalFrames); // timeline shows >=24 frames; In/Out can sit anywhere in the displayed range
       const clampMark = function(v) { const n = Math.round(Number(v)); return (n >= 1 && n <= markMax) ? n : null; };
@@ -40800,7 +40815,7 @@
         fps: Math.max(1, Math.round(Number(gt.fps) || project.fps || 24)),
         paper: { w: paperW, h: paperH },
         camera: { x: camX, y: camY, w: camW, h: camH },
-        cameraWork: { x: cwX, y: cwY, w: cwW, h: cwH, rotation: cwRot },
+        cameraWork: { x: cwX, y: cwY, w: cwW, h: cwH, rotation: cwRot, keyframes: cwKeyframes },
         output: { w: Math.max(1, Math.round(Number(outp.w) || camW)), h: Math.max(1, Math.round(Number(outp.h) || camH)) },
         totalFrames: totalFrames,
         markIn: clampMark(gt.markIn),   // TVPaint-style In/Out playback range (null = unset)
@@ -41544,7 +41559,7 @@
       {
         const SC = function(px2, py2) { return { x: ox + px2 * scale, y: oy + py2 * scale }; };
         const bcam = gt.camera;                                  // BLACK = fixed output/composition frame
-        const wcam = gt.cameraWork || gt.camera;                 // RED  = editable camera-work frame
+        const wcam = gengaCamDrag ? gengaCamDrag.live : gengaCameraWorkAt(gt, frame); // RED = camera-work frame (keyframe-interpolated; live buffer while dragging)
         const camEdit = (state.memoEditTool === 'camera');
         const corners = gengaCamCorners(wcam).map(function(pt) { return SC(pt.x, pt.y); });
         const redFrame = function() { ctx.beginPath(); ctx.moveTo(corners[0].x, corners[0].y); ctx.lineTo(corners[1].x, corners[1].y); ctx.lineTo(corners[2].x, corners[2].y); ctx.lineTo(corners[3].x, corners[3].y); ctx.closePath(); };
@@ -42137,32 +42152,105 @@
     function gengaCamPaperToLocal(cam, px, py) { const c = gengaCamCenter(cam), r = Number(cam.rotation) || 0, cs = Math.cos(-r), sn = Math.sin(-r), dx = px - c.x, dy = py - c.y; return { x: dx * cs - dy * sn, y: dx * sn + dy * cs }; }
     function gengaCamCorners(cam) { const hw = cam.w / 2, hh = cam.h / 2; return [gengaCamLocalToPaper(cam, -hw, -hh), gengaCamLocalToPaper(cam, hw, -hh), gengaCamLocalToPaper(cam, hw, hh), gengaCamLocalToPaper(cam, -hw, hh)]; }
     function gengaCamRotateHandlePaper(cam, viewScale) { const top = gengaCamLocalToPaper(cam, 0, -cam.h / 2), r = Number(cam.rotation) || 0, ux = Math.sin(r), uy = -Math.cos(r), d = 30 / Math.max(1e-4, viewScale); return { x: top.x + ux * d, y: top.y + uy * d }; }
+    // ---- camera-work keyframes: animate the red frame over the timeline (linear interp) ----
+    function gengaCamKfRect(k) { return { x: k.x, y: k.y, w: k.w, h: k.h, rotation: Number(k.rotation) || 0 }; }
+    function gengaCamKeyframes(gt) { return ((gt.cameraWork && gt.cameraWork.keyframes) || []).slice().sort(function(a, b) { return a.frame - b.frame; }); }
+    function gengaCameraWorkAt(gt, frame) {
+      const cw = gt.cameraWork || gt.camera;
+      const base = { x: cw.x, y: cw.y, w: cw.w, h: cw.h, rotation: Number(cw.rotation) || 0 };
+      const kfs = gengaCamKeyframes(gt); if (!kfs.length) return base;
+      if (frame <= kfs[0].frame) return gengaCamKfRect(kfs[0]);
+      if (frame >= kfs[kfs.length - 1].frame) return gengaCamKfRect(kfs[kfs.length - 1]);
+      for (let i = 0; i < kfs.length - 1; i++) {
+        const a = kfs[i], b = kfs[i + 1];
+        if (frame >= a.frame && frame <= b.frame) {
+          const t = b.frame > a.frame ? (frame - a.frame) / (b.frame - a.frame) : 0;
+          let ar = Number(a.rotation) || 0, dr = (Number(b.rotation) || 0) - ar; while (dr > Math.PI) dr -= 2 * Math.PI; while (dr < -Math.PI) dr += 2 * Math.PI;
+          return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, w: a.w + (b.w - a.w) * t, h: a.h + (b.h - a.h) * t, rotation: ar + dr * t };
+        }
+      }
+      return gengaCamKfRect(kfs[0]);
+    }
+    function gengaHasCameraKeyframe(gt, frame) { return ((gt.cameraWork && gt.cameraWork.keyframes) || []).some(function(k) { return k.frame === frame; }); }
+    function gengaSetCameraKeyframe(frame, rect) {
+      runCommand('カメラキー設定', function(proj) {
+        const cw = proj.gengaTimeline.cameraWork;
+        cw.keyframes = (cw.keyframes || []).filter(function(k) { return k.frame !== frame; });
+        cw.keyframes.push({ frame: frame, x: Math.round(rect.x), y: Math.round(rect.y), w: Math.max(20, Math.round(rect.w)), h: Math.max(20, Math.round(rect.h)), rotation: Number(rect.rotation) || 0 });
+        cw.keyframes.sort(function(a, b) { return a.frame - b.frame; });
+      });
+    }
+    function gengaRemoveCameraKeyframe(frame) {
+      runCommand('カメラキー削除', function(proj) { const cw = proj.gengaTimeline.cameraWork; cw.keyframes = (cw.keyframes || []).filter(function(k) { return k.frame !== frame; }); });
+    }
+    function gengaToggleCameraKeyframe() {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const f = gengaCurrentFrame();
+      if (gengaHasCameraKeyframe(gt, f)) gengaRemoveCameraKeyframe(f);
+      else gengaSetCameraKeyframe(f, gengaCameraWorkAt(gt, f));
+    }
+    function gengaMoveCameraKeyframe(fromFrame, toFrame) {
+      if (fromFrame === toFrame || toFrame < 1) return;
+      runCommand('カメラキー移動', function(proj) {
+        const cw = proj.gengaTimeline.cameraWork; const k = (cw.keyframes || []).find(function(x) { return x.frame === fromFrame; }); if (!k) return;
+        cw.keyframes = cw.keyframes.filter(function(x) { return x.frame !== fromFrame && x.frame !== toFrame; });
+        k.frame = toFrame; cw.keyframes.push(k); cw.keyframes.sort(function(a, b) { return a.frame - b.frame; });
+      });
+    }
+    // camera-keyframe diamond: click → jump playhead; drag → change its frame; right-click → delete.
+    let gengaCamKfDrag = null;
+    function gengaCamKfPointerDown(ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      ev.stopPropagation(); ev.preventDefault();
+      const d = ev.currentTarget;
+      const content = document.querySelector('#gengaStage .genga-tl-content'); if (!content) return;
+      gengaCamKfDrag = { from: Number(d.getAttribute('data-frame')), to: Number(d.getAttribute('data-frame')), moved: false, rect: content.getBoundingClientRect(), el: d };
+      document.addEventListener('pointermove', gengaCamKfPointerMove, true);
+      document.addEventListener('pointerup', gengaCamKfPointerUp, true);
+    }
+    function gengaCamKfPointerMove(ev) {
+      if (!gengaCamKfDrag) return;
+      const cw = gengaCellW();
+      const f = Math.max(1, Math.floor((ev.clientX - gengaCamKfDrag.rect.left) / cw) + 1);
+      if (f !== gengaCamKfDrag.from) gengaCamKfDrag.moved = true;
+      gengaCamKfDrag.to = f;
+      if (gengaCamKfDrag.el) gengaCamKfDrag.el.style.left = ((f - 1) * cw + cw / 2) + 'px'; // live feedback
+    }
+    function gengaCamKfPointerUp() {
+      document.removeEventListener('pointermove', gengaCamKfPointerMove, true);
+      document.removeEventListener('pointerup', gengaCamKfPointerUp, true);
+      const d = gengaCamKfDrag; gengaCamKfDrag = null; if (!d) return;
+      if (d.moved && d.to !== d.from) gengaMoveCameraKeyframe(d.from, d.to);
+      else setGengaFrame(d.from);
+    }
     function gengaCameraPointerDown(ev) {
       if (ev.button != null && ev.button !== 0) { ev.preventDefault(); return; }
       const gt = state.project && state.project.gengaTimeline; if (!gt) return;
       const p = gengaPreviewPointerXY(ev); if (!p) return;
-      const cam = gt.cameraWork, view = gengaPreviewXform ? gengaPreviewXform.scale : 1, tol = 13 / Math.max(1e-4, view);
+      const view = gengaPreviewXform ? gengaPreviewXform.scale : 1, tol = 13 / Math.max(1e-4, view);
+      const cam = gengaCameraWorkAt(gt, gengaCurrentFrame()); // edit the displayed (interpolated) rect
       const orig = { x: cam.x, y: cam.y, w: cam.w, h: cam.h, rotation: Number(cam.rotation) || 0 };
+      const live = { x: orig.x, y: orig.y, w: orig.w, h: orig.h, rotation: orig.rotation };
       const center = gengaCamCenter(cam);
       const near = function(h2) { return Math.hypot(p.x - h2.x, p.y - h2.y) <= tol; };
       if (near(gengaCamRotateHandlePaper(cam, view))) {
-        gengaCamDrag = { mode: 'rotate', startAngle: Math.atan2(p.y - center.y, p.x - center.x), orig: orig };
+        gengaCamDrag = { mode: 'rotate', startAngle: Math.atan2(p.y - center.y, p.x - center.x), orig: orig, live: live };
         try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); return;
       }
       const corners = gengaCamCorners(cam);
       for (let i = 0; i < 4; i++) {
-        if (near(corners[i])) { gengaCamDrag = { mode: 'resize', corner: i, orig: orig, aspect: cam.w / Math.max(1, cam.h) }; try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); return; }
+        if (near(corners[i])) { gengaCamDrag = { mode: 'resize', corner: i, orig: orig, aspect: cam.w / Math.max(1, cam.h), live: live }; try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); return; }
       }
       const loc = gengaCamPaperToLocal(cam, p.x, p.y);
       if (Math.abs(loc.x) <= cam.w / 2 && Math.abs(loc.y) <= cam.h / 2) {
-        gengaCamDrag = { mode: 'move', startX: p.x, startY: p.y, orig: orig };
+        gengaCamDrag = { mode: 'move', startX: p.x, startY: p.y, orig: orig, live: live };
         try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
       }
       ev.preventDefault();
     }
     function gengaCameraPointerMove(ev) {
       if (!gengaCamDrag) return;
-      const gt = state.project.gengaTimeline, cam = gt.cameraWork, pw = gt.paper.w, ph = gt.paper.h;
+      const gt = state.project.gengaTimeline, cam = gengaCamDrag.live, pw = gt.paper.w, ph = gt.paper.h;
       const p = gengaPreviewPointerXY(ev); if (!p) return;
       const d = gengaCamDrag, o = d.orig;
       if (d.mode === 'move') {
@@ -42190,11 +42278,11 @@
     }
     function gengaCameraPointerEnd(ev) {
       if (!gengaCamDrag) return;
-      const gt = state.project.gengaTimeline, cam = gt.cameraWork, o = gengaCamDrag.orig; gengaCamDrag = null;
+      const gt = state.project.gengaTimeline, cam = gengaCamDrag.live, o = gengaCamDrag.orig; gengaCamDrag = null;
       const final = { x: Math.round(cam.x), y: Math.round(cam.y), w: Math.round(cam.w), h: Math.round(cam.h), rotation: Number(cam.rotation) || 0 };
-      cam.x = o.x; cam.y = o.y; cam.w = o.w; cam.h = o.h; cam.rotation = o.rotation; // restore for a clean undo before→after
       if (final.x !== o.x || final.y !== o.y || final.w !== o.w || final.h !== o.h || final.rotation !== o.rotation) {
-        runCommand('カメラワーク調整', function(proj) { const c = proj.gengaTimeline.cameraWork; c.x = final.x; c.y = final.y; c.w = final.w; c.h = final.h; c.rotation = final.rotation; });
+        if (gengaCamKeyframes(gt).length) gengaSetCameraKeyframe(gengaCurrentFrame(), final); // animated → record/update a key at the playhead
+        else runCommand('カメラワーク調整', function(proj) { const c = proj.gengaTimeline.cameraWork; c.x = final.x; c.y = final.y; c.w = final.w; c.h = final.h; c.rotation = final.rotation; }); // not animated yet → set the base pose
       }
       drawGengaPreview();
       try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
@@ -42648,6 +42736,14 @@
         });
       }
       const laneWidth = total * cellW;
+      // camera-work keyframe track (head + lane of diamonds)
+      const camHead = '<div class="genga-cam-head"><span class="genga-cam-title">カメラ</span>' +
+        '<button class="genga-cam-kf-btn' + (gengaHasCameraKeyframe(gt, frame) ? ' on' : '') + '" type="button" title="現在フレームにカメラキーを追加/削除">◆</button></div>';
+      let camDiamonds = '';
+      gengaCamKeyframes(gt).forEach(function(k) {
+        camDiamonds += '<div class="genga-cam-kf" data-frame="' + k.frame + '"' + (k.frame === frame ? ' data-active="1"' : '') + ' style="left:' + ((k.frame - 1) * cellW + cellW / 2) + 'px" title="カメラキー F' + k.frame + ' — クリックで移動 / ドラッグで時間変更 / 右クリックで削除"></div>';
+      });
+      const camLane = '<div class="genga-cam-lane">' + camDiamonds + '</div>';
       stageEl.innerHTML =
         '<div class="genga-preview"><canvas id="gengaPreviewCanvas" class="genga-preview-canvas"></canvas></div>' +
         '<div class="genga-topbar">' +
@@ -42659,12 +42755,12 @@
         '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
-            '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + rowsHead +
+            '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + camHead + rowsHead +
           '</div>' +
           '<div class="genga-timeline-wrap">' +
             '<div class="genga-tl-content" style="width:' + laneWidth + 'px;--genga-cell-w:' + cellW + 'px">' +
               '<div class="genga-ruler">' + ruler + '</div>' +
-              '<div class="genga-lanes">' + rowsLane + '</div>' +
+              '<div class="genga-lanes">' + camLane + rowsLane + '</div>' +
               gengaIoMarksHtml(gt, total, cellW) +
               '<div class="genga-playhead" style="left:' + ((frame - 1) * cellW) + 'px;width:' + cellW + 'px"><span class="genga-playhead-handle"></span></div>' +
             '</div>' +
@@ -42672,6 +42768,12 @@
         '</div>';
       const addBtn = stageEl.querySelector('.genga-add-layer');
       if (addBtn) addBtn.addEventListener('click', addGengaLayer);
+      const camKfBtn = stageEl.querySelector('.genga-cam-kf-btn');
+      if (camKfBtn) camKfBtn.addEventListener('click', function(ev) { ev.stopPropagation(); gengaToggleCameraKeyframe(); });
+      stageEl.querySelectorAll('.genga-cam-kf').forEach(function(d) {
+        d.addEventListener('contextmenu', function(ev) { ev.preventDefault(); ev.stopPropagation(); gengaRemoveCameraKeyframe(Number(d.getAttribute('data-frame'))); });
+        d.addEventListener('pointerdown', gengaCamKfPointerDown);
+      });
       stageEl.querySelectorAll('.genga-del-layer').forEach(function(b) {
         b.addEventListener('click', function(ev) { ev.stopPropagation(); deleteGengaLayer(b.getAttribute('data-genga-layer')); });
       });
