@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver306</title>
+  <title>Conte Editor Prototype ver307</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver306</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver307</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7728,7 +7728,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '306';
+    const APP_DISPLAY_VERSION = '307';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41508,18 +41508,18 @@
         else if (which === 'out') { gt.markOut = f; if (gt.markIn != null && gt.markIn > f) gt.markIn = null; }
       });
     }
-    function gengaRulerContextMenu(ev) {
-      ev.preventDefault(); ev.stopPropagation();
+    function gengaShowIoMenu(clientX, clientY) {
       const content = document.querySelector('#gengaStage .genga-tl-content'); if (!content) return;
       const rect = content.getBoundingClientRect();
-      const frame = Math.max(1, Math.floor((ev.clientX - rect.left) / gengaCellW()) + 1);
-      openSimpleContextMenu(ev, [
+      const frame = Math.max(1, Math.floor((clientX - rect.left) / gengaCellW()) + 1);
+      openSimpleContextMenu({ clientX: clientX, clientY: clientY }, [
         { label: 'イン点に設定 (In) — F' + frame, action: function() { setGengaMark('in', frame); } },
         { label: 'アウト点に設定 (Out) — F' + frame, action: function() { setGengaMark('out', frame); } },
         { separator: true },
         { label: 'イン/アウト クリア', action: function() { setGengaMark('clear'); } }
       ], { width: 210, height: 116 });
     }
+    function gengaRulerContextMenu(ev) { ev.preventDefault(); ev.stopPropagation(); gengaShowIoMenu(ev.clientX, ev.clientY); }
     // ---- layer opacity / blend (popover on the layer head's % button) -----------------------------------------
     function gengaLayerById(id) { const gt = state.project && state.project.gengaTimeline; return gt ? (gt.layers || []).find(function(x) { return String(x.id) === String(id); }) : null; }
     function setGengaLayerBlend(id, blend) {
@@ -41561,8 +41561,16 @@
       if (!content) return;
       const scrub = function(e) { const rect = content.getBoundingClientRect(); setGengaFrame(Math.floor((e.clientX - rect.left) / gengaCellW()) + 1); };
       scrub(ev);
-      const up = function() { document.removeEventListener('pointermove', scrub); document.removeEventListener('pointerup', up); };
-      document.addEventListener('pointermove', scrub);
+      // iPad has no right-click: a long-press (touch held still ~480ms) opens the In/Out menu at that frame.
+      const sx = ev.clientX, sy = ev.clientY; let lpFired = false, lpTimer = 0;
+      const cleanup = function() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = 0; } document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+      const move = function(e) {
+        if (lpTimer && (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8)) { clearTimeout(lpTimer); lpTimer = 0; }
+        if (!lpFired) scrub(e);
+      };
+      const up = function() { cleanup(); };
+      if (ev.pointerType === 'touch') lpTimer = setTimeout(function() { lpFired = true; cleanup(); gengaShowIoMenu(sx, sy); }, 480);
+      document.addEventListener('pointermove', move);
       document.addEventListener('pointerup', up);
     }
     function selectGengaLayer(id) {
@@ -42743,10 +42751,8 @@
           if (near(H.corners[i])) { gengaSelDrag = { mode: 'scale', startScale: sel.scale || 1, grabDist: Math.max(1, Math.hypot(p.x - C.x, p.y - C.y)) }; cap(); ev.preventDefault(); return; }
         }
         if (gengaSelPointInside(p.x, p.y)) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
-      } else if (sel && tool === 'lasso-select') {
-        // clicking inside the selection (bbox) → move it; clicking outside → start a new lasso below
-        if (gengaSelPointInside(p.x, p.y)) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
       }
+      // lasso-select is SELECT-ONLY (moving is the Transform tool's job, like conte) — no move-inside-selection here.
       // Add/Sub keep the current selection so the new lasso can combine with it; Replace (and other tools) commit first
       const combining = (tool === 'lasso-select' && (state.memoSelectionMode === 'add' || state.memoSelectionMode === 'sub'));
       if (gengaSel && !combining) gengaCommitSelection();
@@ -44162,52 +44168,6 @@
     refresh();
     bootProjectStartup();
 
-    // ---- GENGA dead-canvas DIAGNOSTIC (read-only; OFF unless the URL hash contains #gdiag; changes NO behavior) ----
-    // When the genga canvas "goes dead", open the page with #gdiag and touch the dead canvas: the overlay shows
-    //   • touch pd/up counts + onCanvas + topEl@last  → is the touch even reaching the canvas, or is something covering it?
-    //   • pointers / pinch / drawSess / tool / layer  → which state is stuck (the thing blocking the draw)
-    //   • "=> reason"                                  → the exact branch that would block gengaDrawStart
-    // Screenshot it in the dead state and we'll know the real cause (no more guessing). Remove this block after.
-    (function gengaDeadCanvasDiag() {
-      try {
-        if (String(location.hash || '').toLowerCase().indexOf('gdiag') < 0) return;
-        const dbg = { pd: 0, up: 0, cancel: 0, lastPD: '-', lastUp: '-', x: 0, y: 0, onCanvas: '-' };
-        const cvEl = function() { return document.getElementById('gengaPreviewCanvas'); };
-        window.addEventListener('pointerdown', function(e) {
-          dbg.pd++; dbg.x = e.clientX; dbg.y = e.clientY;
-          dbg.onCanvas = (e.target === cvEl()) ? 'YES' : ('NO(' + ((e.target && e.target.tagName) || '?') + ')');
-          dbg.lastPD = e.pointerType + '#' + e.pointerId + (e.isPrimary ? 'P' : '');
-        }, true);
-        window.addEventListener('pointerup', function(e) { dbg.up++; dbg.lastUp = 'up#' + e.pointerId; }, true);
-        window.addEventListener('pointercancel', function(e) { dbg.cancel++; dbg.lastUp = 'CANCEL#' + e.pointerId; }, true);
-        const box = document.createElement('div');
-        box.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:2147483647;background:rgba(0,0,0,.86);color:#19ff5b;font:11px/1.35 ui-monospace,monospace;padding:7px 9px;border-radius:6px;white-space:pre;pointer-events:none;max-width:82vw';
-        document.body.appendChild(box);
-        const ids = function(m) { try { return Array.from(m.keys()).join(','); } catch (e) { return '?'; } };
-        setInterval(function() {
-          const gl = (typeof gengaSelectedLayer === 'function') ? gengaSelectedLayer() : null;
-          const kind = (state.project && state.project.kind) || '-';
-          let reason;
-          if (kind !== 'genga') reason = '(not genga)';
-          else if (gengaPinch) reason = 'BLOCK: gengaPinch stuck';
-          else if (gengaPointers.size >= 2) reason = 'BLOCK: pointers>=2 (ghost)';
-          else if (!gl) reason = 'BLOCK: no layer';
-          else if (gl.locked) reason = 'BLOCK: layer locked';
-          else if (state.memoEditTool) reason = 'TOOL=' + state.memoEditTool + ' (not pen)';
-          else reason = 'PEN draw OK';
-          const top = (dbg.x || dbg.y) ? document.elementFromPoint(dbg.x, dbg.y) : null;
-          const topDesc = top ? (top.tagName + (top.id ? '#' + top.id : '') + (top.className && String(top.className).split ? '.' + String(top.className).split(' ')[0] : '')) : '-';
-          box.textContent =
-            'GENGA DIAG ver' + (typeof APP_DISPLAY_VERSION !== 'undefined' ? APP_DISPLAY_VERSION : '?') + '  kind:' + kind + '\n' +
-            'touch pd:' + dbg.pd + ' up:' + dbg.up + ' cancel:' + dbg.cancel + '  last:' + dbg.lastPD + '/' + dbg.lastUp + '\n' +
-            'onCanvas:' + dbg.onCanvas + '  topEl@touch:' + topDesc + '\n' +
-            'pointers:' + gengaPointers.size + '[' + ids(gengaPointers) + ']  pinch:' + (!!gengaPinch) + '  drawSess:' + (!!gengaDrawSession) + '\n' +
-            'flip:' + (!!gengaFlipTouch) + ' pan:' + (!!gengaPanDrag) + ' sel:' + (!!gengaSelDrag) + ' lasso:' + (!!gengaLasso) + ' cam:' + (!!gengaCamDrag) + '\n' +
-            'tool:' + (state.memoEditTool || '(pen)') + '  layer:' + (gl ? (gl.locked ? 'LOCKED' : 'ok') : 'none') + '\n' +
-            '=> ' + reason;
-        }, 200);
-      } catch (e) { /* diagnostics must never break the app */ }
-    })();
   </script>
 </body>
 </html>
