@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver305</title>
+  <title>Conte Editor Prototype ver306</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver305</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver306</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7728,7 +7728,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '305';
+    const APP_DISPLAY_VERSION = '306';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41921,33 +41921,18 @@
       }
       if (gengaSel && gengaSel.frame === frame) {
         const tool = state.memoEditTool;
-        if (gengaSel.quad && tool === 'perspective') {
-          // actual selection SHAPE (lasso outline warped through the quad), under the quad/handles — like transform
-          if (gengaSel.poly && gengaSel.poly.length > 2) {
-            const b = gengaSel.bounds;
-            const wp = gengaSel.poly.map(function(pt) { const u = Math.max(0, Math.min(1, (pt[0] - b.x) / Math.max(1, b.w))), v = Math.max(0, Math.min(1, (pt[1] - b.y) / Math.max(1, b.h))); const dq = gengaQuadBilinear(gengaSel.quad, u, v); return S(dq.x, dq.y); });
-            gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(wp[0].x, wp[0].y); for (let i = 1; i < wp.length; i++) ctx.lineTo(wp[i].x, wp[i].y); ctx.closePath(); }, '#1f66d1', [6, 4]);
-          }
+        gengaDrawSelEdge(ctx, gengaSel, S); // the ACTUAL selection shape (marching ants), unified for every tool
+        if (tool === 'perspective' && gengaSel.quad) {
           const q = gengaSel.quad.map(function(pt) { return S(pt[0], pt[1]); });
           gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[1].x, q[1].y); ctx.lineTo(q[2].x, q[2].y); ctx.lineTo(q[3].x, q[3].y); ctx.closePath(); }, '#d06a1f', [5, 3]);
           q.forEach(function(pt) { gengaOverlayHandle(ctx, pt.x, pt.y); });
         } else if (tool === 'transform') {
-          // keep the ACTUAL selection shape (lasso outline, with the transform applied) visible — not just the
-          // bounding box — matching conte. Drawn under the bbox/handles.
-          if (gengaSel.poly && gengaSel.poly.length > 2) {
-            const sp = gengaSel.poly.map(function(pt) { const t = gengaSelT(gengaSel, pt[0], pt[1]); return S(t.x, t.y); });
-            gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(sp[0].x, sp[0].y); for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y); ctx.closePath(); }, '#1f66d1', [6, 4]);
-          }
           const H = gengaSelHandlesPaper(gengaSel, scale);
           const c = H.corners.map(function(pt) { return S(pt.x, pt.y); }), rot = S(H.rotate.x, H.rotate.y), tm = S(H.topMid.x, H.topMid.y);
           gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(c[0].x, c[0].y); ctx.lineTo(c[1].x, c[1].y); ctx.lineTo(c[2].x, c[2].y); ctx.lineTo(c[3].x, c[3].y); ctx.closePath(); }, '#7aa8e6', [3, 3]);
           ctx.save(); ctx.strokeStyle = '#1f66d1'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(tm.x, tm.y); ctx.lineTo(rot.x, rot.y); ctx.stroke(); ctx.restore();
           c.forEach(function(pt) { gengaOverlayHandle(ctx, pt.x, pt.y); });
           gengaOverlayHandle(ctx, rot.x, rot.y, '#e7f2ff');
-        } else if (gengaSel.poly && gengaSel.poly.length > 2) {
-          // lasso-select (and idle): show the actual lasso outline (transformed), no handles
-          const sp = gengaSel.poly.map(function(pt) { const t = gengaSelT(gengaSel, pt[0], pt[1]); return S(t.x, t.y); });
-          gengaOverlayStroke(ctx, function() { ctx.beginPath(); ctx.moveTo(sp[0].x, sp[0].y); for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y); ctx.closePath(); }, '#1f66d1', [6, 4]);
         }
       }
       // lasso-stamp preview: the captured stamp follows the cursor (semi-transparent + dashed bbox)
@@ -42181,26 +42166,50 @@
     let gengaPinch = null;     // two-finger pinch zoom+pan (iPad) — driven by gengaPointers via Pointer Events (not TouchEvents)
     let gengaLastStrokeCanvas = null; // { dataUrl, canvas } — last committed stroke, seeds the next stroke before its dataUrl decodes
     function gengaSelCenter0(sel) { return { x: sel.bounds.x + sel.bounds.w / 2, y: sel.bounds.y + sel.bounds.h / 2 }; }
-    // base (the hole) + patch transformed (translate tx/ty, rotate, scale about its original center) → a paper-res canvas
+    // UNIFIED transform applier for BOTH tools: draws a bounds-cropped source into ctx, transformed by the
+    // selection (perspective = quad warp; transform = affine tx/ty/scale/rot). Both crop to bounds first, so
+    // neither keeps anything outside the selection box (transform & perspective behave identically). meshN coarsens
+    // the warp while dragging for perf.
+    function gengaSelApplyTransform(ctx, sel, crop, cw, ch) {
+      const b = sel.bounds;
+      if (sel.quad) {
+        gengaWarpQuad(ctx, crop, cw, ch, sel.quad, gengaSelDrag ? 6 : 12);
+      } else {
+        const c0 = gengaSelCenter0(sel);
+        ctx.save();
+        ctx.translate(c0.x + (sel.tx || 0), c0.y + (sel.ty || 0));
+        ctx.rotate(sel.rot || 0); ctx.scale(sel.scale || 1, sel.scale || 1);
+        ctx.translate(-c0.x, -c0.y);
+        ctx.drawImage(crop, Math.round(b.x), Math.round(b.y), cw, ch);
+        ctx.restore();
+      }
+    }
+    // map a point in selection-local (paper) coords → its transformed paper point (quad bilinear or affine)
+    function gengaSelMapPoint(sel, x, y) {
+      if (sel.quad) { const b = sel.bounds; const u = Math.max(0, Math.min(1, (x - b.x) / Math.max(1, b.w))), v = Math.max(0, Math.min(1, (y - b.y) / Math.max(1, b.h))); return gengaQuadBilinear(sel.quad, u, v); }
+      return gengaSelT(sel, x, y);
+    }
+    // base (the hole) + the patch transformed = a paper-res composite canvas
     function gengaSelCompositeFrom(sel) {
       const pw = sel.base.width, ph = sel.base.height;
       const c = document.createElement('canvas'); c.width = pw; c.height = ph;
       const cc = c.getContext('2d');
       cc.drawImage(sel.base, 0, 0);
-      if (sel.quad) {
-        const crop = gengaSelPatchCrop(sel);
-        gengaWarpQuad(cc, crop.canvas, crop.w, crop.h, sel.quad, gengaSelDrag ? 6 : 12); // coarse mesh while dragging (perf), fine when idle/commit
-      } else {
-        const c0 = gengaSelCenter0(sel);
-        cc.save();
-        cc.translate(c0.x + (sel.tx || 0), c0.y + (sel.ty || 0));
-        cc.rotate(sel.rot || 0);
-        cc.scale(sel.scale || 1, sel.scale || 1);
-        cc.translate(-c0.x, -c0.y);
-        cc.drawImage(sel.patch, 0, 0);
-        cc.restore();
-      }
+      const crop = gengaSelPatchCrop(sel);
+      gengaSelApplyTransform(cc, sel, crop.canvas, crop.w, crop.h);
       return c;
+    }
+    // the selection MASK in its CURRENT (transformed) position — used to combine Add/Sub with a new lasso
+    function gengaSelCurrentMask(sel) {
+      if (!sel.mask) return null;
+      if (gengaSelIsPristine(sel)) return sel.mask;
+      const pw = sel.mask.width, ph = sel.mask.height, b = sel.bounds;
+      const cw = Math.max(1, Math.round(b.w)), ch = Math.max(1, Math.round(b.h));
+      const crop = document.createElement('canvas'); crop.width = cw; crop.height = ch;
+      crop.getContext('2d').drawImage(sel.mask, Math.round(b.x), Math.round(b.y), cw, ch, 0, 0, cw, ch);
+      const m = document.createElement('canvas'); m.width = pw; m.height = ph;
+      gengaSelApplyTransform(m.getContext('2d'), sel, crop, cw, ch);
+      return m;
     }
     // forward transform: a local paper point → its transformed paper point
     function gengaSelT(sel, px, py) {
@@ -42285,6 +42294,18 @@
       const s = 8; ctx.save(); ctx.fillStyle = fill || '#fff'; ctx.strokeStyle = '#1f66d1'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.rect(x - s / 2, y - s / 2, s, s); ctx.fill(); ctx.stroke(); ctx.restore();
     }
+    // the ACTUAL selection shape as marching ants — plot the precomputed mask-edge points, transformed live by the
+    // current selection (affine OR quad). Shared by all tools (transform/perspective/lasso) so the outline is the
+    // real region, never a bounding rectangle. S = paper→screen mapper.
+    function gengaDrawSelEdge(ctx, sel, S) {
+      const edge = sel.edge; if (!edge || !edge.length) return;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      for (let i = 0; i < edge.length; i++) { const m = gengaSelMapPoint(sel, edge[i][0], edge[i][1]), s = S(m.x, m.y); ctx.fillRect(s.x - 1.6, s.y - 1.6, 3.2, 3.2); }
+      ctx.fillStyle = '#1f66d1';
+      for (let i = 0; i < edge.length; i++) { const e = edge[i]; if (((e[0] + e[1]) % 10) >= 6) continue; const m = gengaSelMapPoint(sel, e[0], e[1]), s = S(m.x, m.y); ctx.fillRect(s.x - 1, s.y - 1, 2, 2); }
+      ctx.restore();
+    }
     // bake the floating selection back into the layer drawing.
     function gengaCommitSelection() {
       if (!gengaSel) return;
@@ -42300,16 +42321,14 @@
     function gengaResetSelTransform() { if (!gengaSel) return; gengaSel.tx = 0; gengaSel.ty = 0; gengaSel.scale = 1; gengaSel.rot = 0; gengaSel.quad = null; gengaSel.patchCrop = null; drawGengaPreview(); }
     function gengaResetSelQuad() { if (!gengaSel) return; gengaSel.quad = null; gengaSel.patchCrop = null; gengaEnsureQuad(gengaSel); drawGengaPreview(); }
     function gengaInvertSelection() {
-      if (!gengaSel || !gengaSelIsPristine(gengaSel) || !gengaSel.poly) return; // invert only an un-moved lasso selection
+      if (!gengaSel || !gengaSelIsPristine(gengaSel) || !gengaSel.mask) return; // invert only an un-moved selection
       const layer = gengaLayerById(gengaSel.layerId); if (!layer) return;
-      const frame = gengaSel.frame, oldPoly = gengaSel.poly.slice();
-      const wk = gengaWorkingCanvasFor(layer, frame); if (!wk.hasContent) return; // composite = the un-moved drawing
-      const pw = wk.pw, ph = wk.ph;
+      const frame = gengaSel.frame, src = gengaSel.mask, pw = src.width, ph = src.height;
       const inv = document.createElement('canvas'); inv.width = pw; inv.height = ph; const ix = inv.getContext('2d');
       ix.fillStyle = '#fff'; ix.fillRect(0, 0, pw, ph);
-      ix.globalCompositeOperation = 'destination-out'; ix.drawImage(gengaPolyMask(pw, ph, oldPoly), 0, 0); ix.globalCompositeOperation = 'source-over';
+      ix.globalCompositeOperation = 'destination-out'; ix.drawImage(src, 0, 0); ix.globalCompositeOperation = 'source-over'; // full − selection
       gengaSel = null; // drop current so gengaWorkingCanvasFor in lift returns the plain drawing
-      gengaLiftFromMask(layer, frame, inv, null);
+      gengaLiftFromMask(layer, frame, inv);
       drawGengaPreview(); drawGengaLayerThumbs();
     }
     function gengaStampInPlace() {
@@ -42646,20 +42665,30 @@
       return m;
     }
     function gengaSelIsPristine(sel) { return !!sel && !sel.quad && !sel.tx && !sel.ty && (sel.scale == null || sel.scale === 1) && !sel.rot; }
-    // lift the layer@frame drawing through `mask` (white = selected) into a floating gengaSel; bbox from selected ink.
-    function gengaLiftFromMask(layer, frame, mask, outlinePts) {
+    // sample a mask canvas → { bounds: bbox of the selected REGION, edge: sparse boundary points for marching-ants }
+    function gengaSampleMaskEdge(mask) {
+      const w = mask.width, h = mask.height; let data;
+      try { data = mask.getContext('2d').getImageData(0, 0, w, h).data; } catch (e) { return { bounds: null, edge: [] }; }
+      const A = function(x, y) { return (x < 0 || y < 0 || x >= w || y >= h) ? 0 : data[(y * w + x) * 4 + 3]; };
+      let minx = w, miny = h, maxx = -1, maxy = -1; const edge = [];
+      for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) {
+        if (!A(x, y)) continue;
+        if (x < minx) minx = x; if (y < miny) miny = y; if (x > maxx) maxx = x; if (y > maxy) maxy = y;
+        if ((!A(x - 1, y) || !A(x + 1, y) || !A(x, y - 1) || !A(x, y + 1)) && ((x + y) % 3 === 0)) edge.push([x, y]); // sparse boundary
+      } }
+      return { bounds: (maxx >= minx ? { x: minx, y: miny, w: (maxx - minx + 1) || 1, h: (maxy - miny + 1) || 1 } : null), edge: edge };
+    }
+    // lift the layer@frame drawing through `mask` (white = selected) into a floating gengaSel. bounds = the mask
+    // REGION bbox (so the transform/perspective box always contains the selection); edge = the mask outline.
+    function gengaLiftFromMask(layer, frame, mask) {
       const wk = gengaWorkingCanvasFor(layer, frame); if (!wk.hasContent) return false;
       const pw = wk.pw, ph = wk.ph;
+      const samp = gengaSampleMaskEdge(mask); if (!samp.bounds) return false;
       const patch = document.createElement('canvas'); patch.width = pw; patch.height = ph; const px = patch.getContext('2d');
       px.drawImage(wk.cv, 0, 0); px.globalCompositeOperation = 'destination-in'; px.drawImage(mask, 0, 0); px.globalCompositeOperation = 'source-over';
       const base = document.createElement('canvas'); base.width = pw; base.height = ph; const bx = base.getContext('2d');
       bx.drawImage(wk.cv, 0, 0); bx.globalCompositeOperation = 'destination-out'; bx.drawImage(mask, 0, 0); bx.globalCompositeOperation = 'source-over';
-      const id = px.getImageData(0, 0, pw, ph).data;
-      let minx = pw, miny = ph, maxx = 0, maxy = 0, found = false;
-      for (let y = 0; y < ph; y++) { const row = y * pw; for (let x = 0; x < pw; x++) { if (id[(row + x) * 4 + 3] > 8) { found = true; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; } } }
-      if (!found || maxx - minx < 1 || maxy - miny < 1) return false;
-      gengaSel = { layerId: layer.id, frame: frame, base: base, patch: patch, bounds: { x: minx, y: miny, w: (maxx - minx) || 1, h: (maxy - miny) || 1 }, tx: 0, ty: 0, scale: 1, rot: 0,
-        poly: (outlinePts && outlinePts.length > 2 ? outlinePts : [[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]]).map(function(p) { return [p[0], p[1]]; }) };
+      gengaSel = { layerId: layer.id, frame: frame, mask: mask, base: base, patch: patch, bounds: samp.bounds, edge: samp.edge, tx: 0, ty: 0, scale: 1, rot: 0 };
       return true;
     }
     function gengaLiftSelection(layer, frame, pts) {
@@ -42667,33 +42696,24 @@
       const wk = gengaWorkingCanvasFor(layer, frame); if (!wk.hasContent) return false;
       const pw = wk.pw, ph = wk.ph;
       const mode = String(state.memoSelectionMode || 'replace');
-      let mask = gengaPolyMask(pw, ph, pts), outline = pts;
-      // Replace/Add/Sub: combine with the CURRENT (un-moved) selection on the same layer/frame
-      if ((mode === 'add' || mode === 'sub') && gengaSel && String(gengaSel.layerId) === String(layer.id) && gengaSel.frame === frame && gengaSelIsPristine(gengaSel) && gengaSel.poly) {
+      let mask = gengaPolyMask(pw, ph, pts);
+      // Add/Sub: combine the new lasso with the CURRENT selection's mask (in its current transformed position)
+      if ((mode === 'add' || mode === 'sub') && gengaSel && String(gengaSel.layerId) === String(layer.id) && gengaSel.frame === frame && gengaSel.mask) {
+        const cur = gengaSelCurrentMask(gengaSel);
         const comb = document.createElement('canvas'); comb.width = pw; comb.height = ph; const cx = comb.getContext('2d');
-        cx.drawImage(gengaPolyMask(pw, ph, gengaSel.poly), 0, 0);
-        cx.globalCompositeOperation = (mode === 'add') ? 'source-over' : 'destination-out';
-        cx.drawImage(mask, 0, 0); cx.globalCompositeOperation = 'source-over';
-        mask = comb; outline = null; // combined region isn't a simple polygon → bbox outline (patch pixels stay exact)
+        cx.drawImage(cur, 0, 0); cx.globalCompositeOperation = (mode === 'add') ? 'source-over' : 'destination-out'; cx.drawImage(mask, 0, 0);
+        mask = comb;
       }
-      return gengaLiftFromMask(layer, frame, mask, outline);
+      return gengaLiftFromMask(layer, frame, mask);
     }
-    // transform tool with no selection grabs the whole drawing (ink bbox) as the patch (base = empty).
+    // transform/perspective with NO selection grabs the whole drawing: mask = the drawing's own ink → bounds = ink
+    // bbox, edge = ink outline. (Same lift path as a lasso, so behavior is uniform.)
     function gengaSelectAll(layer, frame) {
       const wk = gengaWorkingCanvasFor(layer, frame);
       if (!wk.hasContent) return false;
-      const pw = wk.pw, ph = wk.ph;
-      const id = wk.ctx.getImageData(0, 0, pw, ph).data;
-      let minx = pw, miny = ph, maxx = 0, maxy = 0, found = false;
-      for (let y = 0; y < ph; y++) {
-        const row = y * pw;
-        for (let x = 0; x < pw; x++) { if (id[(row + x) * 4 + 3] > 8) { found = true; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; } }
-      }
-      if (!found) return false;
-      const patch = document.createElement('canvas'); patch.width = pw; patch.height = ph; patch.getContext('2d').drawImage(wk.cv, 0, 0);
-      const base = document.createElement('canvas'); base.width = pw; base.height = ph;
-      gengaSel = { layerId: layer.id, frame: frame, base: base, patch: patch, bounds: { x: minx, y: miny, w: (maxx - minx) || 1, h: (maxy - miny) || 1 }, tx: 0, ty: 0, scale: 1, rot: 0, poly: [[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]] };
-      return true;
+      const mask = document.createElement('canvas'); mask.width = wk.pw; mask.height = wk.ph;
+      mask.getContext('2d').drawImage(wk.cv, 0, 0); // the ink's own alpha is the mask
+      return gengaLiftFromMask(layer, frame, mask);
     }
     function gengaSelPointInside(px, py) {
       if (!gengaSel) return false;
@@ -42724,13 +42744,12 @@
         }
         if (gengaSelPointInside(p.x, p.y)) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
       } else if (sel && tool === 'lasso-select') {
-        // lasso-select = move only; hit-test the actual (transformed) lasso shape, fallback to bbox
-        const hit = (sel.poly && sel.poly.length > 2)
-          ? gengaPointInPoly(p.x, p.y, sel.poly.map(function(q) { const t = gengaSelT(sel, q[0], q[1]); return [t.x, t.y]; }))
-          : gengaSelPointInside(p.x, p.y);
-        if (hit) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
+        // clicking inside the selection (bbox) → move it; clicking outside → start a new lasso below
+        if (gengaSelPointInside(p.x, p.y)) { gengaSelDrag = { mode: 'move', startX: p.x, startY: p.y, baseTx: sel.tx || 0, baseTy: sel.ty || 0 }; cap(); ev.preventDefault(); return; }
       }
-      if (gengaSel) gengaCommitSelection();
+      // Add/Sub keep the current selection so the new lasso can combine with it; Replace (and other tools) commit first
+      const combining = (tool === 'lasso-select' && (state.memoSelectionMode === 'add' || state.memoSelectionMode === 'sub'));
+      if (gengaSel && !combining) gengaCommitSelection();
       if (tool === 'lasso-select') { gengaLasso = { pts: [[p.x, p.y]] }; cap(); }
       ev.preventDefault();
     }
