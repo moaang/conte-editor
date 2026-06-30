@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver291</title>
+  <title>Conte Editor Prototype ver292</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7282,7 +7282,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver291</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver292</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7709,7 +7709,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '291';
+    const APP_DISPLAY_VERSION = '292';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -38810,15 +38810,17 @@
       if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); gengaSel = null; gengaSelDrag = null; gengaLasso = null; drawGengaPreview(); drawGengaLayerThumbs(); return true; }
       return false;
     }
-    // Delete key in genga → delete the selected LAYER (undoable). (Instance/koma delete via key is pending a
-    // selection-model decision; for now koma delete is via its right-click menu.)
+    // Delete key in genga (user choice: playhead-based) → delete the koma at (selected layer, current frame);
+    // if there's no koma there, do NOTHING (do not delete the layer). Layer delete = its right-click menu / ×.
     function handleGengaDeleteKey(event) {
       if (!(state.project && state.project.kind === 'genga')) return false;
       if (isTypingTarget(event.target) || gengaSel) return false;
       if (!isDeleteKeyEvent(event)) return false;
-      const id = state.gengaSelectedLayerId; if (!id) return false;
+      const id = state.gengaSelectedLayerId; const layer = gengaLayerById(id); if (!layer) return false;
+      const koma = gengaExposureAt(layer, gengaCurrentFrame());
+      if (!koma) return false; // no koma at the playhead → do nothing (do NOT delete the layer)
       event.preventDefault(); event.stopImmediatePropagation();
-      deleteGengaLayer(id);
+      deleteGengaExposure(id, koma.id);
       return true;
     }
     function handleMemoKeydown(event) {
