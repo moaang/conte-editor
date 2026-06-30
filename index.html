@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver285</title>
+  <title>Conte Editor Prototype ver286</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver285</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver286</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7683,7 +7683,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '285';
+    const APP_DISPLAY_VERSION = '286';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -30987,7 +30987,8 @@
     async function saveProjectToIndexedDbAutosave() {
       if (!indexedDbAutosaveEnabled(state.project)) return false;
       const id = ensureCurrentProjectId();
-      const payload = serializedProjectJson();
+      // autosave keeps genga drawings as refs (light); the base64 is already in IndexedDB under 'gd:<ref>'
+      const payload = serializedProjectJson({ portable: false });
       const savedAt = new Date().toISOString();
       const title = String(state.project && state.project.title || '');
       await putWorkspaceDbValue(indexedDbProjectPayloadKey(id), payload);
@@ -31836,7 +31837,8 @@
       return stats;
     }
 
-    function projectForJsonStorage() {
+    function projectForJsonStorage(opts) {
+      opts = opts || {};
       const copy = fastClone(state.project);
       copy.schemaVersion = PROJECT_FORMAT_VERSION;
       copy.settings = copy.settings || {};
@@ -31871,6 +31873,9 @@
         });
       }
       compactWaveformPeaksInPlace(copy);
+      // genga drawings are stored as {ref}; inline them (base64 from the store) for PORTABLE files/exports (default).
+      // Autosave passes {portable:false} → keep refs (light JSON; the base64 stays in IndexedDB under 'gd:<ref>').
+      if (copy.gengaTimeline && opts.portable !== false) gengaInlineDrawings(copy.gengaTimeline);
       return copy;
     }
 
@@ -31887,11 +31892,11 @@
       }
     }
 
-    function serializedProjectJson() {
+    function serializedProjectJson(opts) {
       // Compact (no indentation): roughly halves the file/IndexedDB size and speeds up every
       // save / autosave / unsaved-changes comparison. The file is never hand-edited, so readability
       // is not a concern; JSON.parse loads compact and pretty-printed files identically.
-      return JSON.stringify(projectForJsonStorage());
+      return JSON.stringify(projectForJsonStorage(opts));
     }
 
     // A single self-contained JSON (media inlined as base64) overflows JSON.stringify's ~512MB string limit on
@@ -40553,10 +40558,8 @@
       const out = {};
       if (raw && typeof raw === 'object') {
         Object.keys(raw).forEach(function(k) {
-          const d = raw[k];
-          if (d && typeof d === 'object' && typeof d.dataUrl === 'string' && d.dataUrl) {
-            out[String(k)] = { dataUrl: d.dataUrl, w: Math.max(1, Math.round(Number(d.w) || 1)), h: Math.max(1, Math.round(Number(d.h) || 1)) };
-          }
+          const d = gengaIngestDrawing(raw[k]); // accepts legacy {dataUrl} or {ref} → {ref,w,h}
+          if (d) out[String(k)] = d;
         });
       }
       return out;
@@ -40567,21 +40570,71 @@
       (layer.exposures || []).forEach(function(e) { const k = gengaValueKey(e.instanceValue); if (k !== null) used[k] = true; });
       Object.keys(layer.sharedDrawings).forEach(function(k) { if (!used[k]) delete layer.sharedDrawings[k]; });
     }
+    // ---- genga drawing storage: base64 lives OUT of the project (lighter undo clones + IndexedDB) ------------
+    // The project holds only {ref,w,h}; the base64 dataUrl lives in gengaDrawStore (in-memory Map) and is
+    // persisted to WORKSPACE_DB under key 'gd:<ref>'. snapshotProject (=fastClone, per-edit undo hot path) is
+    // therefore light. Serialization inlines refs for portable files (default) and strips to refs for autosave.
+    let gengaDrawStore = new Map();
+    let gengaDrawRefSeq = 0;
+    function gengaDrawingUrl(d) { return d ? (d.ref ? (gengaDrawStore.get(d.ref) || null) : (typeof d.dataUrl === 'string' ? (d.dataUrl || null) : null)) : null; }
+    function gengaPutDrawingData(dataUrl, w, h) {
+      const ref = 'gd_' + Date.now().toString(36) + '_' + (gengaDrawRefSeq++).toString(36);
+      gengaDrawStore.set(ref, String(dataUrl || ''));
+      try { putWorkspaceDbValue('gd:' + ref, String(dataUrl || '')); } catch (e) {}
+      return { ref: ref, w: Math.max(1, Math.round(Number(w) || 1)), h: Math.max(1, Math.round(Number(h) || 1)) };
+    }
+    // canonicalize a drawing object (legacy {dataUrl,w,h} or already {ref,w,h}) → {ref,w,h}; null-safe.
+    function gengaIngestDrawing(d) {
+      if (!d || typeof d !== 'object') return null;
+      if (d.ref) { if (!gengaDrawStore.has(d.ref) && typeof d.dataUrl === 'string' && d.dataUrl) gengaDrawStore.set(d.ref, d.dataUrl); return { ref: String(d.ref), w: Math.max(1, Math.round(Number(d.w) || 1)), h: Math.max(1, Math.round(Number(d.h) || 1)) }; }
+      if (typeof d.dataUrl === 'string' && d.dataUrl) return gengaPutDrawingData(d.dataUrl, d.w, d.h);
+      return null;
+    }
+    // read accessor result: augment a stored drawing with its resolved dataUrl so EVERY reader keeps seeing .dataUrl.
+    function gengaResolveDrawing(d) {
+      if (!d) return null;
+      const u = gengaDrawingUrl(d);
+      if (u) return { ref: d.ref, w: d.w, h: d.h, dataUrl: u };
+      return (typeof d.dataUrl === 'string' && d.dataUrl) ? d : null;
+    }
+    // pull any {ref} drawings whose base64 isn't in memory yet from IndexedDB, then re-render (load/restore).
+    async function gengaHydrateDrawStore(project) {
+      const gt = project && project.gengaTimeline; if (!gt) return;
+      const refs = new Set();
+      (gt.layers || []).forEach(function(l) {
+        (l.exposures || []).forEach(function(e) { if (e.drawing && e.drawing.ref && !gengaDrawStore.has(e.drawing.ref)) refs.add(e.drawing.ref); });
+        if (l.sharedDrawings) Object.keys(l.sharedDrawings).forEach(function(k) { const d = l.sharedDrawings[k]; if (d && d.ref && !gengaDrawStore.has(d.ref)) refs.add(d.ref); });
+      });
+      if (!refs.size) return;
+      let loaded = 0;
+      for (const ref of refs) { try { const v = await getWorkspaceDbValue('gd:' + ref); if (v) { gengaDrawStore.set(ref, String(v)); loaded++; } } catch (e) {} }
+      if (loaded && state.project && state.project.kind === 'genga') { drawGengaPreview(); drawGengaLayerThumbs(); }
+    }
+    // inline {ref}→{dataUrl} (from the store) for PORTABLE serialization (file save / export). Operates on a clone.
+    function gengaInlineDrawings(gt) {
+      if (!gt) return;
+      const inl = function(d) { if (d && d.ref) { const u = gengaDrawStore.get(d.ref); if (u) return { dataUrl: u, w: d.w, h: d.h }; } return d; };
+      (gt.layers || []).forEach(function(l) {
+        (l.exposures || []).forEach(function(e) { if (e.drawing) e.drawing = inl(e.drawing); });
+        if (l.sharedDrawings) Object.keys(l.sharedDrawings).forEach(function(k) { l.sharedDrawings[k] = inl(l.sharedDrawings[k]); });
+      });
+    }
     function gengaExposureDrawing(layer, exp) {
       if (!exp) return null;
       const key = gengaValueKey(exp.instanceValue);
-      if (key !== null) { const sd = layer && layer.sharedDrawings; return (sd && sd[key]) ? sd[key] : null; }
-      return exp.drawing || null;
+      const stored = (key !== null) ? ((layer && layer.sharedDrawings) ? layer.sharedDrawings[key] : null) : exp.drawing;
+      return gengaResolveDrawing(stored);
     }
     function gengaSetExposureDrawing(layer, exp, drawing) {
       if (!exp) return;
+      const d = drawing ? gengaIngestDrawing(drawing) : null; // externalize base64 → {ref,w,h}
       const key = gengaValueKey(exp.instanceValue);
       if (key !== null) {
         if (!layer.sharedDrawings) layer.sharedDrawings = {};
-        layer.sharedDrawings[key] = drawing;
+        layer.sharedDrawings[key] = d;
         exp.drawing = null;
       } else {
-        exp.drawing = drawing;
+        exp.drawing = d;
       }
     }
     // assign / relink / unlink an instance value. choice ('mine'|'theirs') resolves a same-value drawing
@@ -40598,7 +40651,7 @@
       if (newKey === null) {
         // unlink → keep a private copy so the exposure still shows its art independently
         exp.instanceValue = null;
-        exp.drawing = mine ? { dataUrl: mine.dataUrl, w: mine.w, h: mine.h } : null;
+        exp.drawing = mine ? gengaIngestDrawing(mine) : null;
       } else {
         const theirs = layer.sharedDrawings[newKey] || null;
         let winner;
@@ -40606,7 +40659,7 @@
         else winner = mine || theirs || null;
         exp.instanceValue = newKey;
         exp.drawing = null;
-        if (winner) layer.sharedDrawings[newKey] = { dataUrl: winner.dataUrl, w: winner.w, h: winner.h };
+        if (winner) layer.sharedDrawings[newKey] = gengaIngestDrawing(winner);
       }
       gengaGcSharedDrawings(layer);
     }
@@ -40653,7 +40706,7 @@
         startFrame: Math.max(1, Math.round(Number(exp.startFrame) || 1)),
         holdFrames: Math.max(1, Math.round(Number(exp.holdFrames) || 1)),
         instanceValue: (exp.instanceValue === undefined || exp.instanceValue === '') ? null : exp.instanceValue,
-        drawing: exp.drawing && typeof exp.drawing === 'object' ? exp.drawing : null
+        drawing: gengaIngestDrawing(exp.drawing) // externalize legacy inline base64 → {ref,w,h} on load
       };
     }
     function normalizeGengaLayer(layer) {
@@ -40676,8 +40729,8 @@
       // migrate legacy linked exposures (value set + own drawing, pre-pool) into the shared pool, then GC
       out.exposures.forEach(function(e) {
         const k = gengaValueKey(e.instanceValue);
-        if (k !== null && e.drawing && e.drawing.dataUrl) {
-          if (!out.sharedDrawings[k]) out.sharedDrawings[k] = { dataUrl: e.drawing.dataUrl, w: Math.max(1, Math.round(Number(e.drawing.w) || 1)), h: Math.max(1, Math.round(Number(e.drawing.h) || 1)) };
+        if (k !== null && e.drawing) {
+          if (!out.sharedDrawings[k]) out.sharedDrawings[k] = gengaIngestDrawing(e.drawing);
           e.drawing = null;
         }
       });
@@ -42267,7 +42320,7 @@
         const newKey = gengaValueKey(v);
         if (layer && expNow && newKey !== null && newKey !== gengaValueKey(expNow.instanceValue)) {
           const mine = gengaExposureDrawing(layer, expNow);
-          const theirs = layer.sharedDrawings ? layer.sharedDrawings[newKey] : null;
+          const theirs = gengaResolveDrawing(layer.sharedDrawings ? layer.sharedDrawings[newKey] : null);
           if (mine && mine.dataUrl && theirs && theirs.dataUrl) {
             showGengaMergeChoice(numEl, function(choice) {
               if (choice === null) { renderGengaView(); return; }
@@ -42310,7 +42363,7 @@
           startFrame: src.startFrame + src.holdFrames,
           holdFrames: src.holdFrames,
           instanceValue: null,
-          drawing: srcDr ? { dataUrl: srcDr.dataUrl, w: srcDr.w, h: srcDr.h } : null
+          drawing: srcDr ? gengaIngestDrawing(srcDr) : null
         });
       });
     }
@@ -42514,6 +42567,8 @@
       drawGengaPreview();
       drawGengaLayerThumbs();
       gengaSyncZoomHeader(); // shared-header label + camera-frame active state for this project
+      gengaHydrateDrawStore(state.project); // load any {ref} drawings missing from memory (autosave restore) → re-render
+
       const pv = stageEl.querySelector('#gengaPreviewCanvas');
       if (pv) {
         pv.addEventListener('pointerdown', gengaDrawStart);
