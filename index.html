@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver289</title>
+  <title>Conte Editor Prototype ver290</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -433,9 +433,8 @@
 
     .onion-opacity-rail input[type='range'] {
       width: 70px;
-      height: 18px;
+      height: 8px;
       transform: rotate(-90deg);
-      accent-color: #cfd2ce;
     }
 
     .onion-mode-group {
@@ -7122,7 +7121,7 @@
                 <div class="onion-skin-grid">
                   <button id="onionSkinPreviousToggle" class="onion-frame-toggle previous" type="button">前</button>
                   <div class="onion-opacity-rail">
-                    <input id="onionSkinOpacityRange" type="range" min="0" max="100" step="5" orient="vertical" />
+                    <input id="onionSkinOpacityRange" class="gauge-range" type="range" min="0" max="100" step="5" orient="vertical" />
                   </div>
                   <button id="onionSkinNextToggle" class="onion-frame-toggle next" type="button">後</button>
                 </div>
@@ -7283,7 +7282,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver289</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver290</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7399,11 +7398,12 @@
     .genga-lfx-pop { position: fixed; z-index: 200; background: #fff; border: 1px solid #b9b9ae; border-radius: 6px; box-shadow: 0 8px 22px rgba(0,0,0,0.18); padding: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
     .genga-lfx-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     .genga-lfx-val { min-width: 34px; text-align: right; color: #2f6fd1; font-variant-numeric: tabular-nums; }
-    /* exact-fill gauge slider (opacity popover + timeline zoom): track fills 0→100 precisely, no thumb-offset gap */
-    .genga-grange { -webkit-appearance: none; appearance: none; height: 7px; border-radius: 4px; outline: none; background: linear-gradient(to right, #2f6fd1 var(--p, 0%), #d6d6cd var(--p, 0%)); }
-    .genga-grange::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
-    .genga-grange::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
-    .genga-grange::-moz-range-track { background: transparent; }
+    /* exact-fill gauge slider (genga opacity/zoom + conte onion/timeline-zoom): track fills 0→100 precisely,
+       no native thumb-offset gap. Drive --p (0–100%) from the value; the gradient hard-stops at --p. */
+    .gauge-range, .genga-grange { -webkit-appearance: none; appearance: none; height: 7px; border-radius: 4px; outline: none; background: linear-gradient(to right, #2f6fd1 var(--p, 0%), #d6d6cd var(--p, 0%)); }
+    .gauge-range::-webkit-slider-thumb, .genga-grange::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
+    .gauge-range::-moz-range-thumb, .genga-grange::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
+    .gauge-range::-moz-range-track, .genga-grange::-moz-range-track { background: transparent; }
     .genga-lfx-op { width: 120px; }
     /* layer reorder: drag handle = name + thumb only; no text selection; blue insertion line shows the drop spot */
     .genga-layer-head { user-select: none; -webkit-user-select: none; }
@@ -7705,7 +7705,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '289';
+    const APP_DISPLAY_VERSION = '290';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16336,7 +16336,7 @@
               '<small class="voicevox-status">' + escapeHtml(voicevoxStats.label) + '</small>' +
               '<small class="timeline-status">' + escapeHtml(state.timelineStatus || '') + '</small>' +
             '</span>',
-            '<span class="timeline-zoom-control"><span id="timelineTimecode">' + framesToTimelinePositionInput(state.videoPlayheadFrames) + ' / ' + framesToTimeInput(totalFrames) + '</span><label>Zoom <span data-timeline-zoom-value>' + framePx + '</span><input id="timelineZoomRange" type="range" min="1" max="6" step="1" value="' + framePx + '"></label></span>',
+            '<span class="timeline-zoom-control"><span id="timelineTimecode">' + framesToTimelinePositionInput(state.videoPlayheadFrames) + ' / ' + framesToTimeInput(totalFrames) + '</span><label>Zoom <span data-timeline-zoom-value>' + framePx + '</span><input id="timelineZoomRange" class="gauge-range" type="range" min="1" max="6" step="1" value="' + framePx + '" style="--p:' + Math.round((framePx - 1) / 5 * 100) + '%"></label></span>',
           '</div>',
           timelineGroupCollapseButtonHtml('video'),
           timelineGroupCollapseButtonHtml('audio'),
@@ -42763,6 +42763,19 @@
       if (!Number.isFinite(number)) return fallback;
       return Math.min(max, Math.max(min, Math.round(number)));
     }
+    // exact-fill gauge sliders (.gauge-range / .genga-grange): set --p (0–100%) from value so the gradient fills
+    // precisely to the thumb with no native offset gap. Delegated input listener keeps it synced on drag.
+    function syncGaugeRange(el) {
+      if (!el) return;
+      const min = Number(el.min) || 0, max = Number(el.max), v = Number(el.value) || 0;
+      const hi = Number.isFinite(max) ? max : 100;
+      const p = hi > min ? ((v - min) / (hi - min) * 100) : 0;
+      el.style.setProperty('--p', Math.max(0, Math.min(100, p)) + '%');
+    }
+    document.addEventListener('input', function(e) {
+      const t = e.target;
+      if (t && t.classList && (t.classList.contains('gauge-range') || t.classList.contains('genga-grange'))) syncGaugeRange(t);
+    }, true);
 
     function clampFloat(value, min, max, fallback) {
       const number = Number(value);
@@ -43054,7 +43067,7 @@
       if (enabledToggle && document.activeElement !== enabledToggle) enabledToggle.checked = Boolean(settings.enabled);
       if (previousToggle) previousToggle.classList.toggle('active', Boolean(settings.previous));
       if (nextToggle) nextToggle.classList.toggle('active', Boolean(settings.next));
-      if (opacityRange && document.activeElement !== opacityRange) opacityRange.value = String(settings.opacity);
+      if (opacityRange && document.activeElement !== opacityRange) { opacityRange.value = String(settings.opacity); syncGaugeRange(opacityRange); }
       if (layerMode) { layerMode.classList.toggle('active', settings.mode !== 'panel'); layerMode.textContent = (state.project && state.project.kind === 'genga') ? 'レイヤー' : 'Layer row'; }
       if (panelMode) panelMode.classList.toggle('active', settings.mode === 'panel');
     }
