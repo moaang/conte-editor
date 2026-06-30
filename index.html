@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver283</title>
+  <title>Conte Editor Prototype ver284</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver283</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver284</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7682,7 +7682,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '283';
+    const APP_DISPLAY_VERSION = '284';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -38769,7 +38769,17 @@
       }
     }
 
+    // genga floating-selection (lasso-select / transform / perspective): Enter = commit (bake the transform),
+    // Esc = cancel (drop the selection → the exposure.drawing is untouched until commit, so this restores the original).
+    function handleGengaSelectionKey(event) {
+      if (!(state.project && state.project.kind === 'genga') || !gengaSel) return false;
+      if (isTypingTarget(event.target)) return false; // don't hijack the instance-value inline edit
+      if (event.key === 'Enter') { event.preventDefault(); event.stopImmediatePropagation(); gengaCommitSelection(); return true; }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); gengaSel = null; gengaSelDrag = null; gengaLasso = null; drawGengaPreview(); drawGengaLayerThumbs(); return true; }
+      return false;
+    }
     function handleMemoKeydown(event) {
+      if (handleGengaSelectionKey(event)) return;
       if (handleMemoSpacePanKeydown(event)) return;
       if (handleMemoTransformEnterKey(event)) return;
       if (handleConfiguredShortcut(event)) return;
