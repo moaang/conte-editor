@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver292</title>
+  <title>Conte Editor Prototype ver293</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -429,12 +429,6 @@
       align-items: center;
       justify-content: center;
       min-height: 70px;
-    }
-
-    .onion-opacity-rail input[type='range'] {
-      width: 70px;
-      height: 8px;
-      transform: rotate(-90deg);
     }
 
     .onion-mode-group {
@@ -7121,7 +7115,7 @@
                 <div class="onion-skin-grid">
                   <button id="onionSkinPreviousToggle" class="onion-frame-toggle previous" type="button">前</button>
                   <div class="onion-opacity-rail">
-                    <input id="onionSkinOpacityRange" class="gauge-range" type="range" min="0" max="100" step="5" orient="vertical" />
+                    <div id="onionSkinOpacityGauge" class="ggauge ggauge-v" data-gauge="onion" data-min="0" data-max="100" data-step="5" data-value="45" style="--p:45%;height:64px"><div class="ggauge-fill"></div><div class="ggauge-knob"></div></div>
                   </div>
                   <button id="onionSkinNextToggle" class="onion-frame-toggle next" type="button">後</button>
                 </div>
@@ -7282,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver292</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver293</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7400,14 +7394,14 @@
     .genga-lfx-val { min-width: 34px; text-align: right; color: #2f6fd1; font-variant-numeric: tabular-nums; }
     /* exact-fill gauge slider (genga opacity/zoom + conte onion/timeline-zoom): track fills 0→100 precisely,
        no native thumb-offset gap. Drive --p (0–100%) from the value; the gradient hard-stops at --p. */
-    .gauge-range, .genga-grange { -webkit-appearance: none; appearance: none; height: 7px; border-radius: 4px; outline: none; background: linear-gradient(to right, #2f6fd1 var(--p, 0%), #d6d6cd var(--p, 0%)); }
-    .gauge-range::-webkit-slider-thumb, .genga-grange::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
-    .gauge-range::-moz-range-thumb, .genga-grange::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
-    .gauge-range::-moz-range-track, .genga-grange::-moz-range-track { background: transparent; }
     /* custom gauge: knob centered EXACTLY at the fill end (--p), so circle always matches the fill */
-    .ggauge { position: relative; height: 14px; border-radius: 7px; background: #d6d6cd; cursor: pointer; touch-action: none; flex: none; }
-    .ggauge-fill { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); background: #2f6fd1; border-radius: 7px; pointer-events: none; }
-    .ggauge-knob { position: absolute; left: var(--p, 0%); top: 50%; width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%); border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; box-sizing: border-box; pointer-events: none; }
+    .ggauge { position: relative; height: 14px; border-radius: 7px; background: #c2c2b8; border: 1px solid rgba(0,0,0,0.22); box-sizing: border-box; cursor: pointer; touch-action: none; flex: none; }
+    .ggauge-fill { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); background: #2f6fd1; border-radius: 6px; pointer-events: none; }
+    .ggauge-knob { position: absolute; left: var(--p, 0%); top: 50%; width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%); border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; box-sizing: border-box; pointer-events: none; box-shadow: 0 0 2px rgba(0,0,0,0.35); }
+    /* vertical variant (e.g. onion opacity rail): fills from the bottom up */
+    .ggauge.ggauge-v { width: 14px; }
+    .ggauge-v .ggauge-fill { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: var(--p, 0%); }
+    .ggauge-v .ggauge-knob { left: 50%; top: auto; bottom: var(--p, 0%); margin-left: 0; margin-bottom: -7px; transform: translateX(-50%); }
     .genga-lfx-op { width: 120px; }
     /* layer reorder: drag handle = name + thumb only; no text selection; blue insertion line shows the drop spot */
     .genga-layer-head { user-select: none; -webkit-user-select: none; }
@@ -7426,8 +7420,7 @@
     .genga-timeline-wrap::-webkit-scrollbar-track { background: rgba(0,0,0,0.06); }
     .genga-timeline-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.32); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
     .genga-timeline-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.46); background-clip: padding-box; }
-    .genga-tl-zoom { display: inline-flex; align-items: center; gap: 4px; opacity: 0.7; font-size: 11px; }
-    .genga-tl-zoom input[type="range"] { width: 96px; }
+    .genga-tl-zoom { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
     .genga-ruler { position: relative; height: 24px; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; }
     .genga-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(0,0,0,0.07); }
     .genga-tick.major { border-left-color: rgba(0,0,0,0.22); }
@@ -7709,7 +7702,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '292';
+    const APP_DISPLAY_VERSION = '293';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -16340,7 +16333,7 @@
               '<small class="voicevox-status">' + escapeHtml(voicevoxStats.label) + '</small>' +
               '<small class="timeline-status">' + escapeHtml(state.timelineStatus || '') + '</small>' +
             '</span>',
-            '<span class="timeline-zoom-control"><span id="timelineTimecode">' + framesToTimelinePositionInput(state.videoPlayheadFrames) + ' / ' + framesToTimeInput(totalFrames) + '</span><label>Zoom <span data-timeline-zoom-value>' + framePx + '</span><input id="timelineZoomRange" class="gauge-range" type="range" min="1" max="6" step="1" value="' + framePx + '" style="--p:' + Math.round((framePx - 1) / 5 * 100) + '%"></label></span>',
+            '<span class="timeline-zoom-control"><span id="timelineTimecode">' + framesToTimelinePositionInput(state.videoPlayheadFrames) + ' / ' + framesToTimeInput(totalFrames) + '</span><label>Zoom <span data-timeline-zoom-value>' + framePx + '</span>' + gengaGaugeHtml('conte-zoom', 1, 6, 1, framePx, 'width:90px;height:12px') + '</label></span>',
           '</div>',
           timelineGroupCollapseButtonHtml('video'),
           timelineGroupCollapseButtonHtml('audio'),
@@ -21748,22 +21741,7 @@
         const anchorFrames = anchor && anchor.dataset ? Number(anchor.dataset.timelineTotalFrames) : 0;
         return Math.max(1, Math.round(anchorFrames || rootFrames || totalFrames || videoTimelineDisplayTotalFrames(state.project) || 1));
       };
-      const zoom = root.querySelector('#timelineZoomRange');
-      if (zoom) {
-        zoom.dataset.timelineTotalFrames = String(Math.max(1, Math.round(Number(totalFrames) || 1)));
-        zoom.addEventListener('input', function(event) {
-          state.timelineFramePx = clampNumber(event.target.value, 1, 6, 5);
-          const label = root.querySelector('[data-timeline-zoom-value]');
-          if (label) label.textContent = String(state.timelineFramePx);
-          applyTimelineZoomLive(root, runtimeTotalFrames(zoom));
-        });
-        zoom.addEventListener('change', function(event) {
-          state.timelineFramePx = clampNumber(event.target.value, 1, 6, 5);
-          applyTimelineZoomLive(root, runtimeTotalFrames(zoom));
-          saveEditorUiState();
-          renderTimingDashboard();
-        });
-      }
+      // timeline zoom = custom .ggauge (data-gauge="conte-zoom"); handled by the delegated gauge drag.
       const scrollEls = Array.from(root.querySelectorAll('.timeline-scroll'));
       state.timelineScrollEls = scrollEls;
       let syncing = false;
@@ -42787,25 +42765,12 @@
       if (!Number.isFinite(number)) return fallback;
       return Math.min(max, Math.max(min, Math.round(number)));
     }
-    // exact-fill gauge sliders (.gauge-range / .genga-grange): set --p (0–100%) from value so the gradient fills
-    // precisely to the thumb with no native offset gap. Delegated input listener keeps it synced on drag.
-    function syncGaugeRange(el) {
-      if (!el) return;
-      const min = Number(el.min) || 0, max = Number(el.max), v = Number(el.value) || 0;
-      const hi = Number.isFinite(max) ? max : 100;
-      const p = hi > min ? ((v - min) / (hi - min) * 100) : 0;
-      el.style.setProperty('--p', Math.max(0, Math.min(100, p)) + '%');
-    }
-    document.addEventListener('input', function(e) {
-      const t = e.target;
-      if (t && t.classList && (t.classList.contains('gauge-range') || t.classList.contains('genga-grange'))) syncGaugeRange(t);
-    }, true);
 
     // ---- custom gauge (.ggauge): knob sits EXACTLY at the fill end (no native thumb-offset); document-level drag
     // survives host re-renders (genga zoom rebuilds the timeline each step) → smooth continuous drag. ----
-    function gengaGaugeHtml(action, min, max, step, value, style) {
+    function gengaGaugeHtml(action, min, max, step, value, style, cls) {
       const p = (max > min) ? Math.max(0, Math.min(100, (value - min) / (max - min) * 100)) : 0;
-      return '<div class="ggauge" data-gauge="' + action + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-value="' + value + '" style="--p:' + p + '%' + (style ? (';' + style) : '') + '"><div class="ggauge-fill"></div><div class="ggauge-knob"></div></div>';
+      return '<div class="ggauge' + (cls ? ' ' + cls : '') + '" data-gauge="' + action + '" data-min="' + min + '" data-max="' + max + '" data-step="' + step + '" data-value="' + value + '" style="--p:' + p + '%' + (style ? (';' + style) : '') + '"><div class="ggauge-fill"></div><div class="ggauge-knob"></div></div>';
     }
     let gengaGaugeDrag = null;
     function gaugeValAt(g, e, rect) {
@@ -42821,6 +42786,14 @@
       if (a === 'genga-zoom') {
         if (gengaGaugeDrag && v === gengaGaugeDrag.applied) return; if (gengaGaugeDrag) gengaGaugeDrag.applied = v;
         state.gengaCellW = clampNumber(v, 8, 64, GENGA_BASE_CELL); renderGengaView(); gengaScrollPlayheadIntoView();
+      } else if (a === 'onion') {
+        mutateOnionSkinSettings(function(s) { s.opacity = clampNumber(v, 0, 100, 45); });
+      } else if (a === 'conte-zoom') {
+        state.timelineFramePx = clampNumber(v, 1, 6, 5);
+        let root = g; while (root && !(root.querySelector && root.querySelector('.timeline-inner'))) root = root.parentElement;
+        const tf = videoTimelineDisplayTotalFrames(state.project);
+        if (root) { const lbl = root.querySelector('[data-timeline-zoom-value]'); if (lbl) lbl.textContent = String(state.timelineFramePx); applyTimelineZoomLive(root, tf); }
+        if (phase === 'end') { saveEditorUiState(); renderTimingDashboard(); }
       } else if (a.indexOf('genga-op:') === 0) {
         const id = a.slice(9), cur = gengaLayerById(id); if (!cur) return;
         if (phase === 'end') { cur.opacity = gengaGaugeDrag ? gengaGaugeDrag.origOp : cur.opacity; setGengaLayerOpacity(id, v / 100); }
@@ -42840,7 +42813,7 @@
       document.addEventListener('pointerup', gaugePointerUp, true);
     }, true);
     function gaugePointerMove(e) { if (!gengaGaugeDrag) return; e.preventDefault(); const v = gaugeValAt(gengaGaugeDrag.g, e, gengaGaugeDrag.rect); gaugeSetP(gengaGaugeDrag.g, v); gaugeDispatch(gengaGaugeDrag.g, v, 'move'); }
-    function gaugePointerUp(e) { document.removeEventListener('pointermove', gaugePointerMove, true); document.removeEventListener('pointerup', gaugePointerUp, true); if (!gengaGaugeDrag) return; const v = gaugeValAt(gengaGaugeDrag.g, e, gengaGaugeDrag.rect); gaugeDispatch(gengaGaugeDrag.g, v, 'end'); gengaGaugeDrag = null; }
+    function gaugePointerUp(e) { document.removeEventListener('pointermove', gaugePointerMove, true); document.removeEventListener('pointerup', gaugePointerUp, true); if (!gengaGaugeDrag) return; const v = gaugeValAt(gengaGaugeDrag.g, e, gengaGaugeDrag.rect); gaugeSetP(gengaGaugeDrag.g, v); gaugeDispatch(gengaGaugeDrag.g, v, 'end'); gengaGaugeDrag = null; }
 
     function clampFloat(value, min, max, fallback) {
       const number = Number(value);
@@ -43118,7 +43091,7 @@
       const enabledToggle = document.getElementById('onionSkinEnabledToggle');
       const previousToggle = document.getElementById('onionSkinPreviousToggle');
       const nextToggle = document.getElementById('onionSkinNextToggle');
-      const opacityRange = document.getElementById('onionSkinOpacityRange');
+      const opacityGauge = document.getElementById('onionSkinOpacityGauge');
       const layerMode = document.getElementById('onionSkinModeLayerBtn');
       const panelMode = document.getElementById('onionSkinModePanelBtn');
       if (button) {
@@ -43132,7 +43105,7 @@
       if (enabledToggle && document.activeElement !== enabledToggle) enabledToggle.checked = Boolean(settings.enabled);
       if (previousToggle) previousToggle.classList.toggle('active', Boolean(settings.previous));
       if (nextToggle) nextToggle.classList.toggle('active', Boolean(settings.next));
-      if (opacityRange && document.activeElement !== opacityRange) { opacityRange.value = String(settings.opacity); syncGaugeRange(opacityRange); }
+      if (opacityGauge && !(gengaGaugeDrag && gengaGaugeDrag.g === opacityGauge)) { gaugeSetP(opacityGauge, clampNumber(settings.opacity, 0, 100, 45)); }
       if (layerMode) { layerMode.classList.toggle('active', settings.mode !== 'panel'); layerMode.textContent = (state.project && state.project.kind === 'genga') ? 'レイヤー' : 'Layer row'; }
       if (panelMode) panelMode.classList.toggle('active', settings.mode === 'panel');
     }
@@ -43384,11 +43357,7 @@
           settings.next = !settings.next;
         });
       });
-      document.getElementById('onionSkinOpacityRange').addEventListener('input', function(event) {
-        mutateOnionSkinSettings(function(settings) {
-          settings.opacity = clampNumber(event.currentTarget.value, 0, 100, 45);
-        });
-      });
+      // onion opacity = custom .ggauge#onionSkinOpacityGauge (data-gauge="onion"); handled by the delegated gauge drag.
       document.querySelectorAll('[data-onion-mode]').forEach(function(button) {
         button.addEventListener('click', function(event) {
           event.preventDefault();
