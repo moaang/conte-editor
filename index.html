@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver280</title>
+  <title>Conte Editor Prototype ver281</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver280</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver281</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7398,7 +7398,7 @@
     .genga-lname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
     .genga-lop { font-size: 11px; opacity: 0.6; }
     .genga-ph { color: #999; font-style: italic; }
-    .genga-timeline-wrap { flex: 1; overflow: auto; position: relative; }
+    .genga-timeline-wrap { flex: 1; overflow-x: hidden; overflow-y: auto; position: relative; touch-action: pan-y; }
     .genga-ruler { position: relative; height: 24px; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; }
     .genga-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(0,0,0,0.07); }
     .genga-tick.major { border-left-color: rgba(0,0,0,0.22); }
@@ -7674,7 +7674,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '280';
+    const APP_DISPLAY_VERSION = '281';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39044,6 +39044,11 @@
           const nextColor = normalizeMemoBaseColor(button.dataset.memoColor);
           setMemoBrushColor(nextColor, { custom: false, record: false });
           state.memoColorPickerOpen = false;
+          // picking a brush colour = switch to PEN immediately and leave any edit tool (transform/lasso/camera),
+          // matching the eraser button — otherwise transform stayed active until the next stroke.
+          state.memoTool = 'pen';
+          state.memoEditTool = '';
+          state.memoEditToolWindowOpen = false;
           updateMemoUI();
         });
       });
@@ -42106,6 +42111,28 @@
       const layer = (gt.layers || []).find(function(l) { return String(l.id) === String(layerId); });
       return layer ? (layer.exposures || []).find(function(e) { return String(e.id) === String(expId); }) : null;
     }
+    // would [s,e] overlap any OTHER koma in the layer? (drag-MOVE is rejected on overlap; jump-over to a free gap is fine)
+    function gengaRangeOverlapsOther(layer, expId, s, e) {
+      return (layer.exposures || []).some(function(x) {
+        if (String(x.id) === String(expId)) return false;
+        return !(x.startFrame + x.holdFrames - 1 < s || x.startFrame > e);
+      });
+    }
+    // resize OVERWRITES: carve the kept koma's range [s,e] out of every other koma (trim, or remove if fully covered)
+    function gengaCarveOverlap(proj, layerId, keepId) {
+      const gt = proj && proj.gengaTimeline; if (!gt) return;
+      const layer = (gt.layers || []).find(function(l) { return String(l.id) === String(layerId); }); if (!layer) return;
+      const keep = (layer.exposures || []).find(function(x) { return String(x.id) === String(keepId); }); if (!keep) return;
+      const s = keep.startFrame, e = keep.startFrame + keep.holdFrames - 1;
+      layer.exposures = (layer.exposures || []).filter(function(x) {
+        if (String(x.id) === String(keepId)) return true;
+        const xs = x.startFrame, xe = x.startFrame + x.holdFrames - 1;
+        if (xe < s || xs > e) return true;            // no overlap → keep as-is
+        if (xs >= s && xe <= e) return false;          // fully covered → remove
+        if (xs < s) { x.holdFrames = s - xs; return true; } // overlaps left edge (or spans) → keep left part [xs, s-1]
+        x.startFrame = e + 1; x.holdFrames = xe - e; return true; // overlaps right edge → start after e
+      });
+    }
     function gengaExpPointerDown(ev) {
       if (ev.button != null && ev.button !== 0) return;
       if (ev.target && ev.target.classList && ev.target.classList.contains('genga-exp-num')) return;
@@ -42142,16 +42169,37 @@
         d.nextStart = Math.max(1, d.origStart + delta);
         d.block.style.left = ((d.nextStart - 1) * GENGA_CELL_W) + 'px';
       }
+      // live: make the none/hold/repeat button follow the last koma's right edge during the drag (no commit lag)
+      const lane = d.block.parentElement;
+      const pbBtn = lane && lane.querySelector('.genga-postbehavior');
+      if (pbBtn) {
+        const layer = (state.project.gengaTimeline.layers || []).find(function(l) { return String(l.id) === String(d.layerId); });
+        if (layer) {
+          let maxEnd = 0;
+          (layer.exposures || []).forEach(function(x) {
+            const end = (String(x.id) === String(d.expId)) ? (d.nextStart - 1 + d.nextHold) : (x.startFrame - 1 + x.holdFrames);
+            if (end > maxEnd) maxEnd = end;
+          });
+          pbBtn.style.left = (maxEnd * GENGA_CELL_W + 2) + 'px';
+        }
+      }
     }
     function gengaExpPointerUp() {
       document.removeEventListener('pointermove', gengaExpPointerMove);
       document.removeEventListener('pointerup', gengaExpPointerUp);
       const d = gengaExpDrag; gengaExpDrag = null; if (!d) return;
-      if (d.mode === 'resize' && d.nextHold !== d.origHold) {
-        runCommand('原画コマ変更', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (e) e.holdFrames = Math.max(1, d.nextHold); });
-      } else if (d.mode === 'resize-left' && (d.nextStart !== d.origStart || d.nextHold !== d.origHold)) {
-        runCommand('原画コマ変更', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (e) { e.startFrame = Math.max(1, d.nextStart); e.holdFrames = Math.max(1, d.nextHold); } });
-      } else if (d.mode === 'move' && d.nextStart !== d.origStart) {
+      const layer = ((state.project.gengaTimeline && state.project.gengaTimeline.layers) || []).find(function(l) { return String(l.id) === String(d.layerId); });
+      if (!layer) { renderGengaView(); return; }
+      if (d.mode === 'resize') {
+        if (d.nextHold === d.origHold) return;
+        runCommand('原画コマ変更', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (!e) return; e.holdFrames = Math.max(1, d.nextHold); gengaCarveOverlap(proj, d.layerId, d.expId); });
+      } else if (d.mode === 'resize-left') {
+        if (d.nextStart === d.origStart && d.nextHold === d.origHold) return;
+        runCommand('原画コマ変更', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (!e) return; e.startFrame = Math.max(1, d.nextStart); e.holdFrames = Math.max(1, d.nextHold); gengaCarveOverlap(proj, d.layerId, d.expId); });
+      } else if (d.mode === 'move') {
+        if (d.nextStart === d.origStart) return;
+        // drag-MOVE must not overlap another koma; if the dropped range overlaps, snap back (jump fully over = OK)
+        if (gengaRangeOverlapsOther(layer, d.expId, d.nextStart, d.nextStart + d.origHold - 1)) { renderGengaView(); return; }
         runCommand('原画インスタンス移動', function(proj) { const e = gengaFindExposure(proj, d.layerId, d.expId); if (e) e.startFrame = Math.max(1, d.nextStart); });
       }
     }
@@ -42405,12 +42453,19 @@
       const sFwd = stageEl.querySelector('#gengaStepForwardBtn'); if (sFwd) sFwd.addEventListener('click', function() { stopGengaPlayback(); stepGengaFrame(1); });
       const rptBtn = stageEl.querySelector('#gengaRepeatBtn'); if (rptBtn) rptBtn.addEventListener('click', function() { state.gengaRepeat = !state.gengaRepeat; rptBtn.classList.toggle('active', state.gengaRepeat); });
       // camera-frame + zoom buttons now live in the shared header (#gengaZoomHeader), wired once in setup — not here.
-      ['.genga-ruler', '.genga-lanes'].forEach(function(sel) {
-        const el = stageEl.querySelector(sel);
-        if (el) el.addEventListener('pointerdown', gengaScrubStart);
-      });
+      // playhead DRAG-scrub: only on the ruler (the frame bar) + its handle. NOT on the lanes (that would fight
+      // koma drags / horizontal pan). In the lanes, a single CLICK just sets the playhead to that frame.
+      const rulerEl = stageEl.querySelector('.genga-ruler');
+      if (rulerEl) rulerEl.addEventListener('pointerdown', gengaScrubStart);
       const phHandle = stageEl.querySelector('.genga-playhead-handle');
       if (phHandle) phHandle.addEventListener('pointerdown', gengaScrubStart);
+      const lanesEl = stageEl.querySelector('.genga-lanes');
+      if (lanesEl) lanesEl.addEventListener('click', function(e) {
+        const content = stageEl.querySelector('.genga-tl-content'); if (!content) return;
+        stopGengaPlayback();
+        const rect = content.getBoundingClientRect();
+        setGengaFrame(Math.floor((e.clientX - rect.left) / GENGA_CELL_W) + 1);
+      });
       drawGengaPreview();
       drawGengaLayerThumbs();
       gengaSyncZoomHeader(); // shared-header label + camera-frame active state for this project
