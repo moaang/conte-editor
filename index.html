@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver288</title>
+  <title>Conte Editor Prototype ver289</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7283,7 +7283,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver288</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver289</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7393,12 +7393,23 @@
     .genga-lh-top { display: flex; align-items: center; }
     .genga-lh-bottom { display: flex; align-items: center; gap: 6px; }
     .genga-lh-spacer { flex: 1; }
-    .genga-lfx { min-width: 30px; padding: 1px 4px; font-size: 10px; line-height: 1.3; border: 1px solid #c4c4ba; border-radius: 3px; background: #f3f3ee; color: #555; cursor: pointer; font-variant-numeric: tabular-nums; }
-    .genga-lfx.on { border-color: #2f6fd1; color: #2f6fd1; }
+    /* opacity GAUGE button: blue fill = opacity (0 empty → 100 full), centered %; blend abbr badge when not normal */
+    .genga-lfx { position: relative; min-width: 50px; height: 16px; padding: 0 3px; border: 1px solid #b9b9ae; border-radius: 3px; background-image: linear-gradient(to right, #7fa9e8 var(--fill, 100%), #ededE6 var(--fill, 100%)); color: #182536; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; overflow: hidden; white-space: nowrap; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; justify-content: center; gap: 2px; }
+    .genga-lfx-bl { font-weight: 700; color: #1452a8; }
     .genga-lfx-pop { position: fixed; z-index: 200; background: #fff; border: 1px solid #b9b9ae; border-radius: 6px; box-shadow: 0 8px 22px rgba(0,0,0,0.18); padding: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
     .genga-lfx-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-    .genga-lfx-op { width: 120px; }
     .genga-lfx-val { min-width: 34px; text-align: right; color: #2f6fd1; font-variant-numeric: tabular-nums; }
+    /* exact-fill gauge slider (opacity popover + timeline zoom): track fills 0→100 precisely, no thumb-offset gap */
+    .genga-grange { -webkit-appearance: none; appearance: none; height: 7px; border-radius: 4px; outline: none; background: linear-gradient(to right, #2f6fd1 var(--p, 0%), #d6d6cd var(--p, 0%)); }
+    .genga-grange::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
+    .genga-grange::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #2f6fd1; cursor: pointer; }
+    .genga-grange::-moz-range-track { background: transparent; }
+    .genga-lfx-op { width: 120px; }
+    /* layer reorder: drag handle = name + thumb only; no text selection; blue insertion line shows the drop spot */
+    .genga-layer-head { user-select: none; -webkit-user-select: none; }
+    .genga-lname.editing { user-select: text; -webkit-user-select: text; outline: 1px solid #2f6fd1; background: #fff; border-radius: 2px; padding: 0 2px; cursor: text; }
+    .genga-layers-col { position: relative; }
+    .genga-layer-drop-line { position: absolute; left: 2px; right: 2px; height: 2px; margin-top: -1px; background: #2f6fd1; box-shadow: 0 0 0 1px rgba(47,111,209,0.35); z-index: 30; pointer-events: none; }
     .genga-sw { width: 13px; height: 13px; border-radius: 3px; flex: none; }
     .genga-layer-thumb { flex: none; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,0.14); display: block; background: #fff; }
     .genga-lname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
@@ -7694,7 +7705,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '288';
+    const APP_DISPLAY_VERSION = '289';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40722,15 +40733,16 @@
     }
     // layer blend modes (canvas globalCompositeOperation values) + JP labels
     const GENGA_BLEND_MODES = [
-      { v: 'source-over', label: '通常' },
-      { v: 'multiply', label: '乗算' },
-      { v: 'screen', label: 'スクリーン' },
-      { v: 'overlay', label: 'オーバーレイ' },
-      { v: 'lighten', label: '比較(明)' },
-      { v: 'darken', label: '比較(暗)' },
-      { v: 'lighter', label: '加算' }
+      { v: 'source-over', label: '通常', abbr: '' },
+      { v: 'multiply', label: '乗算', abbr: '乗' },
+      { v: 'screen', label: 'スクリーン', abbr: 'ス' },
+      { v: 'overlay', label: 'オーバーレイ', abbr: 'オ' },
+      { v: 'lighten', label: '比較(明)', abbr: '明' },
+      { v: 'darken', label: '比較(暗)', abbr: '暗' },
+      { v: 'lighter', label: '加算', abbr: '加' }
     ];
     function gengaBlendLabel(v) { const m = GENGA_BLEND_MODES.find(function(x) { return x.v === v; }); return m ? m.label : '通常'; }
+    function gengaBlendAbbr(v) { const m = GENGA_BLEND_MODES.find(function(x) { return x.v === v; }); return m ? m.abbr : ''; }
     function normalizeGengaLayer(layer) {
       layer = layer && typeof layer === 'object' ? layer : {};
       let opacity = Number(layer.opacity);
@@ -41129,18 +41141,29 @@
         gt.layers = gt.layers.filter(function(l) { return String(l.id) !== id; });
       });
     }
-    function renameGengaLayer(id) {
-      id = String(id || ''); if (!id || !state.project || state.project.kind !== 'genga') return;
-      const gt = state.project.gengaTimeline; if (!gt || !Array.isArray(gt.layers)) return;
-      const layer = gt.layers.find(function(l) { return String(l.id) === id; });
+    // inline-edit the layer name in place (dblclick → editable text, like the koma instance-value edit).
+    function gengaStartEditLayerName(span) {
+      if (!span || span.getAttribute('contenteditable') === 'true') return;
+      const id = span.getAttribute('data-genga-layer');
+      const layer = (state.project && state.project.gengaTimeline && (state.project.gengaTimeline.layers || []).find(function(x) { return String(x.id) === String(id); }));
       if (!layer) return;
-      const next = window.prompt('レイヤー名', layer.name || 'Layer');
-      if (next === null) return;
-      const name = String(next).trim(); if (!name) return;
-      runCommand('原画レイヤー名変更', function(p) {
-        const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === id; });
-        if (l) l.name = name;
-      });
+      const orig = String(layer.name || 'Layer');
+      span.setAttribute('contenteditable', 'true');
+      span.classList.add('editing');
+      span.textContent = orig;
+      span.focus();
+      try { const r = document.createRange(); r.selectNodeContents(span); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) {}
+      const finish = function(cancel) {
+        span.removeEventListener('blur', onBlur); span.removeEventListener('keydown', onKey);
+        span.removeAttribute('contenteditable'); span.classList.remove('editing');
+        const v = cancel ? orig : span.textContent.trim();
+        if (!v || v === orig) { renderGengaView(); return; }
+        runCommand('原画レイヤー名変更', function(p) { const l = (p.gengaTimeline.layers || []).find(function(x) { return String(x.id) === String(id); }); if (l) l.name = v; });
+      };
+      const onBlur = function() { finish(false); };
+      const onKey = function(ev) { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); span.blur(); } else if (ev.key === 'Escape') { ev.preventDefault(); finish(true); } };
+      span.addEventListener('blur', onBlur);
+      span.addEventListener('keydown', onKey);
     }
     // genga current-frame (1-based) + selected layer — transient UI state (not persisted in the project).
     const GENGA_BASE_CELL = 22; // base px-per-frame; gengaCellW() applies the timeline zoom (state.gengaCellW)
@@ -41226,7 +41249,7 @@
       const pop = document.createElement('div'); pop.className = 'genga-lfx-pop'; pop.dataset.layer = String(id); gengaLayerFxPop = pop;
       const opPct = Math.round((l.opacity != null ? l.opacity : 1) * 100);
       pop.innerHTML =
-        '<label class="genga-lfx-row">不透明度 <span class="genga-lfx-val">' + opPct + '%</span><input type="range" min="0" max="100" step="1" value="' + opPct + '" class="genga-lfx-op"></label>' +
+        '<label class="genga-lfx-row">不透明度 <span class="genga-lfx-val">' + opPct + '%</span><input type="range" min="0" max="100" step="1" value="' + opPct + '" class="genga-lfx-op genga-grange" style="--p:' + opPct + '%"></label>' +
         '<label class="genga-lfx-row">ブレンド <select class="genga-lfx-blend">' + GENGA_BLEND_MODES.map(function(m) { return '<option value="' + m.v + '"' + (((l.blend || 'source-over') === m.v) ? ' selected' : '') + '>' + m.label + '</option>'; }).join('') + '</select></label>';
       document.body.appendChild(pop);
       const r = btn.getBoundingClientRect();
@@ -41235,7 +41258,7 @@
       const op = pop.querySelector('.genga-lfx-op'), val = pop.querySelector('.genga-lfx-val'), blendSel = pop.querySelector('.genga-lfx-blend');
       let origOp = (l.opacity != null ? l.opacity : 1);
       op.addEventListener('pointerdown', function() { const cur = gengaLayerById(id); origOp = cur ? (cur.opacity != null ? cur.opacity : 1) : 1; });
-      op.addEventListener('input', function() { val.textContent = op.value + '%'; const cur = gengaLayerById(id); if (cur) { cur.opacity = op.value / 100; drawGengaPreview(); drawGengaLayerThumbs(); } }); // live, no undo
+      op.addEventListener('input', function() { op.style.setProperty('--p', op.value + '%'); val.textContent = op.value + '%'; const cur = gengaLayerById(id); if (cur) { cur.opacity = op.value / 100; drawGengaPreview(); drawGengaLayerThumbs(); const b = document.querySelector('#gengaStage .genga-lfx[data-genga-layer="' + id + '"]'); if (b) b.style.setProperty('--fill', op.value + '%'); } }); // live, no undo
       op.addEventListener('change', function() { const fin = op.value / 100; const cur = gengaLayerById(id); if (cur) cur.opacity = origOp; setGengaLayerOpacity(id, fin); }); // restore→commit for correct undo
       blendSel.addEventListener('change', function() { setGengaLayerBlend(id, blendSel.value); });
       document.addEventListener('pointerdown', gengaLayerFxOutside, true);
@@ -41294,32 +41317,48 @@
       });
     }
     let gengaLayerDrag = null;
+    function gengaLayerDropTarget(clientY) {
+      const heads = Array.from(document.querySelectorAll('#gengaStage .genga-layer-head[data-genga-layer]'));
+      for (let i = 0; i < heads.length; i++) { const r = heads[i].getBoundingClientRect(); if (clientY < r.top + r.height / 2) return { index: i, heads: heads }; }
+      return { index: heads.length, heads: heads };
+    }
+    function gengaShowLayerDropLine(clientY) {
+      const col = document.querySelector('#gengaStage .genga-layers-col'); if (!col) return;
+      let line = col.querySelector('.genga-layer-drop-line');
+      if (!line) { line = document.createElement('div'); line.className = 'genga-layer-drop-line'; col.appendChild(line); }
+      const t = gengaLayerDropTarget(clientY), colRect = col.getBoundingClientRect();
+      let y;
+      if (t.index < t.heads.length) y = t.heads[t.index].getBoundingClientRect().top - colRect.top + col.scrollTop;
+      else if (t.heads.length) { const r = t.heads[t.heads.length - 1].getBoundingClientRect(); y = r.bottom - colRect.top + col.scrollTop; }
+      else y = 0;
+      line.style.top = y + 'px';
+    }
+    function gengaHideLayerDropLine() { const l = document.querySelector('#gengaStage .genga-layer-drop-line'); if (l) l.remove(); }
     function gengaLayerHeadPointerDown(ev) {
       if (ev.button != null && ev.button !== 0) return;
-      if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+      if (ev.target && ev.target.closest && (ev.target.closest('button') || ev.target.closest('[contenteditable="true"]'))) return;
       const head = ev.currentTarget;
-      gengaLayerDrag = { id: head.getAttribute('data-genga-layer'), startY: ev.clientY, moved: false, head: head };
+      // reorder handle = name + thumbnail only (clicking elsewhere still selects, just won't drag)
+      const onHandle = !!(ev.target.closest && (ev.target.closest('.genga-lname') || ev.target.closest('.genga-layer-thumb')));
+      gengaLayerDrag = { id: head.getAttribute('data-genga-layer'), startY: ev.clientY, moved: false, head: head, canDrag: onHandle };
       document.addEventListener('pointermove', gengaLayerHeadPointerMove);
       document.addEventListener('pointerup', gengaLayerHeadPointerUp);
     }
     function gengaLayerHeadPointerMove(ev) {
-      const d = gengaLayerDrag; if (!d) return;
+      const d = gengaLayerDrag; if (!d || !d.canDrag) return;
       if (!d.moved && Math.abs(ev.clientY - d.startY) < 5) return;
       d.moved = true;
       if (d.head) d.head.classList.add('dragging');
+      gengaShowLayerDropLine(ev.clientY);
     }
     function gengaLayerHeadPointerUp(ev) {
       document.removeEventListener('pointermove', gengaLayerHeadPointerMove);
       document.removeEventListener('pointerup', gengaLayerHeadPointerUp);
       const d = gengaLayerDrag; gengaLayerDrag = null; if (!d) return;
       if (d.head) d.head.classList.remove('dragging');
+      gengaHideLayerDropLine();
       if (!d.moved) { selectGengaLayer(d.id); return; }
-      const heads = Array.from(document.querySelectorAll('#gengaStage .genga-layer-head[data-genga-layer]'));
-      let target = heads.length;
-      for (let i = 0; i < heads.length; i++) {
-        const r = heads[i].getBoundingClientRect();
-        if (ev.clientY < r.top + r.height / 2) { target = i; break; }
-      }
+      const target = gengaLayerDropTarget(ev.clientY).index;
       moveGengaLayer(d.id, target);
     }
     const gengaImageCache = new Map();
@@ -42567,7 +42606,7 @@
             '</div>' +
             '<div class="genga-lh-bottom">' +
               '<canvas class="genga-layer-thumb" data-genga-layer="' + escapeHtml(l.id) + '" width="' + thumbW + '" height="' + thumbH + '" style="border-left:3px solid ' + escapeHtml(l.color || '#888888') + '"></canvas>' +
-              '<button class="genga-lfx' + ((l.blend && l.blend !== 'source-over') ? ' on' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="不透明度 / ブレンド">' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%</button>' +
+              '<button class="genga-lfx" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="不透明度 / ブレンド" style="--fill:' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%">' + Math.round((l.opacity != null ? l.opacity : 1) * 100) + '%' + (gengaBlendAbbr(l.blend) ? ('<span class="genga-lfx-bl">' + gengaBlendAbbr(l.blend) + '</span>') : '') + '</button>' +
               '<span class="genga-lh-spacer"></span>' +
               '<button class="genga-eye' + (l.visible === false ? ' off' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="表示/非表示" aria-label="表示切替">' + gengaEyeIconSvg() + '</button>' +
               '<button class="genga-lock' + (l.locked ? ' on' : '') + '" type="button" data-genga-layer="' + escapeHtml(l.id) + '" title="ロック" aria-label="ロック切替">' + gengaLockIconSvg(l.locked) + '</button>' +
@@ -42609,7 +42648,7 @@
           gengaTransportControlsHtml() +
           '<span class="genga-tl-label">原画タイムライン</span>' +
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
-          '<label class="genga-tl-zoom" title="タイムライン拡大縮小">⟷<input id="gengaTimelineZoomRange" type="range" min="8" max="64" step="2" value="' + gengaCellW() + '"></label>' +
+          '<label class="genga-tl-zoom" title="タイムライン拡大縮小">⟷<input id="gengaTimelineZoomRange" class="genga-grange" type="range" min="8" max="64" step="2" value="' + gengaCellW() + '" style="--p:' + Math.round((gengaCellW() - 8) / 56 * 100) + '%"></label>' +
           '<span class="genga-info-mini" style="margin-left:auto">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
         '</div>' +
         '<div class="genga-dopesheet">' +
@@ -42631,7 +42670,7 @@
         b.addEventListener('click', function(ev) { ev.stopPropagation(); deleteGengaLayer(b.getAttribute('data-genga-layer')); });
       });
       stageEl.querySelectorAll('.genga-lname').forEach(function(n) {
-        n.addEventListener('dblclick', function(ev) { ev.stopPropagation(); renameGengaLayer(n.getAttribute('data-genga-layer')); });
+        n.addEventListener('dblclick', function(ev) { ev.preventDefault(); ev.stopPropagation(); gengaStartEditLayerName(n); });
       });
       stageEl.querySelectorAll('.genga-eye').forEach(function(b) {
         b.addEventListener('click', function(ev) { ev.stopPropagation(); toggleGengaLayerVisible(b.getAttribute('data-genga-layer')); });
