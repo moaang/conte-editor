@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver299</title>
+  <title>Conte Editor Prototype ver300</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver299</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver300</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7423,6 +7423,8 @@
     .genga-timeline-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.32); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
     .genga-timeline-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.46); background-clip: padding-box; }
     .genga-tl-zoom { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
+    .genga-export-btn { margin-left: 10px; border: 1px solid #277045; background: #2f8a52; color: #fff; border-radius: 5px; padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .genga-export-btn:disabled { opacity: 0.7; cursor: default; }
     .genga-ruler { position: relative; height: 24px; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; }
     .genga-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(0,0,0,0.07); }
     .genga-tick.major { border-left-color: rgba(0,0,0,0.22); }
@@ -7722,7 +7724,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '299';
+    const APP_DISPLAY_VERSION = '300';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40788,6 +40790,127 @@
       const d = gengaAudioDrag; gengaAudioDrag = null; if (!d) return;
       if (d.moved && d.to !== d.start) runCommand('音声移動', function(proj) { const c = (proj.gengaTimeline.audioClips || []).find(function(x) { return String(x.id) === String(d.id); }); if (c) c.startFrame = d.to; });
     }
+    // ---- genga VIDEO export (roadmap ④): per-frame CAMERA-VIEW crop → WebCodecs encode (mp4 if available, else
+    // webm) + genga audio mix. Reuses the conte encoder helpers (encodeAudioBufferForExport / loadScriptOnce). ----
+    async function gengaPreloadExportImages() {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const urls = new Set();
+      (gt.layers || []).forEach(function(l) {
+        (l.exposures || []).forEach(function(e) { const d = gengaExposureDrawing(l, e); if (d && d.dataUrl) urls.add(d.dataUrl); });
+        if (l.sharedDrawings) Object.keys(l.sharedDrawings).forEach(function(k) { const d = gengaResolveDrawing(l.sharedDrawings[k]); if (d && d.dataUrl) urls.add(d.dataUrl); });
+      });
+      await Promise.all(Array.from(urls).map(function(u) { return new Promise(function(res) { let img = gengaImageCache.get(u); if (img && img.complete) { res(); return; } img = new Image(); img.onload = res; img.onerror = res; img.src = u; gengaImageCache.set(u, img); }); }));
+    }
+    function gengaRenderExportFrame(canvas, frame, outW, outH) {
+      const gt = state.project.gengaTimeline;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, outW, outH);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, outW, outH);
+      const cam = gengaCameraWorkAt(gt, frame);
+      const comp = gengaCompositeFrame(frame);
+      if (comp) {
+        ctx.save();
+        ctx.translate(outW / 2, outH / 2);
+        ctx.scale(outW / Math.max(1, cam.w), outH / Math.max(1, cam.h));
+        ctx.rotate(-(Number(cam.rotation) || 0));
+        ctx.translate(-(cam.x + cam.w / 2), -(cam.y + cam.h / 2));
+        ctx.drawImage(comp, 0, 0, gt.paper.w, gt.paper.h);
+        ctx.restore();
+      }
+    }
+    async function gengaMixAudioOffline(startFrame, endFrame, fps, sampleRate) {
+      const gt = state.project.gengaTimeline; const clips = gt.audioClips || [];
+      if (!clips.length) return null;
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return null;
+      const durSec = (endFrame - startFrame + 1) / fps;
+      const oac = new OAC(2, Math.max(1, Math.ceil(durSec * sampleRate)), sampleRate);
+      const startSec = (startFrame - 1) / fps;
+      let any = false;
+      for (const c of clips) {
+        const buf = await gengaDecodeAudio(c.ref); if (!buf) continue;
+        const when = (c.startFrame - 1) / fps - startSec;
+        const src = oac.createBufferSource(); src.buffer = buf;
+        const g = oac.createGain(); g.gain.value = (c.volume != null ? c.volume : 1);
+        src.connect(g); g.connect(oac.destination);
+        try { if (when >= 0) src.start(when); else src.start(0, Math.min(buf.duration, -when)); any = true; } catch (e) {}
+      }
+      if (!any) return null;
+      return await oac.startRendering();
+    }
+    async function gengaExportVideoFast(opts, onStatus) {
+      opts = opts || {};
+      if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') throw new Error('このブラウザは WebCodecs 非対応です');
+      const gt = state.project && state.project.gengaTimeline; if (!gt) throw new Error('原画プロジェクトがありません');
+      const fps = Math.max(1, Math.round(gt.fps || 24));
+      const total = Math.max(1, gt.totalFrames || 1);
+      const r = gengaPlayRange();
+      const startFrame = r.lo, endFrame = Math.min(r.hi, Math.max(r.lo, total));
+      const recFrames = endFrame - startFrame + 1;
+      const camW = gt.camera.w || gt.output.w || 1920, camH = gt.camera.h || gt.output.h || 1080;
+      let outW = Math.max(160, Math.min(3840, Math.round(Number(opts.outWidth) || camW))); if (outW % 2) outW -= 1;
+      let outH = Math.round(outW * camH / Math.max(1, camW)); if (outH % 2) outH += 1;
+      const bitrate = Math.min(16000000, Math.max(1500000, Math.round(outW * outH * fps * 0.12)));
+      const sampleRate = 48000;
+      const pick = async function(cands, isAvc) { for (let i = 0; i < cands.length; i++) { const cfg = { codec: cands[i], width: outW, height: outH, bitrate: bitrate, framerate: fps }; if (isAvc) cfg.avc = { format: 'avc' }; let s = null; try { s = await VideoEncoder.isConfigSupported(cfg); } catch (e) {} if (s && s.supported) return cfg; } return null; };
+      const aSup = async function(codec) { try { const s = await AudioEncoder.isConfigSupported({ codec: codec, sampleRate: sampleRate, numberOfChannels: 2, bitrate: 192000 }); return !!(s && s.supported); } catch (e) { return false; } };
+      const hasAudio = (gt.audioClips || []).length > 0 && typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined';
+      let wantMp4 = false, vCfg = null, aCodec = '';
+      const avc = await pick(['avc1.42001f', 'avc1.420028', 'avc1.420033', 'avc1.4d4028'], true);
+      if (avc && (!hasAudio || await aSup('mp4a.40.2'))) { wantMp4 = true; vCfg = avc; aCodec = 'mp4a.40.2'; }
+      if (!vCfg) { const vp = await pick(['vp09.00.10.08', 'vp09.00.31.08', 'vp8'], false); if (vp && (!hasAudio || await aSup('opus'))) { wantMp4 = false; vCfg = vp; aCodec = 'opus'; } }
+      if (!vCfg) throw new Error('対応する映像エンコーダがありません');
+      const muxVideoCodec = wantMp4 ? (vCfg.codec.indexOf('avc') === 0 ? 'avc' : 'vp9') : (vCfg.codec.indexOf('vp09') === 0 ? 'V_VP9' : 'V_VP8');
+      if (onStatus) onStatus('準備中…');
+      await loadScriptOnce(wantMp4 ? 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/build/mp4-muxer.min.js' : 'https://cdn.jsdelivr.net/npm/webm-muxer@5/build/webm-muxer.min.js');
+      const MuxNS = wantMp4 ? window.Mp4Muxer : window.WebMMuxer;
+      if (!MuxNS || !MuxNS.Muxer || !MuxNS.ArrayBufferTarget) throw new Error('muxer のロードに失敗しました');
+      let audioBuffer = null, audioOK = false;
+      if (hasAudio) { if (onStatus) onStatus('音声ミックス中…'); try { audioBuffer = await gengaMixAudioOffline(startFrame, endFrame, fps, sampleRate); } catch (e) {} audioOK = !!audioBuffer; }
+      const muxerOpts = { target: new MuxNS.ArrayBufferTarget(), video: { codec: muxVideoCodec, width: outW, height: outH, frameRate: fps } };
+      if (audioOK) muxerOpts.audio = { codec: wantMp4 ? 'aac' : 'A_OPUS', sampleRate: sampleRate, numberOfChannels: 2 };
+      if (wantMp4) muxerOpts.fastStart = 'in-memory';
+      const muxer = new MuxNS.Muxer(muxerOpts);
+      let encErr = null;
+      const videoEncoder = new VideoEncoder({ output: function(c, m) { try { muxer.addVideoChunk(c, m); } catch (e) { encErr = encErr || e; } }, error: function(e) { encErr = encErr || e; } });
+      videoEncoder.configure(vCfg);
+      let audioEncoder = null;
+      if (audioOK) { audioEncoder = new AudioEncoder({ output: function(c, m) { try { muxer.addAudioChunk(c, m); } catch (e) { encErr = encErr || e; } }, error: function(e) { encErr = encErr || e; } }); audioEncoder.configure({ codec: aCodec, sampleRate: sampleRate, numberOfChannels: 2, bitrate: 192000 }); }
+      await gengaPreloadExportImages();
+      const canvas = document.createElement('canvas'); canvas.width = outW; canvas.height = outH;
+      if (audioOK) { try { encodeAudioBufferForExport(audioEncoder, audioBuffer, sampleRate); } catch (e) { encErr = encErr || e; } }
+      const frameDur = Math.round(1000000 / fps);
+      for (let i = 0; i < recFrames; i++) {
+        if (encErr) throw encErr;
+        gengaRenderExportFrame(canvas, startFrame + i, outW, outH);
+        const vf = new VideoFrame(canvas, { timestamp: i * frameDur, duration: frameDur });
+        videoEncoder.encode(vf, { keyFrame: (i % Math.max(1, fps * 2)) === 0 }); vf.close();
+        while (videoEncoder.encodeQueueSize > 20 && !encErr) { await new Promise(function(res) { setTimeout(res, 3); }); }
+        if ((i & 15) === 0) { await new Promise(function(res) { setTimeout(res, 0); }); if (onStatus) onStatus('エンコード ' + Math.round((i + 1) / recFrames * 100) + '%'); }
+      }
+      if (onStatus) onStatus('まとめ中…');
+      await videoEncoder.flush(); if (audioEncoder) await audioEncoder.flush();
+      if (encErr) throw encErr;
+      muxer.finalize();
+      try { videoEncoder.close(); } catch (e) {} try { if (audioEncoder) audioEncoder.close(); } catch (e) {}
+      const blob = new Blob([muxerOpts.target.buffer], { type: wantMp4 ? 'video/mp4' : 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = (state.project.title || 'genga') + (wantMp4 ? '.mp4' : '.webm'); document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 8000);
+      return { frames: recFrames, blobSize: blob.size, format: wantMp4 ? 'mp4' : 'webm', outW: outW, outH: outH };
+    }
+    function gengaRunExport(btn) {
+      if (!btn || btn.disabled) return;
+      const orig = btn.textContent; btn.disabled = true;
+      const onStatus = function(s) { btn.textContent = s; };
+      stopGengaPlayback();
+      gengaExportVideoFast({}, onStatus).then(function(r) {
+        btn.textContent = '完了 (' + r.format + ' ' + r.outW + '×' + r.outH + ')';
+        setTimeout(function() { btn.textContent = orig; btn.disabled = false; }, 3000);
+      }).catch(function(e) {
+        alert('映像書き出しに失敗: ' + (e && e.message ? e.message : e));
+        btn.textContent = orig; btn.disabled = false;
+      });
+    }
     function gengaExposureDrawing(layer, exp) {
       if (!exp) return null;
       const key = gengaValueKey(exp.instanceValue);
@@ -42958,6 +43081,7 @@
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
           '<label class="genga-tl-zoom" title="タイムライン拡大縮小">⟷' + gengaGaugeHtml('genga-zoom', 8, 64, 2, gengaCellW(), 'width:96px;height:14px') + '</label>' +
           '<span class="genga-info-mini" style="margin-left:auto">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
+          '<button id="gengaExportBtn" class="genga-export-btn" type="button" title="映像を書き出す（カメラ枠が出力範囲・音声込み / mp4対応ブラウザは mp4、非対応は webm）">書き出し</button>' +
         '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
@@ -42978,6 +43102,8 @@
       if (camKfBtn) camKfBtn.addEventListener('click', function(ev) { ev.stopPropagation(); gengaToggleCameraKeyframe(); });
       const audioAddBtn = stageEl.querySelector('.genga-audio-add');
       if (audioAddBtn) audioAddBtn.addEventListener('click', function(ev) { ev.stopPropagation(); gengaImportAudio(); });
+      const expBtn = stageEl.querySelector('#gengaExportBtn');
+      if (expBtn) expBtn.addEventListener('click', function() { gengaRunExport(expBtn); });
       stageEl.querySelectorAll('.genga-audio-clip').forEach(function(el) {
         el.addEventListener('pointerdown', gengaAudioClipPointerDown);
         el.addEventListener('contextmenu', function(ev) { ev.preventDefault(); ev.stopPropagation(); const id = el.getAttribute('data-genga-audio'); openSimpleContextMenu(ev, [{ label: '音声削除', action: function() { gengaDeleteAudioClip(id); } }], { width: 130, height: 44 }); });
