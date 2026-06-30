@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver298</title>
+  <title>Conte Editor Prototype ver299</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver298</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver299</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7522,6 +7522,12 @@
     .genga-cam-kf { position: absolute; top: 50%; width: 11px; height: 11px; transform: translate(-50%,-50%) rotate(45deg); background: #e00000; border: 1px solid #fff; box-shadow: 0 0 0 1px #a00; cursor: grab; touch-action: none; z-index: 2; }
     .genga-cam-kf[data-active="1"] { background: #ff5a5a; box-shadow: 0 0 0 1px #a00, 0 0 5px #e00000; }
     .genga-cam-kf[data-selected="1"] { background: #ffce3a; box-shadow: 0 0 0 1px #8a6500, 0 0 6px #ffb000; }
+    /* audio track */
+    .genga-audio-head { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box; border-top: 1px solid rgba(0,0,0,0.12); border-bottom: 1px solid rgba(0,0,0,0.12); font-size: 11px; color: #444; background: #e7eede; }
+    .genga-audio-add { margin-left: auto; border: none; background: #2f8a52; color: #fff; width: 24px; height: 20px; min-height: 20px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    .genga-audio-lane { height: 34px; position: relative; box-sizing: border-box; border-top: 1px solid rgba(0,0,0,0.12); border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(47,138,82,0.06); background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) var(--genga-cell-w, 22px)); }
+    .genga-audio-clip { position: absolute; top: 4px; bottom: 4px; background: #3a9c63; border: 1px solid #277045; border-radius: 4px; overflow: hidden; cursor: grab; touch-action: none; display: flex; align-items: center; z-index: 2; }
+    .genga-audio-name { font-size: 10px; color: #fff; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
     #projectCreateTitleInput, #gengaCreateDialog input[type="text"], #gengaCreateDialog select {
       display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
@@ -7716,7 +7722,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '298';
+    const APP_DISPLAY_VERSION = '299';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -31893,7 +31899,7 @@
       compactWaveformPeaksInPlace(copy);
       // genga drawings are stored as {ref}; inline them (base64 from the store) for PORTABLE files/exports (default).
       // Autosave passes {portable:false} → keep refs (light JSON; the base64 stays in IndexedDB under 'gd:<ref>').
-      if (copy.gengaTimeline && opts.portable !== false) gengaInlineDrawings(copy.gengaTimeline);
+      if (copy.gengaTimeline && opts.portable !== false) { gengaInlineDrawings(copy.gengaTimeline); gengaInlineAudio(copy.gengaTimeline); }
       return copy;
     }
 
@@ -40664,6 +40670,124 @@
         if (l.sharedDrawings) Object.keys(l.sharedDrawings).forEach(function(k) { l.sharedDrawings[k] = inl(l.sharedDrawings[k]); });
       });
     }
+    // ---- genga audio (mirrors the drawing store): clip holds {ref,...}; bytes (dataURL) live in gengaAudioStore +
+    // WORKSPACE_DB 'ga:<ref>'; decoded AudioBuffers cached in gengaAudioBuf for WebAudio playback. ----
+    let gengaAudioStore = new Map();   // ref → dataURL
+    let gengaAudioBuf = new Map();     // ref → AudioBuffer (decoded, lazy)
+    let gengaAudioRefSeq = 0;
+    let gengaAudioCtx = null;
+    function gengaAudioClipId() { return 'ac_' + Date.now().toString(36) + '_' + (gengaAudioRefSeq++).toString(36); }
+    function gengaAudioUrl(ref) { return ref ? (gengaAudioStore.get(ref) || null) : null; }
+    function gengaPutAudioData(dataUrl) {
+      const ref = 'ga_' + Date.now().toString(36) + '_' + (gengaAudioRefSeq++).toString(36);
+      gengaAudioStore.set(ref, String(dataUrl || ''));
+      try { putWorkspaceDbValue('ga:' + ref, String(dataUrl || '')); } catch (e) {}
+      return ref;
+    }
+    function gengaIngestAudioClip(c) { // externalize an inline dataUrl → {ref}
+      if (!c || typeof c !== 'object') return c;
+      if (c.ref) { if (!gengaAudioStore.has(c.ref) && typeof c.dataUrl === 'string' && c.dataUrl) gengaAudioStore.set(c.ref, c.dataUrl); delete c.dataUrl; return c; }
+      if (typeof c.dataUrl === 'string' && c.dataUrl) { c.ref = gengaPutAudioData(c.dataUrl); delete c.dataUrl; }
+      return c;
+    }
+    async function gengaHydrateAudioStore(project) {
+      const gt = project && project.gengaTimeline; if (!gt) return;
+      const refs = new Set();
+      (gt.audioClips || []).forEach(function(c) { if (c.ref && !gengaAudioStore.has(c.ref)) refs.add(c.ref); });
+      if (!refs.size) return;
+      for (const ref of refs) { try { const v = await getWorkspaceDbValue('ga:' + ref); if (v) gengaAudioStore.set(ref, String(v)); } catch (e) {} }
+    }
+    function gengaInlineAudio(gt) { // {ref}→inline dataUrl for portable serialization (operates on a clone)
+      if (!gt || !Array.isArray(gt.audioClips)) return;
+      gt.audioClips.forEach(function(c) { if (c.ref && !c.dataUrl) { const u = gengaAudioStore.get(c.ref); if (u) c.dataUrl = u; } });
+    }
+    function gengaEnsureAudioCtx() {
+      if (!gengaAudioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; gengaAudioCtx = new AC(); }
+      if (gengaAudioCtx.state === 'suspended') { try { gengaAudioCtx.resume(); } catch (e) {} }
+      return gengaAudioCtx;
+    }
+    async function gengaDecodeAudio(ref) {
+      if (!ref) return null;
+      if (gengaAudioBuf.has(ref)) return gengaAudioBuf.get(ref);
+      const url = gengaAudioUrl(ref); if (!url) return null;
+      const ctx = gengaEnsureAudioCtx(); if (!ctx) return null;
+      try {
+        const resp = await fetch(url); const ab = await resp.arrayBuffer();
+        const buf = await new Promise(function(res, rej) { ctx.decodeAudioData(ab, res, rej); });
+        gengaAudioBuf.set(ref, buf); return buf;
+      } catch (e) { return null; }
+    }
+    let gengaAudioSources = [];
+    function gengaStopAudio() { gengaAudioSources.forEach(function(s) { try { s.stop(); } catch (e) {} try { s.disconnect(); } catch (e) {} }); gengaAudioSources = []; }
+    // schedule every clip via WebAudio relative to the playhead start frame (frame-accurate, survives rAF jitter)
+    async function gengaStartAudioPlayback(startFrame) {
+      const gt = state.project && state.project.gengaTimeline; if (!gt || !(gt.audioClips || []).length) return;
+      const fps = Math.max(1, gt.fps || 24);
+      const ctx = gengaEnsureAudioCtx(); if (!ctx) return;
+      gengaStopAudio();
+      const playStartSec = (startFrame - 1) / fps;
+      const t0 = ctx.currentTime + 0.07; // small lead so scheduling lands ahead of now
+      for (const c of (gt.audioClips || [])) {
+        const buf = await gengaDecodeAudio(c.ref); if (!buf) continue;
+        if (!state.gengaPlaying) { gengaStopAudio(); return; } // stopped during async decode
+        const clipStartSec = (c.startFrame - 1) / fps;
+        if (clipStartSec + buf.duration <= playStartSec) continue; // entirely before the playhead
+        const offset = Math.max(0, playStartSec - clipStartSec);
+        if (offset >= buf.duration) continue;
+        const when = t0 + Math.max(0, clipStartSec - playStartSec);
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        const g = ctx.createGain(); g.gain.value = (c.volume != null ? c.volume : 1);
+        src.connect(g); g.connect(ctx.destination);
+        try { src.start(when, offset); gengaAudioSources.push(src); } catch (e) {}
+      }
+    }
+    function gengaImportAudio() {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*';
+      inp.onchange = function() {
+        const f = inp.files && inp.files[0]; if (!f) return;
+        const rd = new FileReader();
+        rd.onload = function() {
+          const ref = gengaPutAudioData(rd.result);
+          const atFrame = gengaCurrentFrame();
+          gengaDecodeAudio(ref).then(function(buf) {
+            runCommand('音声追加', function(proj) {
+              const gt = proj.gengaTimeline; if (!Array.isArray(gt.audioClips)) gt.audioClips = [];
+              gt.audioClips.push({ id: gengaAudioClipId(), name: String(f.name || 'audio'), ref: ref, startFrame: atFrame, durationSec: Math.max(0.05, buf ? buf.duration : 1), volume: 1 });
+            });
+          });
+        };
+        rd.readAsDataURL(f);
+      };
+      inp.click();
+    }
+    function gengaDeleteAudioClip(id) { runCommand('音声削除', function(proj) { const gt = proj.gengaTimeline; gt.audioClips = (gt.audioClips || []).filter(function(c) { return String(c.id) !== String(id); }); }); }
+    let gengaAudioDrag = null;
+    function gengaAudioClipPointerDown(ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      ev.stopPropagation(); ev.preventDefault();
+      const el = ev.currentTarget, id = el.getAttribute('data-genga-audio');
+      const gt = state.project && state.project.gengaTimeline; const clip = gt && (gt.audioClips || []).find(function(c) { return String(c.id) === String(id); }); if (!clip) return;
+      const content = document.querySelector('#gengaStage .genga-tl-content'); if (!content) return;
+      const cw = gengaCellW();
+      gengaAudioDrag = { id: id, el: el, rect: content.getBoundingClientRect(), grabOffset: Math.floor((ev.clientX - content.getBoundingClientRect().left) / cw) - (clip.startFrame - 1), start: clip.startFrame, to: clip.startFrame, moved: false };
+      document.addEventListener('pointermove', gengaAudioClipPointerMove, true);
+      document.addEventListener('pointerup', gengaAudioClipPointerUp, true);
+    }
+    function gengaAudioClipPointerMove(ev) {
+      if (!gengaAudioDrag) return;
+      const cw = gengaCellW();
+      let f = Math.floor((ev.clientX - gengaAudioDrag.rect.left) / cw) - gengaAudioDrag.grabOffset + 1;
+      f = Math.max(1, f);
+      if (f !== gengaAudioDrag.start) gengaAudioDrag.moved = true;
+      gengaAudioDrag.to = f;
+      if (gengaAudioDrag.el) gengaAudioDrag.el.style.left = ((f - 1) * cw) + 'px';
+    }
+    function gengaAudioClipPointerUp() {
+      document.removeEventListener('pointermove', gengaAudioClipPointerMove, true);
+      document.removeEventListener('pointerup', gengaAudioClipPointerUp, true);
+      const d = gengaAudioDrag; gengaAudioDrag = null; if (!d) return;
+      if (d.moved && d.to !== d.start) runCommand('音声移動', function(proj) { const c = (proj.gengaTimeline.audioClips || []).find(function(x) { return String(x.id) === String(d.id); }); if (c) c.startFrame = d.to; });
+    }
     function gengaExposureDrawing(layer, exp) {
       if (!exp) return null;
       const key = gengaValueKey(exp.instanceValue);
@@ -40832,6 +40956,11 @@
       const totalFrames = Math.max(1, Math.round(Number(gt.totalFrames) || 1), maxFrame);
       const markMax = Math.max(24, totalFrames); // timeline shows >=24 frames; In/Out can sit anywhere in the displayed range
       const clampMark = function(v) { const n = Math.round(Number(v)); return (n >= 1 && n <= markMax) ? n : null; };
+      // audio clips (externalize any inline dataUrl → {ref}; drop empties)
+      const audioClips = (Array.isArray(gt.audioClips) ? gt.audioClips : []).map(function(c) {
+        const out = gengaIngestAudioClip({ id: c.id || gengaAudioClipId(), name: String(c.name || 'audio'), ref: c.ref || null, dataUrl: c.dataUrl, startFrame: Math.max(1, Math.round(Number(c.startFrame) || 1)), durationSec: Math.max(0.05, Number(c.durationSec) || 1), volume: (c.volume != null ? Math.max(0, Math.min(2, Number(c.volume))) : 1) });
+        return out;
+      }).filter(function(c) { return c && c.ref; });
       project.gengaTimeline = {
         fps: Math.max(1, Math.round(Number(gt.fps) || project.fps || 24)),
         paper: { w: paperW, h: paperH },
@@ -40841,7 +40970,8 @@
         totalFrames: totalFrames,
         markIn: clampMark(gt.markIn),   // TVPaint-style In/Out playback range (null = unset)
         markOut: clampMark(gt.markOut),
-        layers: layers
+        layers: layers,
+        audioClips: audioClips
       };
     }
     // 原画(genga) project — separate kind that shares the editor for now; name = 作品名_話数_カット番号[_suffix].
@@ -42689,6 +42819,7 @@
     function stopGengaPlayback() {
       state.gengaPlaying = false;
       if (gengaPlayRaf) { cancelAnimationFrame(gengaPlayRaf); gengaPlayRaf = 0; }
+      gengaStopAudio();
       updateGengaPlayPauseBtn();
       drawGengaPreview(); // revert from camera view to the editing view
     }
@@ -42710,12 +42841,13 @@
       gengaPlayStartFrame = (cur >= r.hi || cur < r.lo) ? r.lo : cur;
       gengaPlayStartTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       updateGengaPlayPauseBtn();
+      gengaStartAudioPlayback(gengaPlayStartFrame);
       const tick = function() {
         if (!state.gengaPlaying) return;
         const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         let f = gengaPlayStartFrame + Math.floor((now - gengaPlayStartTime) / 1000 * fps);
         if (f > r.hi) {
-          if (state.gengaRepeat) { gengaPlayStartFrame = r.lo; gengaPlayStartTime = now; f = r.lo; }
+          if (state.gengaRepeat) { gengaPlayStartFrame = r.lo; gengaPlayStartTime = now; f = r.lo; gengaStartAudioPlayback(r.lo); }
           else { setGengaFrame(r.hi); stopGengaPlayback(); return; }
         }
         setGengaFrame(f);
@@ -42809,6 +42941,15 @@
         camDiamonds += '<div class="genga-cam-kf" data-frame="' + k.frame + '"' + (k.frame === frame ? ' data-active="1"' : '') + (k.frame === state.gengaSelectedCamKf ? ' data-selected="1"' : '') + ' style="left:' + ((k.frame - 1) * cellW + cellW / 2) + 'px" title="カメラキー F' + k.frame + ' — クリックで選択+移動 / ドラッグで時間変更 / 右クリックでメニュー"></div>';
       });
       const camLane = '<div class="genga-cam-lane">' + camDiamonds + '</div>';
+      // audio track (head + lane of clip bars)
+      const audioHead = '<div class="genga-audio-head"><span class="genga-cam-title">音声</span>' +
+        '<button class="genga-audio-add" type="button" title="音声ファイルを追加">＋</button></div>';
+      let audioBars = '';
+      (gt.audioClips || []).forEach(function(c) {
+        const w = Math.max(8, c.durationSec * fps * cellW - 2);
+        audioBars += '<div class="genga-audio-clip" data-genga-audio="' + escapeHtml(c.id) + '" style="left:' + ((c.startFrame - 1) * cellW) + 'px;width:' + w + 'px" title="' + escapeHtml(c.name) + ' — ドラッグで移動 / 右クリックで削除"><span class="genga-audio-name">' + escapeHtml(c.name) + '</span></div>';
+      });
+      const audioLane = '<div class="genga-audio-lane">' + audioBars + '</div>';
       stageEl.innerHTML =
         '<div class="genga-preview"><canvas id="gengaPreviewCanvas" class="genga-preview-canvas"></canvas></div>' +
         '<div class="genga-topbar">' +
@@ -42820,12 +42961,12 @@
         '</div>' +
         '<div class="genga-dopesheet">' +
           '<div class="genga-layers-col">' +
-            '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + camHead + rowsHead +
+            '<div class="genga-col-head"><span>レイヤー</span><button class="genga-add-layer" type="button" title="レイヤー追加" aria-label="レイヤー追加">＋</button></div>' + camHead + rowsHead + audioHead +
           '</div>' +
           '<div class="genga-timeline-wrap">' +
             '<div class="genga-tl-content" style="width:' + laneWidth + 'px;--genga-cell-w:' + cellW + 'px">' +
               '<div class="genga-ruler">' + ruler + '</div>' +
-              '<div class="genga-lanes">' + camLane + rowsLane + '</div>' +
+              '<div class="genga-lanes">' + camLane + rowsLane + audioLane + '</div>' +
               gengaIoMarksHtml(gt, total, cellW) +
               '<div class="genga-playhead" style="left:' + ((frame - 1) * cellW) + 'px;width:' + cellW + 'px"><span class="genga-playhead-handle"></span></div>' +
             '</div>' +
@@ -42835,6 +42976,12 @@
       if (addBtn) addBtn.addEventListener('click', addGengaLayer);
       const camKfBtn = stageEl.querySelector('.genga-cam-kf-btn');
       if (camKfBtn) camKfBtn.addEventListener('click', function(ev) { ev.stopPropagation(); gengaToggleCameraKeyframe(); });
+      const audioAddBtn = stageEl.querySelector('.genga-audio-add');
+      if (audioAddBtn) audioAddBtn.addEventListener('click', function(ev) { ev.stopPropagation(); gengaImportAudio(); });
+      stageEl.querySelectorAll('.genga-audio-clip').forEach(function(el) {
+        el.addEventListener('pointerdown', gengaAudioClipPointerDown);
+        el.addEventListener('contextmenu', function(ev) { ev.preventDefault(); ev.stopPropagation(); const id = el.getAttribute('data-genga-audio'); openSimpleContextMenu(ev, [{ label: '音声削除', action: function() { gengaDeleteAudioClip(id); } }], { width: 130, height: 44 }); });
+      });
       stageEl.querySelectorAll('.genga-cam-kf').forEach(function(d) {
         d.addEventListener('contextmenu', function(ev) {
           ev.preventDefault(); ev.stopPropagation();
@@ -42890,6 +43037,7 @@
       drawGengaLayerThumbs();
       gengaSyncZoomHeader(); // shared-header label + camera-frame active state for this project
       gengaHydrateDrawStore(state.project); // load any {ref} drawings missing from memory (autosave restore) → re-render
+      gengaHydrateAudioStore(state.project); // load any {ref} audio missing from memory
 
       const pv = stageEl.querySelector('#gengaPreviewCanvas');
       if (pv) {
