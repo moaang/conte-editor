@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver300</title>
+  <title>Conte Editor Prototype ver301</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver300</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver301</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7381,7 +7381,7 @@
     .genga-onion-btn.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .genga-dopesheet { display: flex; flex: none; height: 240px; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
     .genga-layers-col { width: 172px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow-y: auto; background: #f0f0ec; }
-    .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #444; }
+    .genga-col-head { height: 24px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.12); color: #444; background: #ecece4; }
     .genga-layer-head { height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 13px; box-sizing: border-box; cursor: default; }
     .genga-lh-top { display: flex; align-items: center; }
     .genga-lh-bottom { display: flex; align-items: center; gap: 6px; }
@@ -7431,7 +7431,7 @@
     .genga-tick.major span, .genga-tick.numbered span { position: absolute; top: 4px; left: 3px; font-size: 10px; color: #777; }
     .genga-lanes { position: relative; }
     /* one cell-gridline PER FRAME — period follows the timeline zoom via --genga-cell-w (set on .genga-tl-content) */
-    .genga-lane { height: 54px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) var(--genga-cell-w, 22px)); }
+    .genga-lane { height: 54px; border-bottom: 1px solid rgba(0,0,0,0.06); position: relative; box-sizing: border-box; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 1px, transparent 1px, transparent var(--genga-cell-w, 22px)); }
     .genga-exp { position: absolute; top: 3px; height: 48px; border-radius: 6px; background: #dbe6f7; display: flex; flex-direction: column; align-items: stretch; gap: 1px; padding: 2px; box-sizing: border-box; cursor: grab; user-select: none; overflow: hidden; }
     .genga-exp:active { cursor: grabbing; }
     .genga-exp-thumb { flex: 1; min-height: 0; width: 100%; background-color: #fff; background-repeat: no-repeat; background-position: center; background-size: contain; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
@@ -7520,14 +7520,14 @@
     .genga-cam-title { font-weight: 600; }
     .genga-cam-kf-btn { margin-left: auto; border: 1px solid #b9b9ad; background: #fff; color: #999; border-radius: 4px; width: 24px; height: 20px; min-height: 20px; line-height: 1; cursor: pointer; font-size: 12px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .genga-cam-kf-btn.on { color: #e00000; border-color: #e00000; background: #fff0f0; }
-    .genga-cam-lane { height: 26px; position: relative; box-sizing: border-box; border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(0,0,0,0.03); background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) var(--genga-cell-w, 22px)); }
+    .genga-cam-lane { height: 26px; position: relative; box-sizing: border-box; border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(0,0,0,0.03); background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 1px, transparent 1px, transparent var(--genga-cell-w, 22px)); }
     .genga-cam-kf { position: absolute; top: 50%; width: 11px; height: 11px; transform: translate(-50%,-50%) rotate(45deg); background: #e00000; border: 1px solid #fff; box-shadow: 0 0 0 1px #a00; cursor: grab; touch-action: none; z-index: 2; }
     .genga-cam-kf[data-active="1"] { background: #ff5a5a; box-shadow: 0 0 0 1px #a00, 0 0 5px #e00000; }
     .genga-cam-kf[data-selected="1"] { background: #ffce3a; box-shadow: 0 0 0 1px #8a6500, 0 0 6px #ffb000; }
     /* audio track */
     .genga-audio-head { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box; border-top: 1px solid rgba(0,0,0,0.12); border-bottom: 1px solid rgba(0,0,0,0.12); font-size: 11px; color: #444; background: #e7eede; }
     .genga-audio-add { margin-left: auto; border: none; background: #2f8a52; color: #fff; width: 24px; height: 20px; min-height: 20px; border-radius: 4px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
-    .genga-audio-lane { height: 34px; position: relative; box-sizing: border-box; border-top: 1px solid rgba(0,0,0,0.12); border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(47,138,82,0.06); background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) calc(var(--genga-cell-w, 22px) - 1px), rgba(0,0,0,0.05) var(--genga-cell-w, 22px)); }
+    .genga-audio-lane { height: 34px; position: relative; box-sizing: border-box; border-top: 1px solid rgba(0,0,0,0.12); border-bottom: 1px solid rgba(0,0,0,0.12); background-color: rgba(47,138,82,0.06); background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 1px, transparent 1px, transparent var(--genga-cell-w, 22px)); }
     .genga-audio-clip { position: absolute; top: 4px; bottom: 4px; background: #3a9c63; border: 1px solid #277045; border-radius: 4px; overflow: hidden; cursor: grab; touch-action: none; display: flex; align-items: center; z-index: 2; }
     .genga-audio-name { font-size: 10px; color: #fff; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     .project-create-label { display: block; text-align: left; font-size: 13px; font-weight: 600; margin: 6px 0 0; }
@@ -7724,7 +7724,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '300';
+    const APP_DISPLAY_VERSION = '301';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
