@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver315</title>
+  <title>Conte Editor Prototype ver316</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7280,7 +7280,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver315</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver316</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7743,7 +7743,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '315';
+    const APP_DISPLAY_VERSION = '316';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -43488,6 +43488,11 @@
       if (lanesEl) lanesEl.addEventListener('click', function(e) {
         const content = stageEl.querySelector('.genga-tl-content'); if (!content) return;
         stopGengaPlayback();
+        // clicking anywhere in a layer's lane — including an EMPTY cell — selects that layer, matching a koma
+        // click (koma sets it on pointerdown; empty cells only hit the lane, so select it here). Audio-lane
+        // clicks have no data-genga-layer, so they only move the playhead.
+        const lane = e.target && e.target.closest ? e.target.closest('.genga-lane[data-genga-layer]') : null;
+        if (lane) selectGengaLayer(lane.getAttribute('data-genga-layer'));
         const rect = content.getBoundingClientRect();
         setGengaFrame(Math.floor((e.clientX - rect.left) / gengaCellW()) + 1);
       });
