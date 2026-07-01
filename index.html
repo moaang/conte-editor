@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver309</title>
+  <title>Conte Editor Prototype ver310</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6915,7 +6915,7 @@
             <span>Edit</span>
           </div>
           <div class="memo-quick-body">
-            <button id="memoParaparaBtn" class="memo-quick-btn memo-parapara-btn" type="button" aria-label="Parapara previous panel" title="Parapara"><span class="memo-parapara-icon" aria-hidden="true"></span></button>
+            <button id="memoParaparaBtn" class="memo-quick-btn memo-parapara-btn" type="button" aria-label="Parapara previous panel" title="パラパラ（前の絵）／右クリック・長押しで設定"><span class="memo-parapara-icon" aria-hidden="true"></span></button>
             <button id="memoClearDrawingBtn" class="memo-quick-btn memo-clear-drawing-btn" type="button" aria-label="Clear layer drawing" title="Backspace">×</button>
             <button id="memoUndoBtn" class="memo-quick-btn" type="button" aria-label="Undo" title="Undo"><span class="memo-undo-icon" aria-hidden="true"></span></button>
             <button id="memoRedoBtn" class="memo-quick-btn" type="button" aria-label="Redo" title="Redo"><span class="memo-redo-icon" aria-hidden="true"></span></button>
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver309</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver310</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7396,6 +7396,13 @@
     .genga-lfx-pop { position: fixed; z-index: 200; background: #fff; border: 1px solid #b9b9ae; border-radius: 6px; box-shadow: 0 8px 22px rgba(0,0,0,0.18); padding: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
     .genga-lfx-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     .genga-lfx-val { min-width: 34px; text-align: right; color: #2f6fd1; font-variant-numeric: tabular-nums; }
+    .genga-parapara-pop { position: fixed; z-index: 200; background: #fff; border: 1px solid #b9b9ae; border-radius: 6px; box-shadow: 0 8px 22px rgba(0,0,0,0.18); padding: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; min-width: 190px; }
+    .genga-pp-title { font-weight: 600; color: #444; }
+    .genga-pp-modes { display: flex; gap: 4px; }
+    .genga-pp-modes button { flex: 1; border: 1px solid #b9b9ae; background: #f4f4f0; border-radius: 5px; padding: 5px 6px; font-size: 12px; cursor: pointer; }
+    .genga-pp-modes button.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
+    .genga-pp-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .genga-pp-val { min-width: 46px; text-align: right; color: #2f6fd1; font-variant-numeric: tabular-nums; }
     /* exact-fill gauge slider (genga opacity/zoom + conte onion/timeline-zoom): track fills 0→100 precisely,
        no native thumb-offset gap. Drive --p (0–100%) from the value; the gradient hard-stops at --p. */
     /* custom gauge: knob centered EXACTLY at the fill end (--p), so circle always matches the fill */
@@ -7729,7 +7736,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '309';
+    const APP_DISPLAY_VERSION = '310';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -7972,6 +7979,8 @@
       videoPlaybackLastScrollUpdate: 0,
       videoPlaybackLastPreviewKey: '',
       paraparaPreviewTimer: 0,
+      gengaParaparaMs: 160,        // genga parapara flash duration (ms); adjustable via the button's settings popover
+      gengaParaparaMode: 'flash',  // 'flash' (tap → show prev for gengaParaparaMs → return) | 'hold' (hold → prev, release → return)
       previewPanelFlipTouch: null,
       videoPlaybackStartAudioTime: 0,
       speechTimers: [],
@@ -39126,12 +39135,23 @@
       document.addEventListener('contextmenu', handleMemoContextMenu);
       const paraparaBtn = document.getElementById('memoParaparaBtn');
       if (paraparaBtn) {
-        paraparaBtn.addEventListener('click', function(event) {
-          event.preventDefault();
-          event.stopPropagation();
-          if (state.project && state.project.kind === 'genga') gengaFlashParaparaPrev();
-          else showParaparaPreviousPanelPreview();
+        gengaLoadParaparaCfg();
+        const isG = function() { return !!(state.project && state.project.kind === 'genga'); };
+        let ppLpTimer = 0, ppLpFired = false, ppHolding = false;
+        const ppClear = function() { if (ppLpTimer) { clearTimeout(ppLpTimer); ppLpTimer = 0; } };
+        paraparaBtn.addEventListener('contextmenu', function(ev) { if (!isG()) return; ev.preventDefault(); ev.stopPropagation(); gengaOpenParaparaSettings(paraparaBtn); });
+        paraparaBtn.addEventListener('pointerdown', function(ev) {
+          if (!isG() || (ev.button != null && ev.button !== 0)) return;
+          ev.preventDefault();
+          ppLpFired = false; ppHolding = false;
+          ppLpTimer = setTimeout(function() { ppLpFired = true; if (ppHolding) { gengaParaparaHoldEnd(); ppHolding = false; } gengaOpenParaparaSettings(paraparaBtn); }, 600); // long-press → settings
+          if (state.gengaParaparaMode === 'hold') ppHolding = gengaParaparaHoldStart();
         });
+        const ppEnd = function() { if (!isG()) return; ppClear(); if (ppLpFired) { ppLpFired = false; return; } if (state.gengaParaparaMode === 'hold') { if (ppHolding) { gengaParaparaHoldEnd(); ppHolding = false; } } else { gengaFlashParaparaPrev(); } };
+        paraparaBtn.addEventListener('pointerup', ppEnd);
+        paraparaBtn.addEventListener('pointercancel', ppEnd);
+        paraparaBtn.addEventListener('pointerleave', function() { if (ppHolding && !ppLpFired) { gengaParaparaHoldEnd(); ppHolding = false; } ppClear(); });
+        paraparaBtn.addEventListener('click', function(event) { event.preventDefault(); event.stopPropagation(); if (!isG()) showParaparaPreviousPanelPreview(); }); // conte path (genga handled via pointer events)
       }
       const clearDrawingBtn = document.getElementById('memoClearDrawingBtn');
       if (clearDrawingBtn) {
@@ -42098,6 +42118,7 @@
       if (gengaPanDrag) { gengaPanDrag = null; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} return; }
       if (gengaCamDrag) { gengaCameraPointerEnd(ev); return; }
       if (gengaSelDrag || gengaLasso) { gengaSelectPointerEnd(ev); return; }
+      if (state.memoEditTool === 'lasso-stamp' && gengaStamp) { if (gengaStampPt) { gengaStampPt = null; drawGengaPreview(); } return; } // stamp placed on down; drop the ghost on release (no iPad leftover)
       if (!gengaDrawSession) return;
       const sess = gengaDrawSession;
       gengaDrawSession = null;
@@ -42409,8 +42430,8 @@
       patch.getContext('2d').drawImage(full, minx, miny, w, h, 0, 0, w, h);
       const work = document.createElement('canvas'); work.width = pw; work.height = ph; work.getContext('2d').drawImage(wk.cv, 0, 0);
       gengaStamp = { patch: patch, w: w, h: h, work: work, workLayer: String(layer.id), workFrame: frame };
-      gengaStampPt = { x: minx + w / 2, y: miny + h / 2 }; // show the stamp at the captured spot immediately (iPad has no hover) so its placement is visible before the first move
-      state.timelineStatus = 'スタンプ取得：クリックで配置 / 右クリックで終了';
+      gengaStampPt = null; // no persistent ghost (a seeded ghost over the just-cut hole looked like a leftover on iPad); tap places, drag positions
+      state.timelineStatus = 'スタンプ取得：タップで配置（ドラッグで位置決め）/ 右クリックで終了';
       drawGengaPreview();
       return true;
     }
@@ -42470,7 +42491,39 @@
       const pf = gengaAdjacentInstanceFrame(layer, gengaCurrentFrame(), -1); if (pf == null) return; // previous instance
       if (gengaParaparaTimer) clearTimeout(gengaParaparaTimer);
       gengaSetParaparaFrame(pf);
-      gengaParaparaTimer = setTimeout(function() { gengaParaparaTimer = 0; gengaSetParaparaFrame(null); }, 160);
+      const ms = Math.max(60, Math.min(1000, Math.round(Number(state.gengaParaparaMs) || 160)));
+      gengaParaparaTimer = setTimeout(function() { gengaParaparaTimer = 0; gengaSetParaparaFrame(null); }, ms);
+    }
+    // hold-mode: show the previous instance while held, snap back on release
+    function gengaParaparaHoldStart() {
+      if (!state.project || state.project.kind !== 'genga') return false;
+      const layer = gengaSelectedLayer(); if (!layer) return false;
+      const pf = gengaAdjacentInstanceFrame(layer, gengaCurrentFrame(), -1); if (pf == null) return false;
+      if (gengaParaparaTimer) { clearTimeout(gengaParaparaTimer); gengaParaparaTimer = 0; }
+      gengaSetParaparaFrame(pf); return true;
+    }
+    function gengaParaparaHoldEnd() { if (gengaParaparaFrame != null) gengaSetParaparaFrame(null); }
+    // settings popover (right-click / long-press the parapara button): mode + flash duration
+    let gengaParaparaPop = null;
+    function gengaCloseParaparaSettings() { if (gengaParaparaPop) { gengaParaparaPop.remove(); gengaParaparaPop = null; document.removeEventListener('pointerdown', gengaParaparaOutside, true); } }
+    function gengaParaparaOutside(e) { if (gengaParaparaPop && !gengaParaparaPop.contains(e.target)) gengaCloseParaparaSettings(); }
+    function gengaSaveParaparaCfg() { try { localStorage.setItem('gengaParaparaCfg', JSON.stringify({ ms: state.gengaParaparaMs, mode: state.gengaParaparaMode })); } catch (e) {} }
+    function gengaLoadParaparaCfg() { try { const c = JSON.parse(localStorage.getItem('gengaParaparaCfg') || '{}'); if (c && typeof c === 'object') { if (Number.isFinite(Number(c.ms))) state.gengaParaparaMs = Math.max(60, Math.min(1000, Math.round(Number(c.ms)))); if (c.mode === 'hold' || c.mode === 'flash') state.gengaParaparaMode = c.mode; } } catch (e) {} }
+    function gengaOpenParaparaSettings(btn) {
+      const open = gengaParaparaPop; gengaCloseParaparaSettings(); if (open) return; // toggle
+      const pop = document.createElement('div'); pop.className = 'genga-parapara-pop'; gengaParaparaPop = pop;
+      pop.innerHTML =
+        '<div class="genga-pp-title">パラパラ設定</div>' +
+        '<div class="genga-pp-modes"><button type="button" data-pp-mode="flash">フラッシュ</button><button type="button" data-pp-mode="hold">ホールド</button></div>' +
+        '<label class="genga-pp-row" data-pp-dur>フラッシュ時間 <span class="genga-pp-val">' + state.gengaParaparaMs + 'ms</span>' + gengaGaugeHtml('parapara-ms', 60, 1000, 20, state.gengaParaparaMs, 'flex:1;height:14px') + '</label>';
+      document.body.appendChild(pop);
+      const r = btn.getBoundingClientRect();
+      pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 6)) + 'px';
+      pop.style.top = (r.bottom + 4) + 'px';
+      const syncModes = function() { pop.querySelectorAll('[data-pp-mode]').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-pp-mode') === state.gengaParaparaMode); }); const dur = pop.querySelector('[data-pp-dur]'); if (dur) dur.style.opacity = (state.gengaParaparaMode === 'flash') ? '1' : '0.4'; };
+      pop.querySelectorAll('[data-pp-mode]').forEach(function(b) { b.addEventListener('click', function() { state.gengaParaparaMode = b.getAttribute('data-pp-mode'); gengaSaveParaparaCfg(); syncModes(); }); });
+      syncModes();
+      document.addEventListener('pointerdown', gengaParaparaOutside, true);
     }
     // ユビパラ: a touch starting in the left/right margin (outside the paper) then dragged up/down flips frames.
     function gengaFlipTouchStart(ev) {
@@ -43467,6 +43520,10 @@
         state.gengaCellW = clampNumber(v, 8, 64, GENGA_BASE_CELL); renderGengaView(); gengaScrollPlayheadIntoView();
       } else if (a === 'onion') {
         mutateOnionSkinSettings(function(s) { s.opacity = clampNumber(v, 0, 100, 45); });
+      } else if (a === 'parapara-ms') {
+        state.gengaParaparaMs = Math.max(60, Math.min(1000, Math.round(v)));
+        if (gengaParaparaPop) { const lbl = gengaParaparaPop.querySelector('.genga-pp-val'); if (lbl) lbl.textContent = state.gengaParaparaMs + 'ms'; }
+        if (phase === 'end') gengaSaveParaparaCfg();
       } else if (a === 'conte-zoom') {
         state.timelineFramePx = clampNumber(v, 1, 6, 5);
         let root = g; while (root && !(root.querySelector && root.querySelector('.timeline-inner'))) root = root.parentElement;
