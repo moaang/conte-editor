@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver324</title>
+  <title>Conte Editor Prototype ver325</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7274,52 +7274,34 @@
     <div class="genga-create-cols">
       <div class="genga-create-left">
         <h2>原画プロジェクト設定</h2>
-        <div class="genga-wh-row" style="margin-top:2px">
-          <span class="project-create-label" style="margin:0">fps</span>
-          <input id="gsFps" type="number" min="1" max="60" step="1" style="flex:none;width:70px" />
+        <div class="export-video-options-row" style="margin-top:2px">
+          <label>fps <input id="gsFps" type="number" min="1" max="60" step="1"></label>
         </div>
-        <label class="project-create-label">作画用紙サイズ(px)</label>
-        <div class="genga-wh-row">
-          <input id="gsPaperW" type="number" min="1" max="16384" placeholder="幅" autocomplete="off" />
-          <span>×</span>
-          <input id="gsPaperH" type="number" min="1" max="16384" placeholder="高さ" autocomplete="off" />
+        <div class="export-video-options-row">
+          <span class="export-video-options-leg">用紙(px)</span>
+          <label>幅 <input id="gsPaperW" type="number" min="1" max="16384"></label>
+          <label>高さ <input id="gsPaperH" type="number" min="1" max="16384"></label>
         </div>
-        <label class="project-create-label">用紙サイズ変更の基準（絵は原寸のまま再配置）</label>
-        <div id="gsGrowAnchor" class="genga-grow-anchor" title="用紙サイズを変えるとき、既存の絵をどの基準点に合わせて置くか">
+        <label class="project-create-label" style="margin-top:6px">用紙サイズ変更の基準（絵は原寸のまま再配置）</label>
+        <div id="gsGrowAnchor" class="genga-grow-anchor" title="用紙サイズを変えるとき、既存の絵とカメラをどの基準点に合わせるか">
           <button type="button" data-anchor="tl" title="左上"></button>
           <button type="button" data-anchor="tr" title="右上"></button>
           <button type="button" data-anchor="center" title="中央"></button>
           <button type="button" data-anchor="bl" title="左下"></button>
           <button type="button" data-anchor="br" title="右下"></button>
         </div>
-        <label class="project-create-label">カメラ アスペクト比</label>
-        <div id="gsArTabs" class="genga-tabs">
-          <button type="button" data-ar="4:3">4:3</button>
-          <button type="button" data-ar="16:9">16:9</button>
-          <button type="button" data-ar="2.39:1">2.39:1</button>
-          <button type="button" data-ar="1.85:1">1.85:1</button>
-          <button type="button" data-ar="1.66:1">1.66:1</button>
-          <button type="button" data-ar="free">自由</button>
-          <button type="button" data-ar="paper">用紙と同じ</button>
+        <div class="export-video-options-row" style="margin-top:6px">
+          <span class="export-video-options-leg">カメラ枠(px)</span>
+          <label>X <input id="gsCamX" type="number" min="0"></label>
+          <label>Y <input id="gsCamY" type="number" min="0"></label>
+          <label>幅 <input id="gsCamW" type="number" min="1"></label>
+          <label>高さ <input id="gsCamH" type="number" min="1"></label>
         </div>
-        <div id="gsArCustomRow" class="genga-wh-row" style="display:none;">
-          <input id="gsArW" type="number" min="0" step="any" placeholder="比 W" autocomplete="off" />
-          <span>:</span>
-          <input id="gsArH" type="number" min="0" step="any" placeholder="比 H" autocomplete="off" />
+        <div class="export-video-options-row">
+          <span class="export-video-options-leg">出力(px)</span>
+          <label>幅 <input id="gsOutW" type="number" min="1"></label>
+          <label>高さ <input id="gsOutH" type="number" min="1"></label>
         </div>
-        <label class="project-create-label">出力解像度（高さ基準 px）</label>
-        <div id="gsSizeTabs" class="genga-tabs">
-          <button type="button" data-h="270">270</button>
-          <button type="button" data-h="480">480</button>
-          <button type="button" data-h="720">720</button>
-          <button type="button" data-h="1080">1080</button>
-          <button type="button" data-h="free">自由</button>
-        </div>
-        <div id="gsSizeCustomRow" class="genga-wh-row" style="display:none;">
-          <input id="gsSizeH" type="number" min="1" max="16384" placeholder="高さ px" autocomplete="off" />
-        </div>
-        <label class="project-create-label">カメラ枠（プレビューで調整・用紙比）</label>
-        <p id="gsCropInfo" class="project-create-hint" style="margin-top:4px;">—</p>
         <p id="gsNote" class="project-create-hint"></p>
         <div class="choice-dialog-actions">
           <button type="button" id="gsApplyBtn" class="primary">適用</button>
@@ -7333,7 +7315,7 @@
             <div id="gsCam" class="genga-cp-cam"><span class="genga-cp-cross"></span><span class="genga-cp-handle"></span></div>
           </div>
         </div>
-        <p class="project-create-hint genga-cp-hint">プレビューでカメラ枠を縦ドラッグで移動／右下ハンドルで拡縮（横は常に中央・縦は中央から下）。背景は現在フレームの絵。</p>
+        <p class="project-create-hint genga-cp-hint">プレビューでカメラ枠をドラッグで移動／右下ハンドルで拡縮（自由）。背景は現在フレームの絵。</p>
       </div>
     </div>
   </dialog>
@@ -7348,7 +7330,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver324</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver325</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7827,7 +7809,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '324';
+    const APP_DISPLAY_VERSION = '325';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41758,121 +41740,105 @@
         h.classList.toggle('selected', h.getAttribute('data-genga-layer') === state.gengaSelectedLayerId);
       });
     }
-    // ---- edit an EXISTING genga project's paper / camera / output / fps (same UI/logic as the create dialog:
-    // aspect-ratio camera + height-based output + live preview) + a paper-grow anchor. Growing/shrinking the
-    // paper re-canvases every drawing at 1:1 into the new paper, placed at the chosen anchor (drawings are NOT
-    // stretched). Camera is aspect+width-fraction (X always centered), clamped into the paper by normalize. ----
+    // ---- edit an EXISTING genga project's paper / camera / output / fps. UI = the previous raw-px inputs + a
+    // preview on the right. Camera枠 is FREELY movable/resizable (no centered-X / Y-restriction). Changing the
+    // paper size re-canvases every drawing at 1:1 into the new paper at the chosen anchor (center/4 corners) —
+    // drawings keep their pixel size (padded, not stretched) — and the camera shifts by the same anchor offset
+    // so the framing is preserved. Normalize clamps the camera into the paper. ----
     function openGengaSettings() {
       if (!(state.project && state.project.kind === 'genga')) return;
       const gt = state.project.gengaTimeline; if (!gt) return;
       const dialog = document.getElementById('gengaSettingsDialog'); if (!dialog) return;
       const $ = function(id) { return document.getElementById(id); };
-      const stage = $('gsStage'), camEl = $('gsCam'), readout = $('gsReadout'), cropInfo = $('gsCropInfo'), note = $('gsNote');
-      const arTabs = $('gsArTabs'), arCustomRow = $('gsArCustomRow'), arWEl = $('gsArW'), arHEl = $('gsArH');
-      const sizeTabs = $('gsSizeTabs'), sizeCustomRow = $('gsSizeCustomRow'), sizeHEl = $('gsSizeH');
-      const paperWEl = $('gsPaperW'), paperHEl = $('gsPaperH'), fpsEl = $('gsFps'), growEl = $('gsGrowAnchor');
+      const stage = $('gsStage'), camEl = $('gsCam'), readout = $('gsReadout'), note = $('gsNote'), growEl = $('gsGrowAnchor');
+      const fpsEl = $('gsFps'), pwEl = $('gsPaperW'), phEl = $('gsPaperH'), cxEl = $('gsCamX'), cyEl = $('gsCamY'), cwEl = $('gsCamW'), chEl = $('gsCamH'), owEl = $('gsOutW'), ohEl = $('gsOutH');
       const applyBtn = $('gsApplyBtn'), cancelBtn = $('gsCancelBtn');
       if (!stage || !camEl) return;
-      const cam = gt.camera, pap = gt.paper, outp = gt.output;
-      const st = { paperW: pap.w, paperH: pap.h, arW: Math.max(1, cam.w), arH: Math.max(1, cam.h), outH: outp.h, outW: outp.w,
-        cropWfrac: cam.w / Math.max(1, pap.w), cropYfrac: cam.y / Math.max(1, pap.h),
-        matchPaper: (cam.w === pap.w && cam.h === pap.h), camW: cam.w, camH: cam.h, camY: cam.y, growAnchor: 'center', previewUrl: '' };
-      let scale = 1;
-      const camX = function() { return Math.max(0, Math.round((st.paperW - st.camW) / 2)); };
-      const parseAr = function(s) { const p = String(s).split(':'); const a = Number(p[0]), b = Number(p[1]); return (a > 0 && b > 0) ? { w: a, h: b } : null; };
+      const origPaperW = gt.paper.w, origPaperH = gt.paper.h, baseCamX = gt.camera.x, baseCamY = gt.camera.y;
+      const st = { paperW: origPaperW, paperH: origPaperH, camX: gt.camera.x, camY: gt.camera.y, camW: gt.camera.w, camH: gt.camera.h, outW: gt.output.w, outH: gt.output.h, growAnchor: 'center' };
+      let scale = 1, baseComposite = null, done = false;
       const setActive = function(c, attr, val) { if (!c) return; c.querySelectorAll('button').forEach(function(b) { b.classList.toggle('active', b.getAttribute(attr) === val); }); };
-      const recompute = function() {
+      const anchorOffset = function() {
+        const ax = (st.growAnchor === 'tl' || st.growAnchor === 'bl') ? 'start' : ((st.growAnchor === 'tr' || st.growAnchor === 'br') ? 'end' : 'center');
+        const ay = (st.growAnchor === 'tl' || st.growAnchor === 'tr') ? 'start' : ((st.growAnchor === 'bl' || st.growAnchor === 'br') ? 'end' : 'center');
+        const off = function(o, n, s) { return s === 'center' ? Math.round((n - o) / 2) : (s === 'end' ? (n - o) : 0); };
+        return { x: off(origPaperW, st.paperW, ax), y: off(origPaperH, st.paperH, ay) };
+      };
+      const clampCam = function() {
         st.paperW = Math.max(1, Math.round(st.paperW)); st.paperH = Math.max(1, Math.round(st.paperH));
-        let cw, ch, cy;
-        if (st.matchPaper) { cw = st.paperW; ch = st.paperH; cy = 0; st.cropWfrac = 1; st.cropYfrac = 0; }
-        else {
-          cw = Math.max(8, Math.round(st.cropWfrac * st.paperW));
-          ch = Math.max(8, Math.round(cw * st.arH / st.arW));
-          if (ch > st.paperH) { ch = st.paperH; cw = Math.max(8, Math.round(ch * st.arW / st.arH)); }
-          if (cw > st.paperW) { cw = st.paperW; ch = Math.max(8, Math.round(cw * st.arH / st.arW)); }
-          st.cropWfrac = cw / st.paperW;
-          const cy0 = Math.max(0, Math.round((st.paperH - ch) / 2));
-          cy = Math.max(cy0, Math.min(Math.round(st.cropYfrac * st.paperH), st.paperH - ch));
-          st.cropYfrac = cy / st.paperH;
-        }
-        st.camW = cw; st.camH = ch; st.camY = cy;
-        const aw = st.matchPaper ? st.paperW : st.arW, ah = st.matchPaper ? st.paperH : st.arH;
-        st.outH = Math.max(1, Math.round(st.outH)); st.outW = Math.max(1, Math.round(st.outH * aw / ah));
+        st.camW = Math.max(1, Math.min(Math.round(st.camW), st.paperW));
+        st.camH = Math.max(1, Math.min(Math.round(st.camH), st.paperH));
+        st.camX = Math.max(0, Math.min(Math.round(st.camX), st.paperW - st.camW));
+        st.camY = Math.max(0, Math.min(Math.round(st.camY), st.paperH - st.camH));
+        st.outW = Math.max(1, Math.round(st.outW)); st.outH = Math.max(1, Math.round(st.outH));
+      };
+      // re-canvas the current-frame composite into the new paper at the anchor offset → preview background,
+      // so the preview shows exactly where the (original-size) art will land after resize.
+      const rebuildArtBg = function() {
+        if (!baseComposite) { stage.style.backgroundImage = 'none'; return; }
+        const off = anchorOffset();
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(st.paperW)); c.height = Math.max(1, Math.round(st.paperH));
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        x.drawImage(baseComposite, off.x, off.y, origPaperW, origPaperH);
+        stage.style.backgroundImage = 'url(' + c.toDataURL('image/png') + ')';
       };
       const renderPreview = function() {
-        recompute();
-        const MAXW = 520, MAXH = 340;
-        scale = Math.min(MAXW / st.paperW, MAXH / st.paperH);
-        stage.style.width = Math.max(1, Math.round(st.paperW * scale)) + 'px';
-        stage.style.height = Math.max(1, Math.round(st.paperH * scale)) + 'px';
-        stage.style.backgroundImage = st.previewUrl ? ('url(' + st.previewUrl + ')') : 'none';
-        camEl.style.left = Math.round(camX() * scale) + 'px';
-        camEl.style.top = Math.round(st.camY * scale) + 'px';
-        camEl.style.width = Math.round(st.camW * scale) + 'px';
-        camEl.style.height = Math.round(st.camH * scale) + 'px';
-        const arTxt = st.matchPaper ? '用紙と同じ' : (st.arW + ':' + st.arH);
-        if (readout) readout.textContent = '用紙 ' + st.paperW + '×' + st.paperH + ' / 出力 ' + st.outW + '×' + st.outH + '（' + arTxt + '）';
-        if (cropInfo) cropInfo.textContent = st.matchPaper ? ('用紙と同じ ・ ' + st.camW + '×' + st.camH + 'px') : ('カメラ ' + st.camW + '×' + st.camH + 'px ・ Y ' + Math.round(st.cropYfrac * 100) + '%（横中央）');
+        clampCam();
+        const MAXW = 520, MAXH = 340; scale = Math.min(MAXW / st.paperW, MAXH / st.paperH);
+        stage.style.width = Math.round(st.paperW * scale) + 'px'; stage.style.height = Math.round(st.paperH * scale) + 'px';
+        camEl.style.left = Math.round(st.camX * scale) + 'px'; camEl.style.top = Math.round(st.camY * scale) + 'px';
+        camEl.style.width = Math.round(st.camW * scale) + 'px'; camEl.style.height = Math.round(st.camH * scale) + 'px';
+        if (readout) readout.textContent = '用紙 ' + st.paperW + '×' + st.paperH + ' / カメラ ' + st.camW + '×' + st.camH + ' @(' + st.camX + ',' + st.camY + ') / 出力 ' + st.outW + '×' + st.outH;
       };
-      const syncInputs = function() { if (paperWEl) paperWEl.value = st.paperW; if (paperHEl) paperHEl.value = st.paperH; };
-      // seed UI from the current project
+      const syncInputs = function() {
+        if (pwEl) pwEl.value = st.paperW; if (phEl) phEl.value = st.paperH;
+        if (cxEl) cxEl.value = st.camX; if (cyEl) cyEl.value = st.camY; if (cwEl) cwEl.value = st.camW; if (chEl) chEl.value = st.camH;
+        if (owEl) owEl.value = st.outW; if (ohEl) ohEl.value = st.outH;
+      };
+      const num = function(el, fb) { const v = Math.round(Number(el && el.value)); return isFinite(v) ? v : fb; };
+      const readInputs = function() {
+        st.paperW = Math.max(1, num(pwEl, st.paperW)); st.paperH = Math.max(1, num(phEl, st.paperH));
+        st.camX = num(cxEl, st.camX); st.camY = num(cyEl, st.camY); st.camW = Math.max(1, num(cwEl, st.camW)); st.camH = Math.max(1, num(chEl, st.camH));
+        st.outW = Math.max(1, num(owEl, st.outW)); st.outH = Math.max(1, num(ohEl, st.outH));
+      };
+      // paper-size or anchor change → snap the camera to track the anchor (default framing) + rebuild the bg
+      const onPaperOrAnchor = function() {
+        readInputs();
+        const off = anchorOffset();
+        st.camX = baseCamX + off.x; st.camY = baseCamY + off.y;
+        clampCam(); rebuildArtBg(); renderPreview(); syncInputs();
+      };
+      // seed
       if (fpsEl) fpsEl.value = gt.fps;
-      const arKey = st.matchPaper ? 'paper' : (function() { const presets = ['4:3', '16:9', '2.39:1', '1.85:1', '1.66:1']; const r = st.arW / st.arH; for (let i = 0; i < presets.length; i++) { const a = parseAr(presets[i]); if (a && Math.abs(a.w / a.h - r) < 0.01) return presets[i]; } return 'free'; })();
-      setActive(arTabs, 'data-ar', arKey);
-      if (arKey === 'free') { if (arCustomRow) arCustomRow.style.display = 'flex'; if (arWEl) arWEl.value = st.arW; if (arHEl) arHEl.value = st.arH; } else if (arCustomRow) arCustomRow.style.display = 'none';
-      const sizeKey = (['270', '480', '720', '1080'].indexOf(String(st.outH)) >= 0) ? String(st.outH) : 'free';
-      setActive(sizeTabs, 'data-h', sizeKey);
-      if (sizeKey === 'free') { if (sizeCustomRow) sizeCustomRow.style.display = 'flex'; if (sizeHEl) sizeHEl.value = st.outH; } else if (sizeCustomRow) sizeCustomRow.style.display = 'none';
       setActive(growEl, 'data-anchor', st.growAnchor);
       let n = 0; (gt.layers || []).forEach(function(l) { n += (l.exposures || []).length; });
-      if (note) note.textContent = n ? ('コマ ' + n + '個 — 用紙サイズを変えると絵は原寸のまま基準位置に再配置されます。') : 'カメラ枠は用紙内にクランプされます。';
-      try { const comp = gengaCompositeFrame(gengaCurrentFrame()); if (comp) { const c2 = document.createElement('canvas'); c2.width = comp.width; c2.height = comp.height; const x2 = c2.getContext('2d'); x2.fillStyle = '#fff'; x2.fillRect(0, 0, c2.width, c2.height); x2.drawImage(comp, 0, 0); st.previewUrl = c2.toDataURL('image/png'); } } catch (e) {}
+      if (note) note.textContent = n ? ('コマ ' + n + '個 — 用紙サイズを変えると絵は原寸のまま基準位置に再配置され、カメラも同じ基準で移動します。') : '用紙サイズ変更時の基準です。';
       syncInputs(); renderPreview();
+      try { const comp = gengaCompositeFrame(gengaCurrentFrame()); if (comp) { const c2 = document.createElement('canvas'); c2.width = comp.width; c2.height = comp.height; c2.getContext('2d').drawImage(comp, 0, 0); const im = new Image(); im.onload = function() { baseComposite = im; if (!done) rebuildArtBg(); }; im.src = c2.toDataURL('image/png'); } } catch (e) {}
       // ---- handlers (bound per-open; cleaned up on close) ----
-      let done = false;
-      const onArTab = function(e) {
-        const btn = e.target && e.target.closest ? e.target.closest('button[data-ar]') : null; if (!btn) return;
-        const val = btn.getAttribute('data-ar'); setActive(arTabs, 'data-ar', val);
-        if (val === 'paper') { st.matchPaper = true; if (arCustomRow) arCustomRow.style.display = 'none'; renderPreview(); syncInputs(); return; }
-        st.matchPaper = false;
-        if (val === 'free') { if (arCustomRow) arCustomRow.style.display = 'flex'; if (arWEl && !arWEl.value) arWEl.value = st.arW; if (arHEl && !arHEl.value) arHEl.value = st.arH; if (arWEl) { try { arWEl.focus(); } catch (err) {} } }
-        else { if (arCustomRow) arCustomRow.style.display = 'none'; const ar = parseAr(val); if (ar) { st.arW = ar.w; st.arH = ar.h; } renderPreview(); syncInputs(); }
-      };
-      const onArCustom = function() { const a = Number(arWEl && arWEl.value), b = Number(arHEl && arHEl.value); if (a > 0 && b > 0) { st.arW = a; st.arH = b; renderPreview(); syncInputs(); } };
-      const onSizeTab = function(e) {
-        const btn = e.target && e.target.closest ? e.target.closest('button[data-h]') : null; if (!btn) return;
-        const val = btn.getAttribute('data-h'); setActive(sizeTabs, 'data-h', val);
-        if (val === 'free') { if (sizeCustomRow) sizeCustomRow.style.display = 'flex'; if (sizeHEl && !sizeHEl.value) sizeHEl.value = st.outH; if (sizeHEl) { try { sizeHEl.focus(); } catch (err) {} } }
-        else { if (sizeCustomRow) sizeCustomRow.style.display = 'none'; st.outH = Number(val); renderPreview(); syncInputs(); }
-      };
-      const onSizeCustom = function() { const h = Math.round(Number(sizeHEl && sizeHEl.value)); if (h > 0) { st.outH = h; renderPreview(); syncInputs(); } };
-      const onPaperWH = function() { let w = Math.round(Number(paperWEl && paperWEl.value)), h = Math.round(Number(paperHEl && paperHEl.value)); if (w > 0) st.paperW = w; if (h > 0) st.paperH = h; renderPreview(); syncInputs(); };
-      const onGrow = function(e) { const btn = e.target && e.target.closest ? e.target.closest('button[data-anchor]') : null; if (!btn) return; st.growAnchor = btn.getAttribute('data-anchor'); setActive(growEl, 'data-anchor', st.growAnchor); };
+      const onCamInput = function() { readInputs(); renderPreview(); };
+      const onCamChange = function() { readInputs(); clampCam(); syncInputs(); renderPreview(); };
+      const onGrow = function(e) { const btn = e.target && e.target.closest ? e.target.closest('button[data-anchor]') : null; if (!btn) return; st.growAnchor = btn.getAttribute('data-anchor'); setActive(growEl, 'data-anchor', st.growAnchor); onPaperOrAnchor(); };
       let drag = null;
       const stagePt = function(e) { const b = stage.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
       const onStageDown = function(e) {
         if (e.target && e.target.classList && e.target.classList.contains('genga-cp-handle')) drag = { mode: 'resize' };
-        else if (e.target === camEl) { const p = stagePt(e); drag = { mode: 'move', grabY: p.y - st.camY * scale }; }
+        else if (e.target === camEl || (e.target && e.target.classList && e.target.classList.contains('genga-cp-cross'))) { const p = stagePt(e); drag = { mode: 'move', gx: p.x - st.camX * scale, gy: p.y - st.camY * scale }; }
         else return;
-        if (st.matchPaper) { st.arW = st.paperW; st.arH = st.paperH; st.matchPaper = false; setActive(arTabs, 'data-ar', 'free'); if (arCustomRow) arCustomRow.style.display = 'flex'; if (arWEl) arWEl.value = st.arW; if (arHEl) arHEl.value = st.arH; }
         document.addEventListener('pointermove', onStageMove); document.addEventListener('pointerup', onStageUp);
         e.preventDefault(); e.stopPropagation();
       };
       const onStageMove = function(e) {
         if (!drag) return; const p = stagePt(e);
-        if (drag.mode === 'move') { st.cropYfrac = ((p.y - drag.grabY) / scale) / Math.max(1, st.paperH); renderPreview(); }
-        else { const th = Math.max(8, (p.y / scale) - st.camY); st.cropWfrac = (th * st.arW / st.arH) / Math.max(1, st.paperW); renderPreview(); }
+        if (drag.mode === 'move') { st.camX = (p.x - drag.gx) / scale; st.camY = (p.y - drag.gy) / scale; }
+        else { st.camW = (p.x / scale) - st.camX; st.camH = (p.y / scale) - st.camY; }
+        renderPreview(); syncInputs();
       };
       const onStageUp = function() { document.removeEventListener('pointermove', onStageMove); document.removeEventListener('pointerup', onStageUp); drag = null; };
       const cleanup = function() {
-        if (arTabs) arTabs.removeEventListener('click', onArTab);
-        if (sizeTabs) sizeTabs.removeEventListener('click', onSizeTab);
         if (growEl) growEl.removeEventListener('click', onGrow);
-        if (arWEl) arWEl.removeEventListener('input', onArCustom);
-        if (arHEl) arHEl.removeEventListener('input', onArCustom);
-        if (sizeHEl) sizeHEl.removeEventListener('input', onSizeCustom);
-        if (paperWEl) paperWEl.removeEventListener('change', onPaperWH);
-        if (paperHEl) paperHEl.removeEventListener('change', onPaperWH);
+        [pwEl, phEl].forEach(function(el) { if (el) el.removeEventListener('change', onPaperOrAnchor); });
+        [cxEl, cyEl, cwEl, chEl, owEl, ohEl].forEach(function(el) { if (el) { el.removeEventListener('input', onCamInput); el.removeEventListener('change', onCamChange); } });
         if (stage) stage.removeEventListener('pointerdown', onStageDown);
         if (applyBtn) applyBtn.removeEventListener('click', onApply);
         if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
@@ -41882,18 +41848,14 @@
       const onCancel = function() { finish(); };
       const onClose = function() { if (!done) finish(); };
       const onApply = async function() {
-        recompute();
-        if (!(st.camW > 0 && st.camH > 0 && st.paperW > 0 && st.paperH > 0)) { if (note) note.textContent = 'サイズを確認してください。'; return; }
+        readInputs(); clampCam();
         const fps = Math.max(1, Math.min(60, Math.round(Number(fpsEl && fpsEl.value) || gt.fps)));
-        const newPaperW = st.paperW, newPaperH = st.paperH, oldPaperW = gt.paper.w, oldPaperH = gt.paper.h;
-        const newCamera = { x: camX(), y: st.camY, w: st.camW, h: st.camH }, newOutput = { w: st.outW, h: st.outH };
+        const newPaperW = st.paperW, newPaperH = st.paperH, oldPaperW = origPaperW, oldPaperH = origPaperH;
+        const newCamera = { x: st.camX, y: st.camY, w: st.camW, h: st.camH }, newOutput = { w: st.outW, h: st.outH };
         let refMap = null;
         if (newPaperW !== oldPaperW || newPaperH !== oldPaperH) {
           if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '再配置中…'; }
-          const ax = (st.growAnchor === 'tl' || st.growAnchor === 'bl') ? 'start' : ((st.growAnchor === 'tr' || st.growAnchor === 'br') ? 'end' : 'center');
-          const ay = (st.growAnchor === 'tl' || st.growAnchor === 'tr') ? 'start' : ((st.growAnchor === 'bl' || st.growAnchor === 'br') ? 'end' : 'center');
-          const off = function(oldS, newS, side) { return side === 'center' ? Math.round((newS - oldS) / 2) : (side === 'end' ? (newS - oldS) : 0); };
-          const offX = off(oldPaperW, newPaperW, ax), offY = off(oldPaperH, newPaperH, ay);
+          const off = anchorOffset(); const offX = off.x, offY = off.y;
           const uniq = new Map(); // dataUrl -> resolved drawing
           (gt.layers || []).forEach(function(l) {
             (l.exposures || []).forEach(function(e) { const d = gengaExposureDrawing(l, e); if (d && d.dataUrl) uniq.set(d.dataUrl, d); });
@@ -41924,14 +41886,9 @@
         if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '適用'; }
         finish();
       };
-      if (arTabs) arTabs.addEventListener('click', onArTab);
-      if (sizeTabs) sizeTabs.addEventListener('click', onSizeTab);
       if (growEl) growEl.addEventListener('click', onGrow);
-      if (arWEl) arWEl.addEventListener('input', onArCustom);
-      if (arHEl) arHEl.addEventListener('input', onArCustom);
-      if (sizeHEl) sizeHEl.addEventListener('input', onSizeCustom);
-      if (paperWEl) paperWEl.addEventListener('change', onPaperWH);
-      if (paperHEl) paperHEl.addEventListener('change', onPaperWH);
+      [pwEl, phEl].forEach(function(el) { if (el) el.addEventListener('change', onPaperOrAnchor); });
+      [cxEl, cyEl, cwEl, chEl, owEl, ohEl].forEach(function(el) { if (el) { el.addEventListener('input', onCamInput); el.addEventListener('change', onCamChange); } });
       if (stage) stage.addEventListener('pointerdown', onStageDown);
       if (applyBtn) applyBtn.addEventListener('click', onApply);
       if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
