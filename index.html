@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver312</title>
+  <title>Conte Editor Prototype ver313</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7280,7 +7280,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver312</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver313</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7740,7 +7740,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '312';
+    const APP_DISPLAY_VERSION = '313';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39708,19 +39708,37 @@
     // Preload every conte-layer bitmap into an in-memory Image cache so the real-time record loop can
     // draw each frame synchronously (no per-frame async load -> no stalls / dropped frames).
     async function preloadVideoExportBitmaps(project, onStatus) {
+      // Re-hydrate any layer bitmap that is persisted to the working folder but whose in-memory bitmapDataUrl
+      // was dropped this session (e.g. a per-panel 中割 variation created + saved-to-file, whose inline data is
+      // then cleared — hydration otherwise only runs on open/restore, not before export). Without this the
+      // render loop's `if (!src) continue` guard silently skips that layer, so it vanishes from the exported
+      // video even though the editor still shows it. No-op for drawings already loaded / non-folder projects.
+      if (typeof hydrateWorkspaceLayerDrawingRefs === 'function') {
+        try { await hydrateWorkspaceLayerDrawingRefs(project); } catch (e) {}
+      }
       const cache = new Map();
       const drawings = project && project.layerDrawings ? project.layerDrawings : {};
       const refs = Object.keys(drawings);
       let loaded = 0;
+      let missing = 0;
       for (let i = 0; i < refs.length; i += 1) {
         const drawing = getLayerDrawingData(project, refs[i]);
         const src = drawing && drawing.bitmapDataUrl;
-        if (!src) continue;
+        if (!src) {
+          // A drawing referenced by a stored file but still without pixels after hydration = a genuine
+          // export gap; surface it (rather than silently dropping the layer) so it's diagnosable.
+          if (drawing && drawing.bitmapStorage && drawing.bitmapStorage.fileName) {
+            missing += 1;
+            console.warn('[video export] layer bitmap unavailable, layer will be missing from output:', refs[i], drawing.bitmapStorage.fileName);
+          }
+          continue;
+        }
         const img = await loadImageForExport(src);
         if (img) cache.set(refs[i], img);
         loaded += 1;
         if (onStatus && loaded % 25 === 0) onStatus('レイヤー読み込み ' + loaded + ' ...');
       }
+      if (missing > 0 && onStatus) onStatus('注意: ' + missing + '件のレイヤー画像が読み込めず、出力に含まれません');
       return cache;
     }
 
