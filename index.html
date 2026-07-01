@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver322</title>
+  <title>Conte Editor Prototype ver323</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7270,6 +7270,38 @@
     </div>
   </dialog>
 
+  <dialog id="gengaSettingsDialog" class="choice-dialog">
+    <div class="export-dialog-body">
+      <h2>原画プロジェクト設定</h2>
+      <p>用紙・カメラ枠・fps を変更します。（絵は用紙サイズに合わせて表示されます）</p>
+      <div class="export-video-options-row">
+        <label>fps <input id="gsFps" type="number" min="1" max="60" step="1"></label>
+      </div>
+      <div class="export-video-options-row">
+        <span class="export-video-options-leg">用紙(px)</span>
+        <label>幅 <input id="gsPaperW" type="number" min="1" max="16384"></label>
+        <label>高さ <input id="gsPaperH" type="number" min="1" max="16384"></label>
+      </div>
+      <div class="export-video-options-row">
+        <span class="export-video-options-leg">カメラ枠(px)</span>
+        <label>X <input id="gsCamX" type="number" min="0"></label>
+        <label>Y <input id="gsCamY" type="number" min="0"></label>
+        <label>幅 <input id="gsCamW" type="number" min="1"></label>
+        <label>高さ <input id="gsCamH" type="number" min="1"></label>
+      </div>
+      <div class="export-video-options-row">
+        <span class="export-video-options-leg">出力(px)</span>
+        <label>幅 <input id="gsOutW" type="number" min="1"></label>
+        <label>高さ <input id="gsOutH" type="number" min="1"></label>
+      </div>
+      <div id="gsNote" class="export-video-options-note"></div>
+      <div class="export-dialog-actions">
+        <button type="button" id="gsCancelBtn">キャンセル</button>
+        <button type="button" id="gsApplyBtn" class="primary">適用</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="versionInfoDialog" class="choice-dialog">
     <form method="dialog">
       <h2>Version Info</h2>
@@ -7280,7 +7312,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver322</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver323</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7380,7 +7412,8 @@
     .genga-topbar { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; font-size: 12px; color: #333; padding: 2px 0; }
     .genga-tl-label { font-weight: 600; }
     .genga-frame-readout { font-variant-numeric: tabular-nums; opacity: 0.8; }
-    .genga-info-mini { margin-left: auto; opacity: 0.55; font-size: 11px; }
+    .genga-info-mini { margin-left: auto; opacity: 0.55; font-size: 11px; cursor: pointer; background: none; border: none; padding: 0; font-family: inherit; color: inherit; }
+    .genga-info-mini:hover { opacity: 0.85; text-decoration: underline; }
     .genga-onion-btn { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 11px; line-height: 1.4; }
     .genga-onion-btn.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
     .genga-dopesheet { display: flex; flex: none; height: 240px; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
@@ -7748,7 +7781,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '322';
+    const APP_DISPLAY_VERSION = '323';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41679,6 +41712,52 @@
         h.classList.toggle('selected', h.getAttribute('data-genga-layer') === state.gengaSelectedLayerId);
       });
     }
+    // ---- edit an EXISTING genga project's paper / camera frame / fps (creation-only until now) ----
+    let gengaSettingsBound = false;
+    function openGengaSettings() {
+      if (!(state.project && state.project.kind === 'genga')) return;
+      const gt = state.project.gengaTimeline; if (!gt) return;
+      const dialog = document.getElementById('gengaSettingsDialog'); if (!dialog) return;
+      const set = function(id, v) { const el = document.getElementById(id); if (el) el.value = v; };
+      set('gsFps', gt.fps);
+      set('gsPaperW', gt.paper.w); set('gsPaperH', gt.paper.h);
+      set('gsCamX', gt.camera.x); set('gsCamY', gt.camera.y); set('gsCamW', gt.camera.w); set('gsCamH', gt.camera.h);
+      set('gsOutW', gt.output.w); set('gsOutH', gt.output.h);
+      const note = document.getElementById('gsNote');
+      if (note) {
+        let n = 0; (gt.layers || []).forEach(function(l) { n += (l.exposures || []).length; });
+        note.textContent = n ? ('コマ ' + n + '個あり — 用紙の比率を変えると絵が拡縮されます。カメラワーク(赤枠)キーフレームは自動調整されません。') : 'カメラ枠は用紙内に自動でクランプされます。';
+      }
+      if (!gengaSettingsBound) {
+        gengaSettingsBound = true;
+        const apply = document.getElementById('gsApplyBtn');
+        const cancel = document.getElementById('gsCancelBtn');
+        if (apply) apply.addEventListener('click', applyGengaSettings);
+        if (cancel) cancel.addEventListener('click', function() { if (dialog.open) dialog.close(); });
+      }
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+    }
+    function applyGengaSettings() {
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return;
+      const num = function(id, fallback) { const el = document.getElementById(id); const v = Math.round(Number(el && el.value)); return isFinite(v) ? v : fallback; };
+      const fps = Math.max(1, Math.min(60, num('gsFps', gt.fps)));
+      const paperW = Math.max(1, num('gsPaperW', gt.paper.w));
+      const paperH = Math.max(1, num('gsPaperH', gt.paper.h));
+      const camW = Math.max(1, num('gsCamW', gt.camera.w));
+      const camH = Math.max(1, num('gsCamH', gt.camera.h));
+      const camX = Math.max(0, num('gsCamX', gt.camera.x));
+      const camY = Math.max(0, num('gsCamY', gt.camera.y));
+      const outW = Math.max(1, num('gsOutW', gt.output.w));
+      const outH = Math.max(1, num('gsOutH', gt.output.h));
+      runCommand('原画プロジェクト設定', function(proj) {
+        const g = proj.gengaTimeline; if (!g) return;
+        g.fps = fps; proj.fps = fps;
+        g.paper = { w: paperW, h: paperH };
+        g.camera = { x: camX, y: camY, w: camW, h: camH }; // normalizeGengaTimeline clamps camera into the paper
+        g.output = { w: outW, h: outH };
+      });
+      const dialog = document.getElementById('gengaSettingsDialog'); if (dialog && dialog.open) dialog.close();
+    }
     // ---- standalone "delete target" selection (distinct from the playhead-linked active layer) ----
     // Exactly one of {solo layer, camera keyframe} is active at a time; setting one clears the other, and any
     // playhead/draw/koma op clears both. Delete priority: keyframe → solo layer → koma-at-playhead.
@@ -43557,7 +43636,7 @@
           '<span class="genga-tl-label">原画タイムライン</span>' +
           '<span class="genga-frame-readout">F<span id="gengaFrameNo">' + frame + '</span> / ' + total + '</span>' +
           '<label class="genga-tl-zoom" title="タイムライン拡大縮小">⟷' + gengaGaugeHtml('genga-zoom', 8, 64, 2, gengaCellW(), 'width:96px;height:14px') + '</label>' +
-          '<span class="genga-info-mini" style="margin-left:auto">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</span>' +
+          '<button class="genga-info-mini" id="gengaInfoMini" type="button" style="margin-left:auto" title="用紙・カメラ枠・fps を変更">' + escapeHtml(project.title || '(無題)') + ' / ' + gt.camera.w + '×' + gt.camera.h + ' / ' + fps + 'fps</button>' +
           '<button id="gengaExportBtn" class="genga-export-btn" type="button" title="映像を書き出す（カメラ枠が出力範囲・音声込み / mp4対応ブラウザは mp4、非対応は webm）">書き出し</button>' +
         '</div>' +
         '<div class="genga-dopesheet">' +
@@ -43583,6 +43662,8 @@
       if (audioAddBtn) audioAddBtn.addEventListener('click', function(ev) { ev.stopPropagation(); gengaImportAudio(); });
       const expBtn = stageEl.querySelector('#gengaExportBtn');
       if (expBtn) expBtn.addEventListener('click', function() { gengaRunExport(expBtn); });
+      const infoMini = stageEl.querySelector('#gengaInfoMini');
+      if (infoMini) infoMini.addEventListener('click', openGengaSettings);
       stageEl.querySelectorAll('.genga-audio-clip').forEach(function(el) {
         el.addEventListener('pointerdown', gengaAudioClipPointerDown);
         el.addEventListener('contextmenu', function(ev) { ev.preventDefault(); ev.stopPropagation(); const id = el.getAttribute('data-genga-audio'); openSimpleContextMenu(ev, [{ label: '音声削除', action: function() { gengaDeleteAudioClip(id); } }], { width: 130, height: 44 }); });
