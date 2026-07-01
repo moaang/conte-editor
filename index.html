@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver317</title>
+  <title>Conte Editor Prototype ver318</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7280,7 +7280,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver317</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver318</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7743,7 +7743,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '317';
+    const APP_DISPLAY_VERSION = '318';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -43101,16 +43101,16 @@
       const delta = Math.round((ev.clientX - d.startX) / gengaCellW());
       if (d.mode === 'resize') {
         d.nextHold = Math.max(1, d.origHold + delta);
-        d.block.style.width = (d.nextHold * gengaCellW() - 2) + 'px';
+        d.block.style.width = (d.nextHold * gengaCellW() - 1) + 'px';
       } else if (d.mode === 'resize-left') {
         const ns = Math.max(1, Math.min(d.origStart + delta, d.origStart + d.origHold - 1));
         d.nextStart = ns;
         d.nextHold = d.origStart + d.origHold - ns;
-        d.block.style.left = ((ns - 1) * gengaCellW()) + 'px';
-        d.block.style.width = (d.nextHold * gengaCellW() - 2) + 'px';
+        d.block.style.left = ((ns - 1) * gengaCellW() + 1) + 'px';
+        d.block.style.width = (d.nextHold * gengaCellW() - 1) + 'px';
       } else {
         d.nextStart = Math.max(1, d.origStart + delta);
-        d.block.style.left = ((d.nextStart - 1) * gengaCellW()) + 'px';
+        d.block.style.left = ((d.nextStart - 1) * gengaCellW() + 1) + 'px';
       }
       // live: make the none/hold/repeat button follow the last koma's right edge during the drag (no commit lag)
       const lane = d.block.parentElement;
@@ -43368,7 +43368,7 @@
             const numText = valued ? String(e.instanceValue) : String(expoRank[e.id] || (ei + 1));
             const eDr = gengaExposureDrawing(l, e);
             const thumbBg = (eDr && eDr.dataUrl) ? ' style="background-image:url(' + eDr.dataUrl + ')"' : '';
-            blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW + 1) + 'px;width:' + (e.holdFrames * cellW - 2) + 'px">' +
+            blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW + 1) + 'px;width:' + (e.holdFrames * cellW - 1) + 'px">' +
               '<span class="genga-exp-thumb"' + thumbBg + '></span>' +
               '<span class="genga-exp-num' + (valued ? ' valued' : '') + '" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" title="ダブルクリックで値入力 / ドラッグでセル選択（C=コピー X=カット V=貼付）">' + escapeHtml(numText) + '</span>' +
               '<span class="genga-exp-resize-left"></span><span class="genga-exp-resize"></span></div>';
