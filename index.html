@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver308</title>
+  <title>Conte Editor Prototype ver309</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver308</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver309</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7729,7 +7729,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '308';
+    const APP_DISPLAY_VERSION = '309';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -38723,9 +38723,11 @@
       const key = normalizeShortcutKeyFromEvent(event);
       const action = SHORTCUT_ACTIONS.find(function(name) { return state.shortcuts[name] && state.shortcuts[name] === key; });
       if (!action) return false;
-      if (!memoInteractionActive()) return false;
+      const inGenga = !!(state.project && state.project.kind === 'genga');
+      if (!memoInteractionActive() && !inGenga) return false;
       event.preventDefault();
       event.stopPropagation();
+      if (inGenga) { handleGengaShortcut(action); updateMemoUI(); return true; } // genga routes to its own equivalents
       if (action === 'brushCycle') activateMemoBrush();
       if (action === 'eraserToggle') state.memoTool = state.memoTool === 'eraser' ? 'pen' : 'eraser';
       if (action === 'sizeDown') changeActiveMemoSize(-1);
@@ -38745,6 +38747,32 @@
       if (action === 'frameBackward') stepVideoPlayheadFrames(-1);
       updateMemoUI();
       return true;
+    }
+    // genga equivalents for the configurable shortcuts (brush/size/tool state is shared with conte via state.memoTool
+    // / memoPenSize; frame step + clear + parapara + selection are genga-specific).
+    function handleGengaShortcut(action) {
+      switch (action) {
+        case 'brushCycle': activateMemoBrush(); break;
+        case 'eraserToggle': state.memoTool = (state.memoTool === 'eraser') ? 'pen' : 'eraser'; break;
+        case 'sizeDown': changeActiveMemoSize(-1); break;
+        case 'sizeUp': changeActiveMemoSize(1); break;
+        case 'clearDrawing': gengaClearCurrentDrawing(); break;
+        case 'onionSkinToggle': toggleOnionSkinEnabled(); break;
+        case 'paraparaPreview': gengaFlashParaparaPrev(); break;
+        case 'lassoSelectClear': gengaClearSelection(); break;
+        case 'lassoStamp': selectMemoEditTool(state.memoEditTool === 'lasso-stamp' ? '' : 'lasso-stamp'); break;
+        case 'lassoSelect': selectMemoEditTool(state.memoEditTool === 'lasso-select' ? '' : 'lasso-select'); break;
+        case 'transform': selectMemoEditTool(state.memoEditTool === 'transform' ? '' : 'transform'); break;
+        case 'perspective': selectMemoEditTool(state.memoEditTool === 'perspective' ? '' : 'perspective'); break;
+        case 'frameForward': stopGengaPlayback(); stepGengaFrame(1); break;
+        case 'frameBackward': stopGengaPlayback(); stepGengaFrame(-1); break;
+      }
+    }
+    function gengaClearCurrentDrawing() {
+      const layer = gengaSelectedLayer(); if (!layer) return;
+      const frame = gengaCurrentFrame();
+      runCommand('原画クリア', function(proj) { const L = (proj.gengaTimeline.layers || []).find(function(x) { return String(x.id) === String(layer.id); }); if (!L) return; const e = gengaExposureAt(L, frame); if (e) gengaSetExposureDrawing(L, e, null); });
+      drawGengaPreview(); drawGengaLayerThumbs();
     }
 
     // Move the video playhead by a whole number of frames (used by the Frame +1 / -1 shortcuts).
