@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver326</title>
+  <title>Conte Editor Prototype ver327</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7348,7 +7348,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver326</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver327</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7834,7 +7834,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '326';
+    const APP_DISPLAY_VERSION = '327';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41827,6 +41827,15 @@
         const arTxt = st.matchPaper ? '用紙と同じ' : (st.arW + ':' + st.arH);
         if (readout) readout.textContent = '用紙 ' + st.paperW + '×' + st.paperH + ' / カメラ ' + st.camW + '×' + st.camH + ' @(' + st.camX + ',' + st.camY + ') / 出力 ' + st.outW + '×' + st.outH + '（' + arTxt + '）';
       };
+      // change the camera aspect while keeping its CENTER fixed — only the size changes (symmetrically), so the
+      // frame doesn't jump around when switching ratios.
+      const setAspect = function(aw, ah) {
+        const cx = st.camX + st.camW / 2, cy = st.camY + st.camH / 2;
+        st.matchPaper = false; st.arW = aw; st.arH = ah;
+        st.camH = Math.max(8, Math.round(st.camW * ah / aw));
+        st.camX = Math.round(cx - st.camW / 2); st.camY = Math.round(cy - st.camH / 2);
+        renderPreview();
+      };
       const syncPaperInputs = function() { if (pwEl) pwEl.value = st.paperW; if (phEl) phEl.value = st.paperH; };
       const num = function(el, fb) { const v = Math.round(Number(el && el.value)); return isFinite(v) ? v : fb; };
       // paper-size or anchor change → snap the camera to track the anchor (default framing) + rebuild the bg
@@ -41856,9 +41865,9 @@
         if (val === 'paper') { st.matchPaper = true; if (arCustomRow) arCustomRow.style.display = 'none'; renderPreview(); return; }
         st.matchPaper = false;
         if (val === 'free') { if (arCustomRow) arCustomRow.style.display = 'flex'; if (arWEl && !arWEl.value) arWEl.value = st.arW; if (arHEl && !arHEl.value) arHEl.value = st.arH; if (arWEl) { try { arWEl.focus(); } catch (err) {} } }
-        else { if (arCustomRow) arCustomRow.style.display = 'none'; const ar = parseAr(val); if (ar) { st.arW = ar.w; st.arH = ar.h; } renderPreview(); }
+        else { if (arCustomRow) arCustomRow.style.display = 'none'; const ar = parseAr(val); if (ar) setAspect(ar.w, ar.h); else renderPreview(); }
       };
-      const onArCustom = function() { const a = Number(arWEl && arWEl.value), b = Number(arHEl && arHEl.value); if (a > 0 && b > 0) { st.matchPaper = false; st.arW = a; st.arH = b; renderPreview(); } };
+      const onArCustom = function() { const a = Number(arWEl && arWEl.value), b = Number(arHEl && arHEl.value); if (a > 0 && b > 0) setAspect(a, b); };
       const onSizeTab = function(e) {
         const btn = e.target && e.target.closest ? e.target.closest('button[data-h]') : null; if (!btn) return;
         const val = btn.getAttribute('data-h'); setActive(sizeTabs, 'data-h', val);
