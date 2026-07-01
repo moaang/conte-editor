@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver321</title>
+  <title>Conte Editor Prototype ver322</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7280,7 +7280,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver321</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver322</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7440,7 +7440,7 @@
     .genga-tl-zoom { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
     .genga-export-btn { margin-left: 10px; border: 1px solid #277045; background: #2f8a52; color: #fff; border-radius: 5px; padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .genga-export-btn:disabled { opacity: 0.7; cursor: default; }
-    .genga-ruler { flex: none; height: 24px; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; touch-action: none; }
+    .genga-ruler { flex: none; height: 24px; position: relative; border-bottom: 1px solid rgba(0,0,0,0.12); background: #f0f0ec; touch-action: none; }
     .genga-tick { position: absolute; top: 0; height: 100%; border-left: 1px solid rgba(0,0,0,0.07); }
     .genga-tick.major { border-left-color: rgba(0,0,0,0.22); }
     .genga-tick.major span, .genga-tick.numbered span { position: absolute; top: 4px; left: 3px; font-size: 10px; color: #777; }
@@ -7451,12 +7451,11 @@
     /* paste feedback: blue wash over the pasted range with emphasized start/end edges, then a 1s hold + 1s fade-out */
     .genga-cell-paste-flash { position: absolute; top: 0; bottom: 0; background: rgba(47,111,209,0.22); border-left: 2px solid rgba(47,111,209,0.95); border-right: 2px solid rgba(47,111,209,0.95); box-sizing: border-box; pointer-events: none; z-index: 3; opacity: 1; transition: opacity 1s ease; }
     .genga-cell-paste-flash.fade { opacity: 0; }
-    /* box around the koma-content region (first koma start → last koma end, whole span not per-cell) so the
-       drawn area reads as distinct from the empty timeline beyond it (where gridlines are kept faint) */
-    /* koma-content region: pale-blue fill toward the koma bg color + its OWN normal gridlines on top, so the
-       drawn span keeps crisp frame lines while the empty area beyond it (lane gridlines) stays faint. The box
-       starts on a cell boundary so these gridlines align with the lane grid. */
-    .genga-content-box { position: absolute; top: 1px; bottom: 1px; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 1px, transparent 1px, transparent var(--genga-cell-w, 22px)), linear-gradient(rgba(219,230,247,0.6), rgba(219,230,247,0.6)); border-radius: 3px; box-sizing: border-box; pointer-events: none; z-index: 0; }
+    /* koma-content region (first koma start → last koma end, whole span): pale-blue fill toward the koma bg
+       color + its OWN clearly-visible gridlines on top. The empty area beyond it keeps only the faint lane
+       gridline. Ruler ticks are confined to the ruler (position:relative above) so they no longer draw the
+       full-height grid. The box starts on a cell boundary, so these gridlines align with the frame grid. */
+    .genga-content-box { position: absolute; top: 1px; bottom: 1px; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0, rgba(0,0,0,0.12) 1px, transparent 1px, transparent var(--genga-cell-w, 22px)), linear-gradient(rgba(219,230,247,0.6), rgba(219,230,247,0.6)); border-radius: 3px; box-sizing: border-box; pointer-events: none; z-index: 0; }
     .genga-exp { position: absolute; top: 1px; height: 52px; border-radius: 2px; background: #dbe6f7; display: flex; flex-direction: column; align-items: stretch; gap: 1px; padding: 1px; box-sizing: border-box; cursor: grab; user-select: none; overflow: hidden; touch-action: none; }
     .genga-exp:active { cursor: grabbing; }
     .genga-exp-thumb { flex: 1; min-height: 0; width: 100%; background-color: #fff; background-repeat: no-repeat; background-position: center; background-size: contain; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
@@ -7749,7 +7748,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '321';
+    const APP_DISPLAY_VERSION = '322';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
