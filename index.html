@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver328</title>
+  <title>Conte Editor Prototype ver329</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7348,7 +7348,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver328</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver329</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7834,7 +7834,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '328';
+    const APP_DISPLAY_VERSION = '329';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -41785,7 +41785,9 @@
       const origPaperW = gt.paper.w, origPaperH = gt.paper.h;
       const baseFrameCx = gt.camera.x + gt.camera.w / 2, baseFrameCy = gt.camera.y + gt.camera.h / 2;
       // frameW/H/Cx/Cy = a STABLE reference crop box; aspect changes just inscribe (contain, centered) in it, so
-      // switching ratios crops (never grows) and is reversible. Only resize / paper-change / 用紙と同じ move the box.
+      // switching ratios crops (never grows) and is reversible. 用紙と同じ shows the whole paper WITHOUT touching
+      // the box, so returning to a ratio restores the original center + size. Only resize / paper-change / an
+      // explicit resize-out-of-用紙と同じ move the box.
       const st = { paperW: origPaperW, paperH: origPaperH, arW: Math.max(1, gt.camera.w), arH: Math.max(1, gt.camera.h),
         matchPaper: (gt.camera.w === origPaperW && gt.camera.h === origPaperH),
         frameW: gt.camera.w, frameH: gt.camera.h, frameCx: baseFrameCx, frameCy: baseFrameCy,
@@ -41862,7 +41864,7 @@
       const onArTab = function(e) {
         const btn = e.target && e.target.closest ? e.target.closest('button[data-ar]') : null; if (!btn) return;
         const val = btn.getAttribute('data-ar'); setActive(arTabs, 'data-ar', val);
-        if (val === 'paper') { st.matchPaper = true; st.frameW = st.paperW; st.frameH = st.paperH; st.frameCx = st.paperW / 2; st.frameCy = st.paperH / 2; if (arCustomRow) arCustomRow.style.display = 'none'; renderPreview(); return; }
+        if (val === 'paper') { st.matchPaper = true; if (arCustomRow) arCustomRow.style.display = 'none'; renderPreview(); return; } // keep the frame box (don't overwrite) so returning to a ratio restores the original center + size
         st.matchPaper = false;
         if (val === 'free') { if (arCustomRow) arCustomRow.style.display = 'flex'; if (arWEl && !arWEl.value) arWEl.value = st.arW; if (arHEl && !arHEl.value) arHEl.value = st.arH; if (arWEl) { try { arWEl.focus(); } catch (err) {} } }
         else { if (arCustomRow) arCustomRow.style.display = 'none'; const ar = parseAr(val); if (ar) setAspect(ar.w, ar.h); else renderPreview(); }
