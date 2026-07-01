@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver310</title>
+  <title>Conte Editor Prototype ver311</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7276,7 +7276,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver310</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver311</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7736,7 +7736,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '310';
+    const APP_DISPLAY_VERSION = '311';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -42491,7 +42491,7 @@
       const pf = gengaAdjacentInstanceFrame(layer, gengaCurrentFrame(), -1); if (pf == null) return; // previous instance
       if (gengaParaparaTimer) clearTimeout(gengaParaparaTimer);
       gengaSetParaparaFrame(pf);
-      const ms = Math.max(60, Math.min(1000, Math.round(Number(state.gengaParaparaMs) || 160)));
+      const ms = Math.max(60, Math.min(500, Math.round(Number(state.gengaParaparaMs) || 160)));
       gengaParaparaTimer = setTimeout(function() { gengaParaparaTimer = 0; gengaSetParaparaFrame(null); }, ms);
     }
     // hold-mode: show the previous instance while held, snap back on release
@@ -42508,14 +42508,14 @@
     function gengaCloseParaparaSettings() { if (gengaParaparaPop) { gengaParaparaPop.remove(); gengaParaparaPop = null; document.removeEventListener('pointerdown', gengaParaparaOutside, true); } }
     function gengaParaparaOutside(e) { if (gengaParaparaPop && !gengaParaparaPop.contains(e.target)) gengaCloseParaparaSettings(); }
     function gengaSaveParaparaCfg() { try { localStorage.setItem('gengaParaparaCfg', JSON.stringify({ ms: state.gengaParaparaMs, mode: state.gengaParaparaMode })); } catch (e) {} }
-    function gengaLoadParaparaCfg() { try { const c = JSON.parse(localStorage.getItem('gengaParaparaCfg') || '{}'); if (c && typeof c === 'object') { if (Number.isFinite(Number(c.ms))) state.gengaParaparaMs = Math.max(60, Math.min(1000, Math.round(Number(c.ms)))); if (c.mode === 'hold' || c.mode === 'flash') state.gengaParaparaMode = c.mode; } } catch (e) {} }
+    function gengaLoadParaparaCfg() { try { const c = JSON.parse(localStorage.getItem('gengaParaparaCfg') || '{}'); if (c && typeof c === 'object') { if (Number.isFinite(Number(c.ms))) state.gengaParaparaMs = Math.max(60, Math.min(500, Math.round(Number(c.ms)))); if (c.mode === 'hold' || c.mode === 'flash') state.gengaParaparaMode = c.mode; } } catch (e) {} }
     function gengaOpenParaparaSettings(btn) {
       const open = gengaParaparaPop; gengaCloseParaparaSettings(); if (open) return; // toggle
       const pop = document.createElement('div'); pop.className = 'genga-parapara-pop'; gengaParaparaPop = pop;
       pop.innerHTML =
         '<div class="genga-pp-title">パラパラ設定</div>' +
         '<div class="genga-pp-modes"><button type="button" data-pp-mode="flash">フラッシュ</button><button type="button" data-pp-mode="hold">ホールド</button></div>' +
-        '<label class="genga-pp-row" data-pp-dur>フラッシュ時間 <span class="genga-pp-val">' + state.gengaParaparaMs + 'ms</span>' + gengaGaugeHtml('parapara-ms', 60, 1000, 20, state.gengaParaparaMs, 'flex:1;height:14px') + '</label>';
+        '<label class="genga-pp-row" data-pp-dur>フラッシュ時間 <span class="genga-pp-val">' + state.gengaParaparaMs + 'ms</span>' + gengaGaugeHtml('parapara-ms', 60, 500, 20, state.gengaParaparaMs, 'flex:1;height:14px') + '</label>';
       document.body.appendChild(pop);
       const r = btn.getBoundingClientRect();
       pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 6)) + 'px';
@@ -43521,7 +43521,7 @@
       } else if (a === 'onion') {
         mutateOnionSkinSettings(function(s) { s.opacity = clampNumber(v, 0, 100, 45); });
       } else if (a === 'parapara-ms') {
-        state.gengaParaparaMs = Math.max(60, Math.min(1000, Math.round(v)));
+        state.gengaParaparaMs = Math.max(60, Math.min(500, Math.round(v)));
         if (gengaParaparaPop) { const lbl = gengaParaparaPop.querySelector('.genga-pp-val'); if (lbl) lbl.textContent = state.gengaParaparaMs + 'ms'; }
         if (phase === 'end') gengaSaveParaparaCfg();
       } else if (a === 'conte-zoom') {
