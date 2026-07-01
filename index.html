@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver311</title>
+  <title>Conte Editor Prototype ver312</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -2066,7 +2066,7 @@
       left: var(--memo-quick-left, 206px);
       top: var(--memo-quick-top, 44px);
       z-index: 81;
-      width: 152px;
+      width: calc(var(--memo-quick-btn, 32px) * 4 + 20px); /* follows the button size (iPad scale gauge) */
       max-width: calc(100vw - 18px);
       background: transparent;
     }
@@ -2097,17 +2097,20 @@
 
     .memo-quick-body {
       display: grid;
-      grid-template-columns: repeat(4, 32px);
+      grid-template-columns: repeat(4, var(--memo-quick-btn, 32px));
       gap: 4px;
       justify-content: center;
       padding: 6px 4px;
     }
+    /* iPad button-size gauge in the Edit window header (hidden on desktop) */
+    .memo-quick-scale-gauge { width: 60px; flex: none; margin-left: 6px; }
 
     .memo-quick-btn {
-      width: 32px;
-      min-width: 32px;
-      height: 32px;
-      min-height: 32px;
+      width: var(--memo-quick-btn, 32px);
+      min-width: var(--memo-quick-btn, 32px);
+      height: var(--memo-quick-btn, 32px);
+      min-height: var(--memo-quick-btn, 32px);
+      font-size: var(--memo-quick-btn, 32px); /* icons/× sized in em → scale with the button */
       padding: 0;
       display: inline-grid;
       place-items: center;
@@ -2117,16 +2120,16 @@
 
     .memo-quick-btn .memo-undo-icon,
     .memo-quick-btn .memo-redo-icon {
-      width: 22px;
-      height: 22px;
-      background-size: 22px 22px;
+      width: 0.69em;
+      height: 0.69em;
+      background-size: 0.69em 0.69em;
     }
 
     .memo-clear-drawing-btn {
       border-color: #b32623;
       background: #d7332f;
       color: #fff;
-      font-size: 27px;
+      font-size: 0.84em;
       font-weight: 900;
       line-height: 1;
     }
@@ -2145,32 +2148,32 @@
     .memo-parapara-icon {
       position: relative;
       display: block;
-      width: 18px;
-      height: 18px;
+      width: 0.56em;
+      height: 0.56em;
     }
 
     .memo-parapara-icon::before,
     .memo-parapara-icon::after {
       content: '';
       position: absolute;
-      border: 2px solid currentColor;
-      border-radius: 2px;
+      border: 0.0625em solid currentColor;
+      border-radius: 0.0625em;
       box-sizing: border-box;
     }
 
     .memo-parapara-icon::before {
-      left: 3px;
-      top: 5px;
-      width: 9px;
-      height: 9px;
+      left: 0.094em;
+      top: 0.156em;
+      width: 0.28em;
+      height: 0.28em;
       opacity: 0.55;
     }
 
     .memo-parapara-icon::after {
-      left: 7px;
-      top: 3px;
-      width: 9px;
-      height: 9px;
+      left: 0.219em;
+      top: 0.094em;
+      width: 0.28em;
+      height: 0.28em;
     }
 
     .memo-nudge-window-wrap {
@@ -6913,6 +6916,7 @@
         <div class="memo-quick-window">
           <div id="memoQuickHeader" class="memo-quick-header" data-memo-quick-window-drag="true">
             <span>Edit</span>
+            <div id="memoQuickScaleGauge" class="ggauge memo-quick-scale-gauge" data-gauge="memo-quick-scale" data-min="28" data-max="72" data-step="4" data-value="32" style="--p:0.0909;height:11px" title="ボタンサイズ" hidden><div class="ggauge-fill"></div><div class="ggauge-knob"></div></div>
           </div>
           <div class="memo-quick-body">
             <button id="memoParaparaBtn" class="memo-quick-btn memo-parapara-btn" type="button" aria-label="Parapara previous panel" title="パラパラ（前の絵）／右クリック・長押しで設定"><span class="memo-parapara-icon" aria-hidden="true"></span></button>
@@ -7276,7 +7280,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver311</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver312</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7736,7 +7740,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '311';
+    const APP_DISPLAY_VERSION = '312';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39166,6 +39170,16 @@
       if (memoUndoBtn) memoUndoBtn.addEventListener('click', runPrimaryUndo);
       const memoRedoBtn = document.getElementById('memoRedoBtn');
       if (memoRedoBtn) memoRedoBtn.addEventListener('click', runPrimaryRedo);
+      // Edit-window button-size gauge: iPad/tablet only (bigger touch targets); restore the saved size
+      (function() {
+        const qw = document.getElementById('memoQuickWindow'); const g = document.getElementById('memoQuickScaleGauge'); if (!qw) return;
+        let px = 32; try { const s = Number(localStorage.getItem('memoQuickBtnPx')); if (Number.isFinite(s) && s >= 28 && s <= 72) px = Math.round(s); } catch (e) {}
+        qw.style.setProperty('--memo-quick-btn', px + 'px');
+        if (g) {
+          g.dataset.value = String(px); g.style.setProperty('--p', Math.max(0, Math.min(1, (px - 28) / 44)));
+          if (typeof mobileOrTabletRuntime === 'function' && mobileOrTabletRuntime()) g.hidden = false;
+        }
+      })();
       document.getElementById('memoEraserBtn').addEventListener('click', function() {
         state.memoTool = 'eraser';
         state.memoEyedropper = false;
@@ -43524,6 +43538,9 @@
         state.gengaParaparaMs = Math.max(60, Math.min(500, Math.round(v)));
         if (gengaParaparaPop) { const lbl = gengaParaparaPop.querySelector('.genga-pp-val'); if (lbl) lbl.textContent = state.gengaParaparaMs + 'ms'; }
         if (phase === 'end') gengaSaveParaparaCfg();
+      } else if (a === 'memo-quick-scale') {
+        const qw = document.getElementById('memoQuickWindow'); if (qw) qw.style.setProperty('--memo-quick-btn', Math.round(v) + 'px'); // Edit-window button size (iPad)
+        if (phase === 'end') { try { localStorage.setItem('memoQuickBtnPx', String(Math.round(v))); } catch (e) {} }
       } else if (a === 'conte-zoom') {
         state.timelineFramePx = clampNumber(v, 1, 6, 5);
         let root = g; while (root && !(root.querySelector && root.querySelector('.timeline-inner'))) root = root.parentElement;
