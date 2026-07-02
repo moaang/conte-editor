@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver330</title>
+  <title>Conte Editor Prototype ver331</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -6831,6 +6831,7 @@
                 <span id="memoSizeValue" class="memo-size-value">2</span>
                 <input id="memoSizeRange" class="memo-size-range" type="range" min="0" max="11" step="1" />
               </label>
+              <button id="gengaAaBtn" class="genga-aa-btn" type="button" title="アンチエイリアス: ON" aria-label="Antialias toggle">AA</button>
             </div>
             <details id="shortcutDetails" class="shortcut-card">
               <summary>shortcuts</summary>
@@ -7348,7 +7349,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver330</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver331</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7452,6 +7453,11 @@
     .genga-info-mini:hover { opacity: 0.85; text-decoration: underline; }
     .genga-onion-btn { border: 1px solid rgba(0,0,0,0.2); background: #fff; border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 11px; line-height: 1.4; }
     .genga-onion-btn.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
+    /* genga-only antialias toggle in the Tools window (sits at the secondary row's right end, under the camera
+       tool button). active = AA ON; off = hard-edged pixel strokes. */
+    .genga-aa-btn { display: none; margin-left: auto; min-width: 30px; height: 30px; border: 1px solid rgba(0,0,0,0.25); border-radius: 6px; background: #fff; color: #999; font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0 6px; align-items: center; justify-content: center; }
+    .genga-aa-btn.active { background: #2f6fd1; color: #fff; border-color: #2f6fd1; }
+    body.genga-active .genga-aa-btn { display: inline-flex; }
     .genga-dopesheet { display: flex; flex: none; height: 240px; min-height: 0; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; overflow: hidden; background: #fafafa; }
     .genga-layers-col { width: 172px; flex: none; border-right: 1px solid rgba(0,0,0,0.18); overflow: hidden; display: flex; flex-direction: column; background: #f0f0ec; }
     /* only the layers/audio body scrolls vertically; the ruler + camera header rows stay fixed (single-axis
@@ -7836,7 +7842,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '330';
+    const APP_DISPLAY_VERSION = '331';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -39346,6 +39352,13 @@
           updateMemoUI();
         }
       });
+      // genga-only: antialias toggle (Tools window, under the camera tool button)
+      const gengaAaBtn = document.getElementById('gengaAaBtn');
+      if (gengaAaBtn) {
+        gengaAaBtn.classList.toggle('active', gengaAntialiasOn());
+        gengaAaBtn.title = 'アンチエイリアス: ' + (gengaAntialiasOn() ? 'ON' : 'OFF');
+        gengaAaBtn.addEventListener('click', function() { toggleGengaAntialias(); });
+      }
       document.querySelectorAll('.memo-edit-tool-btn[data-memo-edit-tool]').forEach(function(button) {
         button.addEventListener('click', function() {
           const tool = String(button.dataset.memoEditTool || '');
@@ -42469,6 +42482,64 @@
         y: (ev.clientY - rect.top - gengaPreviewXform.oy) / gengaPreviewXform.scale
       };
     }
+    // eyedropper (スポイト) on the genga paper: sample the visible composite at the paper point → brush color.
+    // Mirrors conte's pickMemoColorFromEvent (empty pixel → drop out of eyedropper mode).
+    function gengaPickColorAt(p) {
+      const comp = gengaCompositeFrame(gengaCurrentFrame()); if (!comp) return;
+      const x = Math.max(0, Math.min(comp.width - 1, Math.round(p.x)));
+      const y = Math.max(0, Math.min(comp.height - 1, Math.round(p.y)));
+      const d = comp.getContext('2d').getImageData(x, y, 1, 1).data;
+      if (d[3] > 0) {
+        setMemoBrushColor(rgbToHex({ r: d[0], g: d[1], b: d[2] }), { custom: true, record: true });
+        state.memoColorPickerOpen = false;
+        saveEditorUiState();
+      } else {
+        state.memoEyedropper = false;
+      }
+      updateMemoUI();
+    }
+    // ---- anti-aliasing toggle (genga pen only). AA off = hard-edged pixel lines: integer Bresenham steps
+    // stamping a rasterized disc via fillRect rows (canvas stroke() always anti-aliases, so we rasterize). ----
+    function gengaAntialiasOn() {
+      if (state.gengaAntialias == null) {
+        try { state.gengaAntialias = localStorage.getItem('gengaAntialias') !== '0'; } catch (e) { state.gengaAntialias = true; }
+      }
+      return state.gengaAntialias !== false;
+    }
+    function toggleGengaAntialias() {
+      state.gengaAntialias = !gengaAntialiasOn();
+      try { localStorage.setItem('gengaAntialias', state.gengaAntialias ? '1' : '0'); } catch (e) {}
+      const b = document.getElementById('gengaAaBtn');
+      if (b) { b.classList.toggle('active', state.gengaAntialias); b.title = 'アンチエイリアス: ' + (state.gengaAntialias ? 'ON' : 'OFF'); }
+    }
+    function gengaPixelStampRows(size) { // disc mask as [dy, xStart, len] rows (size 1 → single px)
+      const s = Math.max(1, Math.round(size)), cN = (s - 1) / 2, r2 = (s / 2) * (s / 2);
+      const rows = [];
+      for (let dy = 0; dy < s; dy++) {
+        let x0 = -1, len = 0;
+        for (let dx = 0; dx < s; dx++) { if ((dx - cN) * (dx - cN) + (dy - cN) * (dy - cN) <= r2) { if (x0 < 0) x0 = dx; len++; } }
+        if (len > 0) rows.push([dy, x0, len]);
+      }
+      return { rows: rows, off: Math.floor((s - 1) / 2) };
+    }
+    function gengaPixelStampAt(ctx, stamp, x, y) {
+      const bx = Math.round(x) - stamp.off, by = Math.round(y) - stamp.off;
+      for (let i = 0; i < stamp.rows.length; i++) { const r = stamp.rows[i]; ctx.fillRect(bx + r[1], by + r[0], r[2], 1); }
+    }
+    function gengaPixelLine(ctx, stamp, x0, y0, x1, y1) { // integer Bresenham, stamping every step
+      let ix = Math.round(x0), iy = Math.round(y0);
+      const tx = Math.round(x1), ty = Math.round(y1);
+      const dx = Math.abs(tx - ix), sx = ix < tx ? 1 : -1;
+      const dy = -Math.abs(ty - iy), sy = iy < ty ? 1 : -1;
+      let err = dx + dy, guard = 0;
+      for (;;) {
+        gengaPixelStampAt(ctx, stamp, ix, iy);
+        if ((ix === tx && iy === ty) || guard++ > 100000) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) { err += dy; ix += sx; }
+        if (e2 <= dx) { err += dx; iy += sy; }
+      }
+    }
     function gengaDrawStart(ev) {
       if (!state.project || state.project.kind !== 'genga') return;
       gengaClearStandalone(); // drawing/flipping is a playhead op → ends any standalone delete-selection
@@ -42491,6 +42562,12 @@
         gengaPanDrag = { startX: ev.clientX, startY: ev.clientY, baseX: state.gengaPanX || 0, baseY: state.gengaPanY || 0 };
         try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
         ev.preventDefault(); return;
+      }
+      // eyedropper (スポイト): intercept BEFORE any tool op (same as conte) — sample the visible composite,
+      // never start a stroke. Previously genga ignored state.memoEyedropper entirely, so the button did nothing.
+      if (state.memoEyedropper) {
+        const pp = gengaPreviewPointerXY(ev);
+        if (pp) { gengaPickColorAt(pp); ev.preventDefault(); return; }
       }
       if (state.memoEditTool === 'camera') { gengaCameraPointerDown(ev); return; } // camera-frame edit (no layer needed)
       const layer = gengaSelectedLayer();
@@ -42523,10 +42600,11 @@
         gengaDrawDrawingInto(c, existingDr, pw, ph, drawGengaPreview);
       }
       c.lineCap = 'round'; c.lineJoin = 'round';
-      // Reuse the conte memo tool state (pen/eraser + color + size). memo size is 480-space px → scale to paper.
+      // Reuse the conte memo tool state (pen/eraser + color + size). GENGA brush size = PAPER PIXELS (1 = one
+      // real pixel on the paper bitmap), unlike the conte memo's reference-space unit — true pixel control.
       const eraser = (state.memoTool === 'eraser');
       const memoSize = (typeof activeMemoSize === 'function' ? activeMemoSize() : 4);
-      c.lineWidth = Math.max(1, Math.round(memoSize * (pw / 480)));
+      c.lineWidth = Math.max(1, Math.round(memoSize));
       if (eraser) {
         c.globalCompositeOperation = 'destination-out';
         c.strokeStyle = 'rgba(0,0,0,1)'; c.fillStyle = 'rgba(0,0,0,1)';
@@ -42534,8 +42612,10 @@
         const memoCol = (typeof activeMemoColor === 'function' ? activeMemoColor() : '#111111');
         c.strokeStyle = memoCol; c.fillStyle = memoCol;
       }
-      gengaDrawSession = { layerId: layer.id, frame: frame, canvas: cv, ctx: c, lastX: p.x, lastY: p.y };
-      c.beginPath(); c.arc(p.x, p.y, c.lineWidth / 2, 0, Math.PI * 2); c.fill();
+      const pxStamp = gengaAntialiasOn() ? null : gengaPixelStampRows(c.lineWidth); // AA off → hard-edged pixel stamping
+      gengaDrawSession = { layerId: layer.id, frame: frame, canvas: cv, ctx: c, lastX: p.x, lastY: p.y, pxStamp: pxStamp };
+      if (pxStamp) gengaPixelStampAt(c, pxStamp, p.x, p.y);
+      else { c.beginPath(); c.arc(p.x, p.y, c.lineWidth / 2, 0, Math.PI * 2); c.fill(); }
       try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
       if (String(state.gengaSelectedLayerId) !== String(layer.id)) selectGengaLayer(layer.id);
       drawGengaPreview();
@@ -42552,7 +42632,11 @@
       if (!gengaDrawSession) return;
       const p = gengaPreviewPointerXY(ev); if (!p) return;
       const c = gengaDrawSession.ctx;
-      c.beginPath(); c.moveTo(gengaDrawSession.lastX, gengaDrawSession.lastY); c.lineTo(p.x, p.y); c.stroke();
+      if (gengaDrawSession.pxStamp) {
+        gengaPixelLine(c, gengaDrawSession.pxStamp, gengaDrawSession.lastX, gengaDrawSession.lastY, p.x, p.y); // AA off
+      } else {
+        c.beginPath(); c.moveTo(gengaDrawSession.lastX, gengaDrawSession.lastY); c.lineTo(p.x, p.y); c.stroke();
+      }
       gengaDrawSession.lastX = p.x; gengaDrawSession.lastY = p.y;
       drawGengaPreview();
       ev.preventDefault();
