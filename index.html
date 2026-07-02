@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver331</title>
+  <title>Conte Editor Prototype ver332</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7349,7 +7349,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver331</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver332</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7842,7 +7842,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '331';
+    const APP_DISPLAY_VERSION = '332';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -42134,17 +42134,28 @@
       const target = gengaLayerDropTarget(ev.clientY).index;
       moveGengaLayer(d.id, target);
     }
-    const gengaImageCache = new Map();
+    // decoded-image cache with an LRU cap: every stroke commit mints a NEW dataUrl (the old one would otherwise
+    // stay decoded forever), and large projects hold many koma bitmaps — unbounded growth is the iPad memory
+    // cliff. Over the cap the least-recently-USED entries are dropped; the dataUrl itself is untouched, so an
+    // evicted frame simply re-decodes (ms-scale) the next time it's shown.
+    const GENGA_IMAGE_CACHE_MAX = 120;
+    const gengaImageCache = new Map(); // Map iteration order = insertion order → delete+set re-insert = LRU touch
     let gengaPreviewXform = null;
     let gengaDrawSession = null;
     function gengaImageFor(dataUrl, onReady) {
       if (!dataUrl) return null;
       let img = gengaImageCache.get(dataUrl);
-      if (img) return img.complete ? img : null;
+      if (img) {
+        gengaImageCache.delete(dataUrl); gengaImageCache.set(dataUrl, img); // LRU touch
+        return img.complete ? img : null;
+      }
       img = new Image();
       img.onload = function() { if (onReady) onReady(); };
       img.src = dataUrl;
       gengaImageCache.set(dataUrl, img);
+      while (gengaImageCache.size > GENGA_IMAGE_CACHE_MAX) {
+        gengaImageCache.delete(gengaImageCache.keys().next().value); // evict least-recently-used
+      }
       return img.complete ? img : null;
     }
     function gengaExposureAt(layer, frame) {
@@ -42353,6 +42364,9 @@
       state.gengaPanX = panX; state.gengaPanY = panY;
       const ox = Math.round(cenX + panX), oy = Math.round(cenY + panY);
       gengaPreviewXform = { ox: ox, oy: oy, scale: scale, pw: pw, ph: ph };
+      // 100%+ zoom → nearest-neighbor: show the paper's REAL pixels crisp (no resample blur), so AA-off strokes
+      // read as actual pixels when magnified. Below 100% keep smoothing (nearest shimmers when minified).
+      ctx.imageSmoothingEnabled = scale < 1;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(ox, oy, dw, dh);
       // parapara/yubipara flip: temporarily show another frame's composite (no onion during the flip)
