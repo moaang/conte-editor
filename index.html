@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver333</title>
+  <title>Conte Editor Prototype ver334</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7349,7 +7349,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver333</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver334</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7538,9 +7538,10 @@
     .genga-exp-thumb-img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
     .genga-exp-num { font-size: 10px; line-height: 1.7; text-align: center; color: #9aa0a6; white-space: nowrap; overflow: hidden; flex: none; cursor: text; }
     /* disabled placeholder card for EMPTY cells inside the koma-content region: same shape as a koma so the
-       region reads as one editable strip (grab/select works there too); tinted close to the region bg. */
-    .genga-exp.genga-exp-empty { background: rgba(219,230,247,0.5); cursor: default; }
-    .genga-exp-empty .genga-exp-thumb { background-color: rgba(255,255,255,0.55); box-shadow: 0 0 0 1px rgba(0,0,0,0.045); }
+       region reads as one editable strip (drag = move the whole region; cell-select on the number strip).
+       Kept nearly indistinguishable from the region background — just a whisper of a card. */
+    .genga-exp.genga-exp-empty { background: transparent; cursor: grab; }
+    .genga-exp-empty .genga-exp-thumb { background-color: rgba(255,255,255,0.3); box-shadow: 0 0 0 1px rgba(0,0,0,0.025); }
     .genga-exp-num.valued { color: #2f6fd1; font-weight: 500; }
     .genga-exp-num.editing { background: #fff; color: #111; outline: 1px solid #2f6fd1; border-radius: 2px; cursor: text; }
     .genga-exp-resize { position: absolute; right: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
@@ -7846,7 +7847,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '333';
+    const APP_DISPLAY_VERSION = '334';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -43720,6 +43721,14 @@
         const ids = s.filter(function(e) { return e.startFrame >= cs.start && e.startFrame <= cs.end; }).map(function(e) { return String(e.id); });
         if (ids.length) return { komaIds: ids, kind: 'sel', selStart: cs.start, selEnd: cs.end };
       }
+      // plain drag on an EMPTY cell INSIDE the content region (the placeholder cards) → move the whole region,
+      // same as Shift-drag. Koma bodies keep their own single-koma drag (they stopPropagation before this).
+      {
+        const firstStart = s[0].startFrame, lastEnd = s[s.length - 1].startFrame + s[s.length - 1].holdFrames - 1;
+        if (frameAtPointer >= firstStart && frameAtPointer <= lastEnd && !gengaExposureAt(layer, frameAtPointer)) {
+          return { komaIds: s.map(function(e) { return String(e.id); }), kind: 'all' };
+        }
+      }
       return null;
     }
     // shrink delta so the moved set stays ≥ frame 1 and never overlaps a NON-moved koma (stop just before it)
@@ -43743,7 +43752,13 @@
         if (!idset.has(String(e.id))) return;
         blocks.push({ id: String(e.id), origStart: e.startFrame, holdFrames: e.holdFrames, el: document.querySelector('#gengaStage .genga-exp[data-genga-exp="' + cssEscapeValue(String(e.id)) + '"]') });
       });
-      gengaBatchDrag = { layerId: String(layerId), idset: idset, kind: cand.kind, selStart: cand.selStart, selEnd: cand.selEnd, startX: ev.clientX, delta: 0, blocks: blocks };
+      // whole-region drag: the placeholder cards move live with the komas (the whole strip slides as one)
+      let phBlocks = null;
+      if (cand.kind === 'all') {
+        const lane0 = document.querySelector('#gengaStage .genga-lane[data-genga-layer="' + cssEscapeValue(String(layerId)) + '"]');
+        if (lane0) phBlocks = Array.from(lane0.querySelectorAll('.genga-exp-empty')).map(function(el) { return { el: el, baseLeft: parseFloat(el.style.left) || 0 }; });
+      }
+      gengaBatchDrag = { layerId: String(layerId), idset: idset, kind: cand.kind, selStart: cand.selStart, selEnd: cand.selEnd, startX: ev.clientX, delta: 0, blocks: blocks, phBlocks: phBlocks };
       selectGengaLayer(layerId);
       document.addEventListener('pointermove', gengaBatchDragMove);
       document.addEventListener('pointerup', gengaBatchDragUp);
@@ -43756,6 +43771,7 @@
       let delta = gengaBatchClampDelta(layer, d.idset, Math.round((ev.clientX - d.startX) / cw));
       d.delta = delta;
       d.blocks.forEach(function(b) { if (b.el) b.el.style.left = ((b.origStart + delta - 1) * cw + 1) + 'px'; });
+      if (d.phBlocks) d.phBlocks.forEach(function(p) { if (p.el) p.el.style.left = (p.baseLeft + delta * cw) + 'px'; }); // region placeholders slide along
       const lane = document.querySelector('#gengaStage .genga-lane[data-genga-layer="' + cssEscapeValue(String(d.layerId)) + '"]');
       if (lane) {
         let minStart = Infinity, maxEnd = 0;
@@ -43770,9 +43786,13 @@
       document.removeEventListener('pointermove', gengaBatchDragMove);
       document.removeEventListener('pointerup', gengaBatchDragUp);
       const d = gengaBatchDrag; gengaBatchDrag = null; if (!d) return;
-      // swallow the trailing click so the lane-click handler doesn't clear the selection / move the playhead
-      gengaCellSelClickGuard = true; setTimeout(function() { gengaCellSelClickGuard = false; }, 0);
-      if (!d.delta) { renderGengaView(); return; }
+      // swallow the trailing click after a selection-drag or a REAL move (else the lane click would clear the
+      // selection / jump the playhead). A plain no-move click on a region placeholder must still fall through
+      // to the lane handler (select layer + move playhead).
+      if (d.kind === 'sel' || d.delta) {
+        gengaCellSelClickGuard = true; setTimeout(function() { gengaCellSelClickGuard = false; }, 0);
+      }
+      if (!d.delta) { if (d.kind === 'sel') renderGengaView(); return; }
       const delta = d.delta, idset = d.idset;
       if (d.kind === 'sel' && state.gengaCellSel && String(state.gengaCellSel.layerId) === String(d.layerId)) {
         state.gengaCellSel = { layerId: d.layerId, start: d.selStart + delta, end: d.selEnd + delta }; // keep the selection on the moved komas
