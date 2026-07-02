@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Conte Editor Prototype ver329</title>
+  <title>Conte Editor Prototype ver330</title>
   <style>
     :root {
       --bg: #e8e8e2;
@@ -7348,7 +7348,7 @@
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Version</span>
-          <span id="versionInfoVersionValue" class="version-info-value">ver329</span>
+          <span id="versionInfoVersionValue" class="version-info-value">ver330</span>
         </div>
         <div class="version-info-row">
           <span class="version-info-label">Schema</span>
@@ -7527,7 +7527,9 @@
     .genga-content-box { position: absolute; top: 1px; bottom: 1px; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0, rgba(0,0,0,0.12) 1px, transparent 1px, transparent var(--genga-cell-w, 22px)), linear-gradient(rgba(219,230,247,0.6), rgba(219,230,247,0.6)); border-radius: 3px; box-sizing: border-box; pointer-events: none; z-index: 0; }
     .genga-exp { position: absolute; top: 1px; height: 52px; border-radius: 2px; background: #dbe6f7; display: flex; flex-direction: column; align-items: stretch; gap: 1px; padding: 1px; box-sizing: border-box; cursor: grab; user-select: none; overflow: hidden; touch-action: none; }
     .genga-exp:active { cursor: grabbing; }
-    .genga-exp-thumb { flex: 1; min-height: 0; width: 100%; background-color: #fff; background-repeat: no-repeat; background-position: center; background-size: contain; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
+    .genga-exp-thumb { flex: 1; min-height: 0; width: 100%; position: relative; overflow: hidden; background-color: #fff; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
+    /* trimmed-bitmap koma thumb: the ink crop placed proportionally on the paper→thumb mapping */
+    .genga-exp-thumb-img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
     .genga-exp-num { font-size: 10px; line-height: 1.3; text-align: center; color: #9aa0a6; white-space: nowrap; overflow: hidden; flex: none; cursor: text; }
     .genga-exp-num.valued { color: #2f6fd1; font-weight: 500; }
     .genga-exp-num.editing { background: #fff; color: #111; outline: 1px solid #2f6fd1; border-radius: 2px; cursor: text; }
@@ -7834,7 +7836,7 @@
     // ================================================================================================
     // APP: CONSTANTS
     const APP_NAME = 'Conte Editor';
-    const APP_DISPLAY_VERSION = '329';
+    const APP_DISPLAY_VERSION = '330';
     const PROJECT_FORMAT_VERSION = 2;
     const ROWS_PER_PAGE = 5;
     const EMPTY_SLOT_COUNT = 5;
@@ -40820,25 +40822,69 @@
     let gengaDrawStore = new Map();
     let gengaDrawRefSeq = 0;
     function gengaDrawingUrl(d) { return d ? (d.ref ? (gengaDrawStore.get(d.ref) || null) : (typeof d.dataUrl === 'string' ? (d.dataUrl || null) : null)) : null; }
-    function gengaPutDrawingData(dataUrl, w, h) {
+    // x,y (integer paper px, optional) = TRIMMED-bitmap placement: the bitmap is the ink's bbox crop and is drawn
+    // 1:1 at (x,y) on the paper. Objects WITHOUT finite x/y are legacy full-paper bitmaps (drawn scaled to paper).
+    function gengaPutDrawingData(dataUrl, w, h, x, y) {
       const ref = 'gd_' + Date.now().toString(36) + '_' + (gengaDrawRefSeq++).toString(36);
       gengaDrawStore.set(ref, String(dataUrl || ''));
       try { putWorkspaceDbValue('gd:' + ref, String(dataUrl || '')); } catch (e) {}
-      return { ref: ref, w: Math.max(1, Math.round(Number(w) || 1)), h: Math.max(1, Math.round(Number(h) || 1)) };
+      const out = { ref: ref, w: Math.max(1, Math.round(Number(w) || 1)), h: Math.max(1, Math.round(Number(h) || 1)) };
+      if (Number.isFinite(Number(x)) && Number.isFinite(Number(y))) { out.x = Math.round(Number(x)); out.y = Math.round(Number(y)); }
+      return out;
     }
-    // canonicalize a drawing object (legacy {dataUrl,w,h} or already {ref,w,h}) → {ref,w,h}; null-safe.
+    // canonicalize a drawing object (legacy {dataUrl,w,h} or already {ref,w,h}) → {ref,w,h[,x,y]}; null-safe.
     function gengaIngestDrawing(d) {
       if (!d || typeof d !== 'object') return null;
-      if (d.ref) { if (!gengaDrawStore.has(d.ref) && typeof d.dataUrl === 'string' && d.dataUrl) gengaDrawStore.set(d.ref, d.dataUrl); return { ref: String(d.ref), w: Math.max(1, Math.round(Number(d.w) || 1)), h: Math.max(1, Math.round(Number(d.h) || 1)) }; }
-      if (typeof d.dataUrl === 'string' && d.dataUrl) return gengaPutDrawingData(d.dataUrl, d.w, d.h);
+      if (d.ref) {
+        if (!gengaDrawStore.has(d.ref) && typeof d.dataUrl === 'string' && d.dataUrl) gengaDrawStore.set(d.ref, d.dataUrl);
+        const out = { ref: String(d.ref), w: Math.max(1, Math.round(Number(d.w) || 1)), h: Math.max(1, Math.round(Number(d.h) || 1)) };
+        if (Number.isFinite(Number(d.x)) && Number.isFinite(Number(d.y))) { out.x = Math.round(Number(d.x)); out.y = Math.round(Number(d.y)); }
+        return out;
+      }
+      if (typeof d.dataUrl === 'string' && d.dataUrl) return gengaPutDrawingData(d.dataUrl, d.w, d.h, d.x, d.y);
       return null;
     }
     // read accessor result: augment a stored drawing with its resolved dataUrl so EVERY reader keeps seeing .dataUrl.
     function gengaResolveDrawing(d) {
       if (!d) return null;
       const u = gengaDrawingUrl(d);
-      if (u) return { ref: d.ref, w: d.w, h: d.h, dataUrl: u };
+      if (u) { const out = { ref: d.ref, w: d.w, h: d.h, dataUrl: u }; if (Number.isFinite(Number(d.x)) && Number.isFinite(Number(d.y))) { out.x = d.x; out.y = d.y; } return out; }
       return (typeof d.dataUrl === 'string' && d.dataUrl) ? d : null;
+    }
+    // draw a resolved drawing onto a paper-res context with correct placement (trimmed 1:1 at x,y / legacy scaled
+    // to paper). Falls back to the kept last-stroke canvas while its freshly-committed dataUrl is still decoding —
+    // this is what stops the "line blinks out for a frame right after a fast stroke" flicker.
+    function gengaDrawDrawingInto(ctx, dr, pw, ph, onReady) {
+      if (!dr || !dr.dataUrl) return false;
+      const img = gengaImageFor(dr.dataUrl, onReady);
+      if (!img) {
+        if (gengaLastStrokeCanvas && gengaLastStrokeCanvas.dataUrl === dr.dataUrl) { ctx.drawImage(gengaLastStrokeCanvas.canvas, 0, 0); return true; }
+        return false;
+      }
+      if (Number.isFinite(Number(dr.x)) && Number.isFinite(Number(dr.y))) ctx.drawImage(img, Math.round(dr.x), Math.round(dr.y));
+      else ctx.drawImage(img, 0, 0, pw, ph);
+      return true;
+    }
+    // crop a paper-res canvas to its ink bbox → {dataUrl,w,h,x,y} (integer offsets, 1:1 crop = zero drift), or
+    // null when empty. Encoding only the ink region keeps per-stroke toDataURL + decoded memory small at large
+    // paper sizes. Edge-scan: rows top/bottom for y-bounds, then columns within them for x-bounds.
+    function gengaTrimCanvasToDrawing(cv) {
+      const w = cv.width, h = cv.height;
+      const data = cv.getContext('2d').getImageData(0, 0, w, h).data;
+      let minY = -1, maxY = -1;
+      for (let y = 0; y < h && minY < 0; y++) { const row = y * w * 4; for (let x = 0; x < w; x++) { if (data[row + x * 4 + 3] > 0) { minY = y; break; } } }
+      if (minY < 0) return null; // fully transparent
+      for (let y = h - 1; y >= minY && maxY < 0; y--) { const row = y * w * 4; for (let x = 0; x < w; x++) { if (data[row + x * 4 + 3] > 0) { maxY = y; break; } } }
+      let minX = w, maxX = -1;
+      for (let y = minY; y <= maxY; y++) {
+        const row = y * w * 4;
+        for (let x = 0; x < minX; x++) { if (data[row + x * 4 + 3] > 0) { minX = x; break; } }
+        for (let x = w - 1; x > maxX; x--) { if (data[row + x * 4 + 3] > 0) { maxX = x; break; } }
+      }
+      const tw = maxX - minX + 1, th = maxY - minY + 1;
+      const t = document.createElement('canvas'); t.width = tw; t.height = th;
+      t.getContext('2d').drawImage(cv, minX, minY, tw, th, 0, 0, tw, th);
+      return { dataUrl: t.toDataURL('image/png'), w: tw, h: th, x: minX, y: minY };
     }
     // pull any {ref} drawings whose base64 isn't in memory yet from IndexedDB, then re-render (load/restore).
     async function gengaHydrateDrawStore(project) {
@@ -40856,7 +40902,7 @@
     // inline {ref}→{dataUrl} (from the store) for PORTABLE serialization (file save / export). Operates on a clone.
     function gengaInlineDrawings(gt) {
       if (!gt) return;
-      const inl = function(d) { if (d && d.ref) { const u = gengaDrawStore.get(d.ref); if (u) return { dataUrl: u, w: d.w, h: d.h }; } return d; };
+      const inl = function(d) { if (d && d.ref) { const u = gengaDrawStore.get(d.ref); if (u) { const out = { dataUrl: u, w: d.w, h: d.h }; if (Number.isFinite(Number(d.x)) && Number.isFinite(Number(d.y))) { out.x = d.x; out.y = d.y; } return out; } } return d; };
       (gt.layers || []).forEach(function(l) {
         (l.exposures || []).forEach(function(e) { if (e.drawing) e.drawing = inl(e.drawing); });
         if (l.sharedDrawings) Object.keys(l.sharedDrawings).forEach(function(k) { l.sharedDrawings[k] = inl(l.sharedDrawings[k]); });
@@ -41938,9 +41984,12 @@
             const url = urls[i];
             const img = await new Promise(function(res) { const im = new Image(); im.onload = function() { res(im); }; im.onerror = function() { res(null); }; im.src = url; });
             if (!img) continue;
+            const srcDr = uniq.get(url);
             const c = document.createElement('canvas'); c.width = newPaperW; c.height = newPaperH;
-            c.getContext('2d').drawImage(img, offX, offY, oldPaperW, oldPaperH); // 1:1 (old paper size) at the anchor offset
-            refMap.set(url, gengaIngestDrawing({ dataUrl: c.toDataURL('image/png'), w: newPaperW, h: newPaperH }));
+            const cctx = c.getContext('2d');
+            if (srcDr && Number.isFinite(Number(srcDr.x)) && Number.isFinite(Number(srcDr.y))) cctx.drawImage(img, offX + srcDr.x, offY + srcDr.y); // trimmed crop 1:1 at its paper spot + anchor offset
+            else cctx.drawImage(img, offX, offY, oldPaperW, oldPaperH); // legacy full-paper bitmap 1:1 (old paper size) at the anchor offset
+            refMap.set(url, gengaIngestDrawing(gengaTrimCanvasToDrawing(c)));
           }
         }
         runCommand('原画プロジェクト設定', function(proj) {
@@ -42160,51 +42209,86 @@
       return l || null;
     }
     // composite all visible layers at `frame` → a paper-res offscreen canvas (live stroke uses the working canvas).
+    // During an active draw session the layers BELOW the drawing layer are composited once and cached on the
+    // session (they can't change mid-stroke), so fast strokes don't recomposite the whole stack per pointermove.
     function gengaCompositeFrame(frame) {
       const gt = state.project && state.project.gengaTimeline; if (!gt) return null;
       const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
       const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
       const cx2 = cv.getContext('2d');
       const layers = gt.layers || [];
-      for (let i = layers.length - 1; i >= 0; i--) {
-        const l = layers[i];
-        if (l.visible === false) continue;
+      const sess = (gengaDrawSession && frame === gengaDrawSession.frame) ? gengaDrawSession : null;
+      const sessIdx = sess ? layers.findIndex(function(l) { return String(l.id) === String(sess.layerId); }) : -1;
+      const drawLayer = function(target, l) {
         let src = null;
-        if (gengaDrawSession && String(l.id) === String(gengaDrawSession.layerId) && frame === gengaDrawSession.frame) {
-          src = gengaDrawSession.canvas;
+        if (sess && String(l.id) === String(sess.layerId)) {
+          src = sess.canvas;
         } else if (gengaSel && String(l.id) === String(gengaSel.layerId) && frame === gengaSel.frame) {
           src = gengaSelCompositeFrom(gengaSel);
         } else {
           const e = gengaResolveExposure(l, frame);
           const dr = gengaExposureDrawing(l, e);
-          if (dr && dr.dataUrl) src = gengaImageFor(dr.dataUrl, drawGengaPreview);
+          if (dr && dr.dataUrl) {
+            target.globalCompositeOperation = l.blend || 'source-over'; target.globalAlpha = (l.opacity != null ? l.opacity : 1);
+            gengaDrawDrawingInto(target, dr, pw, ph, drawGengaPreview);
+            target.globalAlpha = 1; target.globalCompositeOperation = 'source-over';
+            return;
+          }
         }
-        if (src) { cx2.globalCompositeOperation = l.blend || 'source-over'; cx2.globalAlpha = (l.opacity != null ? l.opacity : 1); cx2.drawImage(src, 0, 0, pw, ph); cx2.globalAlpha = 1; cx2.globalCompositeOperation = 'source-over'; }
+        if (src) { target.globalCompositeOperation = l.blend || 'source-over'; target.globalAlpha = (l.opacity != null ? l.opacity : 1); target.drawImage(src, 0, 0, pw, ph); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; }
+      };
+      if (sess && sessIdx >= 0) {
+        // below-stack cache (layers array is top-first → indices AFTER sessIdx are below)
+        if (!sess.belowCache || sess.belowCache.width !== pw || sess.belowCache.height !== ph) {
+          const bc = document.createElement('canvas'); bc.width = pw; bc.height = ph;
+          const bctx = bc.getContext('2d');
+          for (let i = layers.length - 1; i > sessIdx; i--) { if (layers[i].visible !== false) drawLayer(bctx, layers[i]); }
+          sess.belowCache = bc;
+        }
+        cx2.drawImage(sess.belowCache, 0, 0);
+        if (layers[sessIdx].visible !== false) drawLayer(cx2, layers[sessIdx]);
+        for (let i = sessIdx - 1; i >= 0; i--) { if (layers[i].visible !== false) drawLayer(cx2, layers[i]); } // layers above (blend vs live content stays correct)
+        return cv;
+      }
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const l = layers[i];
+        if (l.visible === false) continue;
+        drawLayer(cx2, l);
       }
       return cv;
     }
-    function gengaDrawOnionFrame(ctx, frame, ox, oy, dw, dh, opacity, tint) {
-      const c = gengaCompositeFrame(frame); if (!c) return;
+    function gengaOnionTintedCanvas(frame, tint) {
+      // during an active stroke the onion frames can't change → cache the tinted composites on the session
+      // (previously EVERY pointermove recomposited both onion frames — a main cause of fast-draw jank/flicker).
+      const sess = gengaDrawSession;
+      const key = frame + '|' + tint;
+      if (sess && sess.onionCache && sess.onionCache[key]) return sess.onionCache[key];
+      const c = gengaCompositeFrame(frame); if (!c) return null;
       const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
       const tx = t.getContext('2d');
       tx.drawImage(c, 0, 0);
       tx.globalCompositeOperation = 'source-atop';
       tx.globalAlpha = 0.6; tx.fillStyle = tint; tx.fillRect(0, 0, t.width, t.height);
+      if (sess) { sess.onionCache = sess.onionCache || {}; sess.onionCache[key] = t; }
+      return t;
+    }
+    function gengaDrawOnionFrame(ctx, frame, ox, oy, dw, dh, opacity, tint) {
+      const t = gengaOnionTintedCanvas(frame, tint); if (!t) return;
       ctx.globalAlpha = opacity; ctx.drawImage(t, ox, oy, dw, dh); ctx.globalAlpha = 1;
     }
-    function gengaNearestDrawing(layer, frame) {
+    function gengaNearestDrawing(layer, frame) { // → resolved drawing OBJECT (placement-aware), not a bare url
       if (!layer || !Array.isArray(layer.exposures)) return null;
       const exact = gengaExposureDrawing(layer, gengaExposureAt(layer, frame));
-      if (exact && exact.dataUrl) return exact.dataUrl;
-      let bestUrl = null, bestDist = Infinity;
+      if (exact && exact.dataUrl) return exact;
+      let best = null, bestDist = Infinity;
       layer.exposures.forEach(function(e) {
         const dr = gengaExposureDrawing(layer, e);
         if (dr && dr.dataUrl) {
           const d = Math.min(Math.abs(e.startFrame - frame), Math.abs(e.startFrame + e.holdFrames - 1 - frame));
-          if (d < bestDist) { bestDist = d; bestUrl = dr.dataUrl; }
+          if (d < bestDist) { bestDist = d; best = dr; }
         }
       });
-      return bestUrl;
+      return best;
     }
     // TVPaint-style layer-header thumbnail: each layer's drawing at the current (or nearest) frame.
     function drawGengaLayerThumbs() {
@@ -42216,8 +42300,19 @@
         ctx.clearRect(0, 0, cv.width, cv.height);
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
         if (!layer) return;
-        const url = gengaNearestDrawing(layer, frame);
-        if (url) { const img = gengaImageFor(url, drawGengaLayerThumbs); if (img) ctx.drawImage(img, 0, 0, cv.width, cv.height); }
+        const dr = gengaNearestDrawing(layer, frame);
+        if (dr && dr.dataUrl) {
+          const img = gengaImageFor(dr.dataUrl, drawGengaLayerThumbs);
+          if (img) {
+            const gtp = state.project.gengaTimeline, pw = Math.max(1, gtp.paper.w), ph = Math.max(1, gtp.paper.h);
+            if (Number.isFinite(Number(dr.x)) && Number.isFinite(Number(dr.y))) {
+              // trimmed: map the paper onto the thumb (same stretch semantics as before), placing the crop inside it
+              ctx.drawImage(img, dr.x / pw * cv.width, dr.y / ph * cv.height, dr.w / pw * cv.width, dr.h / ph * cv.height);
+            } else {
+              ctx.drawImage(img, 0, 0, cv.width, cv.height);
+            }
+          }
+        }
       });
     }
     function drawGengaPreview() {
@@ -42423,12 +42518,9 @@
         c.drawImage(seedCanvas, 0, 0);
       } else {
         const existingDr = gengaExposureDrawing(layer, gengaExposureAt(layer, frame));
-        if (existingDr && existingDr.dataUrl) {
-          const img = gengaImageCache.get(existingDr.dataUrl);
-          if (img && img.complete) c.drawImage(img, 0, 0, pw, ph);
-          // the just-committed dataUrl may not have decoded yet (rapid strokes) → seed from the kept canvas
-          else if (gengaLastStrokeCanvas && gengaLastStrokeCanvas.dataUrl === existingDr.dataUrl) c.drawImage(gengaLastStrokeCanvas.canvas, 0, 0);
-        }
+        // placement-aware seed (trimmed 1:1 at x,y / legacy scaled); falls back to the kept last-stroke canvas
+        // while the freshly-committed dataUrl is still decoding (rapid strokes).
+        gengaDrawDrawingInto(c, existingDr, pw, ph, drawGengaPreview);
       }
       c.lineCap = 'round'; c.lineJoin = 'round';
       // Reuse the conte memo tool state (pen/eraser + color + size). memo size is 480-space px → scale to paper.
@@ -42476,16 +42568,17 @@
       if (!gengaDrawSession) return;
       const sess = gengaDrawSession;
       gengaDrawSession = null;
-      const dataUrl = sess.canvas.toDataURL('image/png');
-      const layerId = sess.layerId, frame = sess.frame, pw = sess.canvas.width, ph = sess.canvas.height;
-      gengaLastStrokeCanvas = { dataUrl: dataUrl, canvas: sess.canvas }; // keep for the next stroke's seed (async-decode race)
-      gengaImageFor(dataUrl, drawGengaPreview);
-      gengaCommitDrawing(layerId, frame, { dataUrl: dataUrl, w: pw, h: ph }, '原画描画');
+      gengaCommitCanvas(sess.layerId, sess.frame, sess.canvas, '原画描画'); // ink-bbox trimmed + decode-race fallback
       try { if (ev.pointerId != null) ev.target.releasePointerCapture(ev.pointerId); } catch (e) {}
     }
     // ---- shared drawing commit + tool helpers (P1: clear/nudge; P2+: lasso/transform) ----
     // commit a drawing object (or null to clear) onto the exposure covering `frame` of layer `layerId`.
     function gengaCommitDrawing(layerId, frame, drawing, label) {
+      // drawing onto an EXISTING koma only changes pixels → skip the full genga stage rebuild (innerHTML swap of
+      // the whole dopesheet per stroke = the visible mid-drawing flash) and patch the thumb/preview directly.
+      // A commit that CREATES a koma still does the full render (new .genga-exp element needed).
+      const liveLayer = gengaLayerById(layerId);
+      const partial = !!(liveLayer && gengaExposureAt(liveLayer, frame));
       runCommand(label || '原画描画', function(proj) {
         const gt = proj.gengaTimeline; if (!gt) return;
         const layer = (gt.layers || []).find(function(x) { return String(x.id) === String(layerId); });
@@ -42503,7 +42596,35 @@
           layer.exposures.push(e);
         }
         gengaSetExposureDrawing(layer, e, drawing);
-      });
+      }, partial ? { skipStage: true } : undefined);
+      if (partial) { gengaUpdateExpThumbDom(layerId, frame); drawGengaLayerThumbs(); drawGengaPreview(); }
+    }
+    // trim a paper-res canvas to its ink bbox and commit it (all drawing-type commits route here). The full
+    // canvas is kept as the decode-race fallback so the preview never blinks while the new PNG decodes.
+    function gengaCommitCanvas(layerId, frame, cv, label) {
+      const trimmed = gengaTrimCanvasToDrawing(cv);
+      if (trimmed) {
+        gengaLastStrokeCanvas = { dataUrl: trimmed.dataUrl, canvas: cv };
+        gengaImageFor(trimmed.dataUrl, drawGengaPreview);
+      }
+      gengaCommitDrawing(layerId, frame, trimmed, label);
+    }
+    // patch one koma's timeline thumbnail in place (partial refresh path — no dopesheet rebuild).
+    function gengaUpdateExpThumbDom(layerId, frame) {
+      const layer = gengaLayerById(layerId); if (!layer) return;
+      const e = gengaExposureAt(layer, frame); if (!e) return;
+      const el = document.querySelector('#gengaStage .genga-exp[data-genga-exp="' + cssEscapeValue(String(e.id)) + '"] .genga-exp-thumb');
+      if (el) el.innerHTML = gengaExpThumbInnerHtml(gengaExposureDrawing(layer, e));
+    }
+    // koma thumb inner markup: the crop placed proportionally on the paper→thumb mapping (same stretch semantics
+    // as the layer-head thumbs); legacy full-paper bitmaps fill the whole thumb.
+    function gengaExpThumbInnerHtml(dr) {
+      if (!(dr && dr.dataUrl)) return '';
+      const gt = state.project && state.project.gengaTimeline; if (!gt) return '';
+      const pw = Math.max(1, gt.paper.w), ph = Math.max(1, gt.paper.h);
+      let x = 0, y = 0, w = pw, h = ph;
+      if (Number.isFinite(Number(dr.x)) && Number.isFinite(Number(dr.y))) { x = dr.x; y = dr.y; w = dr.w; h = dr.h; }
+      return '<img class="genga-exp-thumb-img" src="' + dr.dataUrl + '" style="left:' + (x / pw * 100).toFixed(3) + '%;top:' + (y / ph * 100).toFixed(3) + '%;width:' + (w / pw * 100).toFixed(3) + '%;height:' + (h / ph * 100).toFixed(3) + '%" alt="">';
     }
     // paper-sized working canvas seeded with the current exposure art (sync, from cache).
     function gengaWorkingCanvasFor(layer, frame) {
@@ -42518,10 +42639,7 @@
         return { cv: cv, ctx: c, pw: pw, ph: ph, hasContent: true };
       }
       const dr = gengaExposureDrawing(layer, gengaExposureAt(layer, frame));
-      if (dr && dr.dataUrl) {
-        const img = gengaImageFor(dr.dataUrl, drawGengaPreview);
-        if (img && img.complete) { c.drawImage(img, 0, 0, pw, ph); hasContent = true; }
-      }
+      if (dr && dr.dataUrl) hasContent = gengaDrawDrawingInto(c, dr, pw, ph, drawGengaPreview); // placement-aware (trimmed/legacy)
       return { cv: cv, ctx: c, pw: pw, ph: ph, hasContent: hasContent };
     }
     // which memo edit tool is active (lasso/transform/perspective) — '' = plain pen/eraser.
@@ -42541,9 +42659,7 @@
       if (!wk.hasContent) return true;
       const out = document.createElement('canvas'); out.width = wk.pw; out.height = wk.ph;
       out.getContext('2d').drawImage(wk.cv, dx, dy);
-      const dataUrl = out.toDataURL('image/png');
-      gengaImageFor(dataUrl, drawGengaPreview);
-      gengaCommitDrawing(layer.id, frame, { dataUrl: dataUrl, w: wk.pw, h: wk.ph }, '原画移動');
+      gengaCommitCanvas(layer.id, frame, out, '原画移動');
       drawGengaPreview(); drawGengaLayerThumbs();
       return true;
     }
@@ -42732,9 +42848,7 @@
       if (!gengaSel) return;
       const sel = gengaSel; gengaSel = null; gengaSelDrag = null;
       const out = gengaSelCompositeFrom(sel);
-      const dataUrl = out.toDataURL('image/png');
-      gengaImageFor(dataUrl, drawGengaPreview);
-      gengaCommitDrawing(sel.layerId, sel.frame, { dataUrl: dataUrl, w: out.width, h: out.height }, '原画変形');
+      gengaCommitCanvas(sel.layerId, sel.frame, out, '原画変形');
       drawGengaPreview(); drawGengaLayerThumbs();
     }
     // ---- selection-tool button actions (genga) — the tool-options buttons route here when kind==='genga' ----
@@ -42798,9 +42912,7 @@
         gengaStamp.work = work; gengaStamp.workLayer = String(layer.id); gengaStamp.workFrame = frame;
       }
       gengaStamp.work.getContext('2d').drawImage(gengaStamp.patch, Math.round(x - gengaStamp.w / 2), Math.round(y - gengaStamp.h / 2));
-      const dataUrl = gengaStamp.work.toDataURL('image/png');
-      gengaImageFor(dataUrl, drawGengaPreview);
-      gengaCommitDrawing(layer.id, frame, { dataUrl: dataUrl, w: gengaStamp.work.width, h: gengaStamp.work.height }, '原画スタンプ');
+      gengaCommitCanvas(layer.id, frame, gengaStamp.work, '原画スタンプ');
       drawGengaPreview(); drawGengaLayerThumbs();
     }
     function gengaStampPointerDown(ev, layer) {
@@ -43790,9 +43902,8 @@
             const valued = (e.instanceValue !== null && e.instanceValue !== undefined && e.instanceValue !== '');
             const numText = valued ? String(e.instanceValue) : String(expoRank[e.id] || (ei + 1));
             const eDr = gengaExposureDrawing(l, e);
-            const thumbBg = (eDr && eDr.dataUrl) ? ' style="background-image:url(' + eDr.dataUrl + ')"' : '';
             blocks += '<div class="genga-exp" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" style="left:' + ((e.startFrame - 1) * cellW + 1) + 'px;width:' + (e.holdFrames * cellW - 1) + 'px">' +
-              '<span class="genga-exp-thumb"' + thumbBg + '></span>' +
+              '<span class="genga-exp-thumb">' + gengaExpThumbInnerHtml(eDr) + '</span>' +
               '<span class="genga-exp-num' + (valued ? ' valued' : '') + '" data-genga-layer="' + escapeHtml(l.id) + '" data-genga-exp="' + escapeHtml(e.id) + '" title="ダブルクリックで値入力 / ドラッグでセル選択（C=コピー X=カット V=貼付）">' + escapeHtml(numText) + '</span>' +
               '<span class="genga-exp-resize-left"></span><span class="genga-exp-resize"></span></div>';
           });
